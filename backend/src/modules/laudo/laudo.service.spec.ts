@@ -8,11 +8,13 @@ describe('LaudoService', () => {
     examPerformed: { create: jest.fn(), findFirst: jest.fn(), update: jest.fn() },
   } as any;
 
+  const context = { get: jest.fn().mockReturnValue('t-1') };
+
   let service: LaudoService;
 
   beforeEach(() => {
     jest.clearAllMocks();
-    service = new LaudoService(prisma);
+    service = new LaudoService(prisma, context as any);
   });
 
   it('creates pre-laudo (happy path)', async () => {

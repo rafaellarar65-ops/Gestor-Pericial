@@ -17,11 +17,13 @@ describe('AgendaService', () => {
     $transaction: jest.fn(),
   } as any;
 
+  const context = { get: jest.fn().mockReturnValue('t-1') };
+
   let service: AgendaService;
 
   beforeEach(() => {
     jest.clearAllMocks();
-    service = new AgendaService(prisma);
+    service = new AgendaService(prisma, context as any);
   });
 
   it('creates an event (happy path)', async () => {

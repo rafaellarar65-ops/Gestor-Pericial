@@ -11,11 +11,13 @@ describe('KnowledgeService', () => {
     },
   } as any;
 
+  const context = { get: jest.fn().mockReturnValue('t-1') };
+
   let service: KnowledgeService;
 
   beforeEach(() => {
     jest.clearAllMocks();
-    service = new KnowledgeService(prisma);
+    service = new KnowledgeService(prisma, context as any);
   });
 
   it('creates knowledge item (happy path)', async () => {

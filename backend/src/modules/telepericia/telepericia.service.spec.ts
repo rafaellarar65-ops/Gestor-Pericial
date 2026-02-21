@@ -11,11 +11,13 @@ describe('TelepericiaService', () => {
     },
   } as any;
 
+  const context = { get: jest.fn().mockReturnValue('t-1') };
+
   let service: TelepericiaService;
 
   beforeEach(() => {
     jest.clearAllMocks();
-    service = new TelepericiaService(prisma);
+    service = new TelepericiaService(prisma, context as any);
   });
 
   it('creates tele slot (happy path)', async () => {

@@ -8,7 +8,7 @@ import { CreateManeuversDto, MediaUploadDto, ProtocolDto, SearchManeuversDto, Up
 export class ManeuversService {
   constructor(
     private readonly prisma: PrismaService,
-    private readonly context: RequestContextService = new RequestContextService(),
+    private readonly context: RequestContextService,
   ) {}
 
   create(dto: CreateManeuversDto) {

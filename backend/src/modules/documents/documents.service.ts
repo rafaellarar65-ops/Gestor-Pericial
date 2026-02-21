@@ -8,7 +8,7 @@ import { CategorizeDocumentDto, LinkPericiaDocumentDto, SignedUrlDto, UploadDocu
 export class DocumentsService {
   constructor(
     private readonly prisma: PrismaService,
-    private readonly context: RequestContextService = new RequestContextService(),
+    private readonly context: RequestContextService,
   ) {}
 
   upload(dto: UploadDocumentDto) {

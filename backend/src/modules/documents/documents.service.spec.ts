@@ -10,11 +10,13 @@ describe('DocumentsService', () => {
     },
   } as any;
 
+  const context = { get: jest.fn().mockReturnValue('t-1') };
+
   let service: DocumentsService;
 
   beforeEach(() => {
     jest.clearAllMocks();
-    service = new DocumentsService(prisma);
+    service = new DocumentsService(prisma, context as any);
   });
 
   it('uploads document metadata (happy path)', async () => {

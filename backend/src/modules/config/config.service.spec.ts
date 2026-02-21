@@ -20,6 +20,8 @@ describe('ConfigDomainService', () => {
     tribunal: delegate,
   } as any;
 
+  const context = { get: jest.fn().mockReturnValue('t-1') };
+
   let service: ConfigDomainService;
 
   beforeEach(() => {

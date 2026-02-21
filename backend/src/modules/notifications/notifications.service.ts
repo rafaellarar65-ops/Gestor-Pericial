@@ -10,7 +10,7 @@ export class NotificationsService {
   constructor(
     private readonly prisma: PrismaService,
     private readonly gateway: NotificationsGateway,
-    private readonly context: RequestContextService = new RequestContextService(),
+    private readonly context: RequestContextService,
   ) {}
 
   realtime(dto: RealtimeNotificationDto) {

@@ -21,6 +21,8 @@ describe('UsersService', () => {
     },
   } as any;
 
+  const context = { get: jest.fn().mockReturnValue('t-1') };
+
   let service: UsersService;
 
   beforeEach(() => {

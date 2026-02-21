@@ -16,7 +16,7 @@ import {
 export class LaudoService {
   constructor(
     private readonly prisma: PrismaService,
-    private readonly context: RequestContextService = new RequestContextService(),
+    private readonly context: RequestContextService,
   ) {}
 
   createPreLaudo(dto: CreatePreLaudoDto) {

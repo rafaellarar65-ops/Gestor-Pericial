@@ -27,11 +27,13 @@ describe('FinancialService', () => {
     $transaction: jest.fn(),
   } as any;
 
+  const context = { get: jest.fn().mockReturnValue('t-1') };
+
   let service: FinancialService;
 
   beforeEach(() => {
     jest.clearAllMocks();
-    service = new FinancialService(prisma);
+    service = new FinancialService(prisma, context as any);
   });
 
   it('creates recebimento (happy path)', async () => {

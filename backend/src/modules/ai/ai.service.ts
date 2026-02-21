@@ -9,7 +9,7 @@ export class AiService {
 
   constructor(
     private readonly prisma: PrismaService,
-    private readonly context: RequestContextService = new RequestContextService(),
+    private readonly context: RequestContextService,
   ) {}
 
   async analyzeDocument(dto: AnalyzeDocumentDto) {

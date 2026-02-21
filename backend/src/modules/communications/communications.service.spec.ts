@@ -6,11 +6,13 @@ describe('CommunicationsService', () => {
     lawyer: { create: jest.fn(), findMany: jest.fn() },
   } as any;
 
+  const context = { get: jest.fn().mockReturnValue('t-1') };
+
   let service: CommunicationsService;
 
   beforeEach(() => {
     jest.clearAllMocks();
-    service = new CommunicationsService(prisma);
+    service = new CommunicationsService(prisma, context as any);
   });
 
   it('creates template (happy path)', async () => {

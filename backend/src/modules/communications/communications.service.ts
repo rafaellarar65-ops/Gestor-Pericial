@@ -8,7 +8,7 @@ import { CreateEmailTemplateDto, CreateLawyerDto, GenerateHubEmailDto, SendEmail
 export class CommunicationsService {
   constructor(
     private readonly prisma: PrismaService,
-    private readonly context: RequestContextService = new RequestContextService(),
+    private readonly context: RequestContextService,
   ) {}
 
   sendEmail(dto: SendEmailDto) {

@@ -10,11 +10,13 @@ describe('NotificationsService', () => {
     broadcast: jest.fn(),
   } as any;
 
+  const context = { get: jest.fn().mockReturnValue('t-1') };
+
   let service: NotificationsService;
 
   beforeEach(() => {
     jest.clearAllMocks();
-    service = new NotificationsService(prisma, gateway);
+    service = new NotificationsService(prisma, gateway as any, context as any);
   });
 
   it('returns realtime payload (happy path)', () => {

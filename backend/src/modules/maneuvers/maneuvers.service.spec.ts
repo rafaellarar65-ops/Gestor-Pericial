@@ -11,11 +11,13 @@ describe('ManeuversService', () => {
     },
   } as any;
 
+  const context = { get: jest.fn().mockReturnValue('t-1') };
+
   let service: ManeuversService;
 
   beforeEach(() => {
     jest.clearAllMocks();
-    service = new ManeuversService(prisma);
+    service = new ManeuversService(prisma, context as any);
   });
 
   it('creates physical maneuver (happy path)', async () => {

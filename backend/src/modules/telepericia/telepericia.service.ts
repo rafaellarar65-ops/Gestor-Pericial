@@ -9,7 +9,7 @@ import { BookTeleSlotDto, CreateTeleSlotDto, UploadSessionDto, WhatsappContactDt
 export class TelepericiaService {
   constructor(
     private readonly prisma: PrismaService,
-    private readonly context: RequestContextService = new RequestContextService(),
+    private readonly context: RequestContextService,
   ) {}
 
   createSlot(dto: CreateTeleSlotDto) {

@@ -8,7 +8,7 @@ import { BatchScheduleDto, CreateAgendaEventDto, CreateAgendaTaskDto, UpdateAgen
 export class AgendaService {
   constructor(
     private readonly prisma: PrismaService,
-    private readonly context: RequestContextService = new RequestContextService(),
+    private readonly context: RequestContextService,
   ) {}
 
   createEvent(dto: CreateAgendaEventDto) {

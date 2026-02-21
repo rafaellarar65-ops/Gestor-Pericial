@@ -8,7 +8,7 @@ import { CreateDespesaDto, CreateRecebimentoDto, ImportRecebimentosDto, Reconcil
 export class FinancialService {
   constructor(
     private readonly prisma: PrismaService,
-    private readonly context: RequestContextService = new RequestContextService(),
+    private readonly context: RequestContextService,
   ) {}
 
   createRecebimento(dto: CreateRecebimentoDto) {

@@ -9,11 +9,13 @@ describe('AiService', () => {
     },
   } as any;
 
+  const context = { get: jest.fn().mockReturnValue('t-1') };
+
   let service: AiService;
 
   beforeEach(() => {
     jest.clearAllMocks();
-    service = new AiService(prisma);
+    service = new AiService(prisma, context as any);
   });
 
   it('analyzes document and returns summary (happy path)', async () => {
