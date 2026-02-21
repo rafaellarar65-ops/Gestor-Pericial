@@ -298,7 +298,7 @@ CREATE TABLE IF NOT EXISTS public."PreLaudo" (
   "laudoRealtime" jsonb,
   "templateName" text,
   version integer NOT NULL DEFAULT 1,
-  "lockedByUserId" uuid,
+  "lockedByUserId" uuid REFERENCES public."User"(id) ON DELETE SET NULL,
   "lockedAt" timestamptz,
   "createdAt" timestamptz NOT NULL DEFAULT now(),
   "updatedAt" timestamptz NOT NULL DEFAULT now(),
@@ -760,3 +760,40 @@ CREATE INDEX IF NOT EXISTS idx_activity_log_tenant_entity_created ON public."Act
 CREATE INDEX IF NOT EXISTS idx_tele_slot_tenant_start_status ON public."TeleSlot" ("tenantId", "startAt", status);
 CREATE INDEX IF NOT EXISTS idx_scheduling_batch_tenant_date ON public."SchedulingBatch" ("tenantId", "dateRef");
 CREATE INDEX IF NOT EXISTS idx_cnj_sync_tenant_status_next ON public."CnjSync" ("tenantId", status, "nextSyncAt");
+
+-- =========================
+-- CHECK constraints for monetary fields (must be non-negative)
+-- =========================
+ALTER TABLE public."Pericia"
+  ADD CONSTRAINT chk_pericia_honorarios_jg_positive
+    CHECK ("honorariosPrevistosJG" IS NULL OR "honorariosPrevistosJG" >= 0),
+  ADD CONSTRAINT chk_pericia_honorarios_partes_positive
+    CHECK ("honorariosPrevistosPartes" IS NULL OR "honorariosPrevistosPartes" >= 0),
+  ADD CONSTRAINT chk_pericia_valor_recebido_positive
+    CHECK ("valorRecebidoTotal" IS NULL OR "valorRecebidoTotal" >= 0);
+
+ALTER TABLE public."Recebimento"
+  ADD CONSTRAINT chk_recebimento_valor_bruto_positive
+    CHECK ("valorBruto" >= 0),
+  ADD CONSTRAINT chk_recebimento_valor_liquido_positive
+    CHECK ("valorLiquido" IS NULL OR "valorLiquido" >= 0),
+  ADD CONSTRAINT chk_recebimento_tarifa_positive
+    CHECK (tarifa IS NULL OR tarifa >= 0),
+  ADD CONSTRAINT chk_recebimento_desconto_positive
+    CHECK (desconto IS NULL OR desconto >= 0);
+
+ALTER TABLE public."Despesa"
+  ADD CONSTRAINT chk_despesa_valor_positive
+    CHECK (valor >= 0);
+
+ALTER TABLE public."BankTransaction"
+  ADD CONSTRAINT chk_bank_tx_amount_positive
+    CHECK (amount >= 0);
+
+ALTER TABLE public."CashLedgerItem"
+  ADD CONSTRAINT chk_cash_ledger_amount_positive
+    CHECK (amount >= 0);
+
+ALTER TABLE public."UnmatchedPayment"
+  ADD CONSTRAINT chk_unmatched_amount_positive
+    CHECK (amount IS NULL OR amount >= 0);
