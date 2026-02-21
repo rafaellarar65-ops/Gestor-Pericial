@@ -1,7 +1,16 @@
-import { Body, Controller, Delete, Get, Param, Patch, Post } from '@nestjs/common';
-import { ApiBearerAuth, ApiTags } from '@nestjs/swagger';
+import { Body, Controller, Get, Param, Patch, Post, Query, Req } from '@nestjs/common';
+import { ApiBearerAuth, ApiOperation, ApiTags } from '@nestjs/swagger';
+import { Request } from 'express';
+import { Roles } from '../../common/decorators/roles.decorator';
+import {
+  BatchUpdatePericiasDto,
+  ChangeStatusPericiaDto,
+  CreatePericiasDto,
+  ImportPericiasDto,
+  ListPericiasDto,
+  UpdatePericiasDto,
+} from './dto/pericias.dto';
 import { PericiasService } from './pericias.service';
-import { CreatePericiasDto, UpdatePericiasDto } from './dto/pericias.dto';
 
 @ApiTags('pericias')
 @ApiBearerAuth()
@@ -10,22 +19,51 @@ export class PericiasController {
   constructor(private readonly service: PericiasService) {}
 
   @Get()
-  list() { return this.service.findAll(); }
-  @Get(':id')
-  get(@Param('id') id: string) { return this.service.findOne(id); }
-  @Post()
-  create(@Body() dto: CreatePericiasDto) { return this.service.create(dto); }
-  @Patch(':id')
-  update(@Param('id') id: string, @Body() dto: UpdatePericiasDto) { return this.service.update(id, dto); }
-  @Post('batch-update')
-  batch_update() { return { action: 'batch-update', module: 'pericias' }; }
-  @Post('import-csv')
-  import_csv() { return { action: 'import-csv', module: 'pericias' }; }
-  @Post('export')
-  export() { return { action: 'export', module: 'pericias' }; }
-  @Post('change-status')
-  change_status() { return { action: 'change-status', module: 'pericias' }; }
-  @Get('dashboard')
-  dashboard() { return { action: 'dashboard', module: 'pericias' }; }
+  @ApiOperation({ summary: 'Lista perícias com filtros compostos' })
+  list(@Query() query: ListPericiasDto) {
+    return this.service.findAll(query);
+  }
 
+  @Get('dashboard')
+  @ApiOperation({ summary: 'KPIs agregados do dashboard de perícias' })
+  dashboard() {
+    return this.service.dashboard();
+  }
+
+  @Get(':id')
+  get(@Param('id') id: string) {
+    return this.service.findOne(id);
+  }
+
+  @Post()
+  create(@Body() dto: CreatePericiasDto) {
+    return this.service.create(dto);
+  }
+
+  @Patch(':id')
+  update(@Param('id') id: string, @Body() dto: UpdatePericiasDto) {
+    return this.service.update(id, dto);
+  }
+
+  @Patch('batch-update')
+  @Roles('ADMIN')
+  batchUpdate(@Body() dto: BatchUpdatePericiasDto) {
+    return this.service.batchUpdate(dto);
+  }
+
+  @Post('import-csv')
+  @Roles('ADMIN')
+  importCsv(@Body() dto: ImportPericiasDto) {
+    return this.service.importCsv(dto);
+  }
+
+  @Post('export')
+  export(@Body() query: ListPericiasDto) {
+    return this.service.export(query);
+  }
+
+  @Patch('change-status')
+  changeStatus(@Body() dto: ChangeStatusPericiaDto, @Req() req: Request & { user?: { sub?: string } }) {
+    return this.service.changeStatus(dto, req.user?.sub);
+  }
 }
