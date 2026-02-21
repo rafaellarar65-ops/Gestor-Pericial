@@ -398,6 +398,7 @@ model Pericia {
   despesas         Despesa[]
   logStatuses      LogStatus[]
   bankTransactions BankTransaction[]
+  teleSlots        TeleSlot[]
   cnjSyncs         CnjSync[]
 
   @@unique([tenantId, processoCNJ])
