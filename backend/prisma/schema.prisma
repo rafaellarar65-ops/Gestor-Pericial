@@ -166,8 +166,9 @@ model User {
   updatedAt      DateTime    @updatedAt
   createdBy      String?     @db.Uuid
   updatedBy      String?     @db.Uuid
-  tenant         Tenant      @relation(fields: [tenantId], references: [id], onDelete: Cascade)
-  profile        UserProfile?
+  tenant          Tenant      @relation(fields: [tenantId], references: [id], onDelete: Cascade)
+  profile         UserProfile?
+  lockedPreLaudos PreLaudo[]  @relation("PreLaudoLockedBy")
 
   @@index([tenantId, role])
 }
@@ -486,8 +487,9 @@ model PreLaudo {
   createdBy        String?  @db.Uuid
   updatedBy        String?  @db.Uuid
 
-  tenant  Tenant  @relation(fields: [tenantId], references: [id], onDelete: Cascade)
-  pericia Pericia @relation(fields: [periciaId], references: [id], onDelete: Cascade)
+  tenant       Tenant  @relation(fields: [tenantId], references: [id], onDelete: Cascade)
+  pericia      Pericia @relation(fields: [periciaId], references: [id], onDelete: Cascade)
+  lockedByUser User?   @relation("PreLaudoLockedBy", fields: [lockedByUserId], references: [id], onDelete: SetNull)
 
   @@index([tenantId, periciaId])
 }
@@ -505,8 +507,9 @@ model ExamPlan {
   createdBy    String?  @db.Uuid
   updatedBy    String?  @db.Uuid
 
-  tenant  Tenant  @relation(fields: [tenantId], references: [id], onDelete: Cascade)
-  pericia Pericia @relation(fields: [periciaId], references: [id], onDelete: Cascade)
+  tenant         Tenant         @relation(fields: [tenantId], references: [id], onDelete: Cascade)
+  pericia        Pericia        @relation(fields: [periciaId], references: [id], onDelete: Cascade)
+  examsPerformed ExamPerformed[]
 
   @@index([tenantId, periciaId])
 }
@@ -643,7 +646,7 @@ model Recebimento {
   updatedBy        String?        @db.Uuid
 
   tenant      Tenant      @relation(fields: [tenantId], references: [id], onDelete: Cascade)
-  pericia     Pericia     @relation(fields: [periciaId], references: [id], onDelete: Restrict)
+  pericia     Pericia     @relation(fields: [periciaId], references: [id], onDelete: Cascade)
   importBatch ImportBatch? @relation(fields: [importBatchId], references: [id], onDelete: SetNull)
   payer       Payer?      @relation(fields: [payerId], references: [id], onDelete: SetNull)
 

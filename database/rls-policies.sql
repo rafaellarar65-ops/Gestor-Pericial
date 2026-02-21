@@ -25,6 +25,7 @@ GRANT EXECUTE ON FUNCTION public.current_tenant_id() TO authenticated;
 -- =========================================
 -- Enable RLS on app tables
 -- =========================================
+ALTER TABLE public."Tenant" ENABLE ROW LEVEL SECURITY;
 ALTER TABLE public."User" ENABLE ROW LEVEL SECURITY;
 ALTER TABLE public."UserProfile" ENABLE ROW LEVEL SECURITY;
 ALTER TABLE public."Cidade" ENABLE ROW LEVEL SECURITY;
@@ -75,7 +76,7 @@ DECLARE
   p record;
 BEGIN
   FOREACH t IN ARRAY ARRAY[
-    'User','UserProfile','Cidade','Tribunal','Vara','TipoPericia','Modalidade','Status','Local','Pericia',
+    'Tenant','User','UserProfile','Cidade','Tribunal','Vara','TipoPericia','Modalidade','Status','Local','Pericia',
     'Lawyer','LawyerOnPericia','CaseDocument','PreLaudo','ExamPlan','ExamPerformed','PhysicalManeuver',
     'KnowledgeItem','AgendaEvent','AgendaTask','Recebimento','ImportBatch','UnmatchedPayment','Despesa',
     'BankTransaction','CashLedgerItem','PaymentProfile','Payer','SmartRule','AutomationRule','LogStatus',
@@ -94,6 +95,35 @@ BEGIN
   END LOOP;
 END
 $$;
+
+-- =========================================
+-- Tenant policies (each user sees only their own tenant)
+-- =========================================
+CREATE POLICY tenant_select
+ON public."Tenant"
+FOR SELECT
+USING (
+  id = public.current_tenant_id()
+);
+
+CREATE POLICY tenant_update_admin
+ON public."Tenant"
+FOR UPDATE
+USING (
+  id = public.current_tenant_id()
+  AND EXISTS (
+    SELECT 1
+    FROM public."User" u
+    WHERE u.id = auth.uid()
+      AND u."tenantId" = public.current_tenant_id()
+      AND u.role = 'ADMIN'
+  )
+)
+WITH CHECK (
+  id = public.current_tenant_id()
+);
+
+-- Intentionally no INSERT/DELETE policy for authenticated users.
 
 -- =========================================
 -- User / UserProfile policies
@@ -190,7 +220,7 @@ BEGIN
     'Lawyer','LawyerOnPericia','CaseDocument','PreLaudo','ExamPlan','ExamPerformed','PhysicalManeuver',
     'KnowledgeItem','AgendaEvent','AgendaTask','Recebimento','ImportBatch','UnmatchedPayment','Despesa',
     'BankTransaction','CashLedgerItem','PaymentProfile','Payer','SmartRule','AutomationRule',
-    'ActivityLog','DailyUsage','EmailConfig','EmailTemplate','IntegrationSettings','NotificationConfig',
+    'DailyUsage','EmailConfig','EmailTemplate','IntegrationSettings','NotificationConfig',
     'TeleSlot','SchedulingBatch','CnjSync'
   ]
   LOOP
@@ -237,6 +267,21 @@ FOR INSERT
 WITH CHECK ("tenantId" = public.current_tenant_id());
 
 -- No UPDATE/DELETE policies on purpose.
+
+-- =========================================
+-- ActivityLog immutable audit trail (INSERT-only, no UPDATE/DELETE)
+-- =========================================
+CREATE POLICY activity_log_select_tenant
+ON public."ActivityLog"
+FOR SELECT
+USING ("tenantId" = public.current_tenant_id());
+
+CREATE POLICY activity_log_insert_tenant
+ON public."ActivityLog"
+FOR INSERT
+WITH CHECK ("tenantId" = public.current_tenant_id());
+
+-- No UPDATE/DELETE policies on purpose — audit trail must be immutable.
 
 -- =========================================
 -- Public upload session access (token-based)
