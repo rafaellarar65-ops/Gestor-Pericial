@@ -1,22 +1,28 @@
 import { Injectable, NotFoundException } from '@nestjs/common';
 import { randomUUID } from 'crypto';
+import { RequestContextService } from '../../common/request-context.service';
 import { PrismaService } from '../../prisma/prisma.service';
 import { CategorizeDocumentDto, LinkPericiaDocumentDto, SignedUrlDto, UploadDocumentDto } from './dto/documents.dto';
 
 @Injectable()
 export class DocumentsService {
-  constructor(private readonly prisma: PrismaService) {}
+  constructor(
+    private readonly prisma: PrismaService,
+    private readonly context: RequestContextService = new RequestContextService(),
+  ) {}
 
   upload(dto: UploadDocumentDto) {
+    const tenantId = this.context.get('tenantId') ?? '';
     return this.prisma.caseDocument.create({
       data: {
+        tenantId,
         periciaId: dto.periciaId,
         nome: dto.nome,
-        tipo: dto.tipo,
-        categoria: dto.categoria,
+        ...(dto.tipo ? { tipo: dto.tipo } : {}),
+        ...(dto.categoria ? { categoria: dto.categoria } : {}),
         storagePath: dto.storagePath ?? `documents/${randomUUID()}-${dto.nome}`,
-        mimeType: dto.mimeType,
-        fileSize: dto.fileSize,
+        ...(dto.mimeType ? { mimeType: dto.mimeType } : {}),
+        ...(dto.fileSize ? { fileSize: dto.fileSize } : {}),
       },
     });
   }
@@ -36,18 +42,12 @@ export class DocumentsService {
 
   async categorize(dto: CategorizeDocumentDto) {
     await this.ensureExists(dto.documentId);
-    return this.prisma.caseDocument.update({
-      where: { id: dto.documentId },
-      data: { categoria: dto.categoria },
-    });
+    return this.prisma.caseDocument.update({ where: { id: dto.documentId }, data: { categoria: dto.categoria } });
   }
 
   async linkPericia(dto: LinkPericiaDocumentDto) {
     await this.ensureExists(dto.documentId);
-    return this.prisma.caseDocument.update({
-      where: { id: dto.documentId },
-      data: { periciaId: dto.periciaId },
-    });
+    return this.prisma.caseDocument.update({ where: { id: dto.documentId }, data: { periciaId: dto.periciaId } });
   }
 
   private async ensureExists(id: string) {

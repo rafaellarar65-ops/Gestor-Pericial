@@ -27,6 +27,6 @@ describe('DocumentsService', () => {
 
   it('throws NotFoundException when generating signed url for missing document (edge case)', async () => {
     prisma.caseDocument.findFirst.mockResolvedValue(null);
-    await expect(service.downloadSignedUrl({ documentId: 'a6f7f363-fd5b-4c4d-8171-c6d65144f8d3' })).rejects.toThrow(NotFoundException);
+    await expect(service.downloadSignedUrl({ documentId: 'a6f7f363-fd5b-4c4d-8171-c6d65144f8d3', expiresInSeconds: 300 })).rejects.toThrow(NotFoundException);
   });
 });

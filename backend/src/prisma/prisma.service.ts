@@ -1,5 +1,5 @@
-import { INestApplication, Injectable, OnModuleInit } from '@nestjs/common';
-import { Prisma, PrismaClient } from '@prisma/client';
+import { Injectable, OnModuleInit } from '@nestjs/common';
+import { PrismaClient } from '@prisma/client';
 import { RequestContextService } from '../common/request-context.service';
 
 @Injectable()
@@ -7,7 +7,7 @@ export class PrismaService extends PrismaClient implements OnModuleInit {
   constructor(private readonly context: RequestContextService) {
     super();
 
-    this.$use(async (params: Prisma.MiddlewareParams, next) => {
+    this.$use(async (params: any, next: (params: any) => Promise<any>) => {
       const tenantId = this.context.get('tenantId');
       if (!tenantId || !params.model) return next(params);
 
@@ -40,11 +40,5 @@ export class PrismaService extends PrismaClient implements OnModuleInit {
 
   async onModuleInit(): Promise<void> {
     await this.$connect();
-  }
-
-  async enableShutdownHooks(app: INestApplication): Promise<void> {
-    this.$on('beforeExit', async () => {
-      await app.close();
-    });
   }
 }

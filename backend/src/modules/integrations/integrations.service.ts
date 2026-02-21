@@ -1,7 +1,7 @@
-import { Injectable, TooManyRequestsException } from '@nestjs/common';
-import { CnjSyncStatus } from '@prisma/client';
-import { PrismaService } from '../../prisma/prisma.service';
+import { HttpException, HttpStatus, Injectable } from '@nestjs/common';
+import { CnjSyncStatus, Prisma } from '@prisma/client';
 import { RequestContextService } from '../../common/request-context.service';
+import { PrismaService } from '../../prisma/prisma.service';
 import {
   DatajudCnjDto,
   DatajudSyncDto,
@@ -12,7 +12,7 @@ import {
 
 @Injectable()
 export class IntegrationsService {
-  private readonly cache = new Map<string, { expiresAt: number; value: unknown }>();
+  private readonly cache = new Map<string, { expiresAt: number; value: Record<string, unknown> }>();
   private readonly rlMap = new Map<string, { windowStart: number; count: number }>();
 
   constructor(
@@ -21,21 +21,23 @@ export class IntegrationsService {
   ) {}
 
   async saveSettings(dto: SaveIntegrationSettingsDto) {
+    const tenantId = this.context.get('tenantId') ?? '';
     const existing = await this.prisma.integrationSettings.findFirst({ where: { provider: dto.provider } });
 
     if (existing) {
       return this.prisma.integrationSettings.update({
         where: { id: existing.id },
-        data: { config: dto.config, active: dto.active ?? true },
+        data: { config: dto.config as Prisma.InputJsonValue, active: dto.active ?? true },
       });
     }
 
     return this.prisma.integrationSettings.create({
-      data: { provider: dto.provider, config: dto.config, active: dto.active ?? true },
+      data: { tenantId, provider: dto.provider, config: dto.config as Prisma.InputJsonValue, active: dto.active ?? true },
     });
   }
 
   async datajudByCnj(dto: DatajudCnjDto) {
+    const tenantId = this.context.get('tenantId') ?? '';
     this.assertRateLimit('DATAJUD', 60, 30);
 
     const cached = this.getCache(`datajud:${dto.cnj}`);
@@ -43,7 +45,8 @@ export class IntegrationsService {
 
     const sync = await this.prisma.cnjSync.create({
       data: {
-        periciaId: dto.periciaId,
+        tenantId,
+        ...(dto.periciaId ? { periciaId: dto.periciaId } : {}),
         status: CnjSyncStatus.PENDING,
         payload: { cnj: dto.cnj },
         message: 'Consulta agendada',
@@ -62,21 +65,23 @@ export class IntegrationsService {
               { data: new Date().toISOString(), descricao: 'Distribuição' },
               { data: new Date().toISOString(), descricao: 'Concluso para decisão' },
             ],
-          },
+          } as Prisma.InputJsonValue,
         },
       }),
     );
 
-    this.setCache(`datajud:${dto.cnj}`, result, 5 * 60 * 1000);
+    this.setCache(`datajud:${dto.cnj}`, result as unknown as Record<string, unknown>, 5 * 60 * 1000);
     return { ...result, cached: false };
   }
 
   datajudSync(dto: DatajudSyncDto) {
+    const tenantId = this.context.get('tenantId') ?? '';
     this.assertRateLimit('DATAJUD_SYNC', 60, 30);
 
     return this.prisma.cnjSync.create({
       data: {
-        periciaId: dto.periciaId,
+        tenantId,
+        ...(dto.periciaId ? { periciaId: dto.periciaId } : {}),
         status: CnjSyncStatus.PENDING,
         nextSyncAt: new Date(Date.now() + 5 * 60 * 1000),
         message: 'Sync enfileirado',
@@ -96,11 +101,7 @@ export class IntegrationsService {
 
   tjmgUtils(dto: TjmgUtilsDto) {
     const onlyDigits = dto.cnj.replace(/\D/g, '');
-    return {
-      original: dto.cnj,
-      normalized: onlyDigits,
-      validLength: onlyDigits.length === 20,
-    };
+    return { original: dto.cnj, normalized: onlyDigits, validLength: onlyDigits.length === 20 };
   }
 
   private async withRetry<T>(fn: () => Promise<T>, retries = 3): Promise<T> {
@@ -122,10 +123,10 @@ export class IntegrationsService {
       this.cache.delete(key);
       return null;
     }
-    return value.value as Record<string, unknown>;
+    return value.value;
   }
 
-  private setCache(key: string, value: unknown, ttlMs: number) {
+  private setCache(key: string, value: Record<string, unknown>, ttlMs: number) {
     this.cache.set(key, { value, expiresAt: Date.now() + ttlMs });
   }
 
@@ -141,7 +142,7 @@ export class IntegrationsService {
     }
 
     if (current.count >= max) {
-      throw new TooManyRequestsException(`Rate limit de integração excedido para ${provider}`);
+      throw new HttpException(`Rate limit de integração excedido para ${provider}`, HttpStatus.TOO_MANY_REQUESTS);
     }
 
     current.count += 1;

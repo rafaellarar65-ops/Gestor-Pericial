@@ -1,4 +1,5 @@
 import { Injectable } from '@nestjs/common';
+import { RequestContextService } from '../../common/request-context.service';
 import { PrismaService } from '../../prisma/prisma.service';
 import { AnalyzeDocumentDto, BatchActionDto, LaudoAssistDto } from './dto/ai.dto';
 
@@ -6,7 +7,10 @@ import { AnalyzeDocumentDto, BatchActionDto, LaudoAssistDto } from './dto/ai.dto
 export class AiService {
   private readonly cache = new Map<string, Record<string, unknown>>();
 
-  constructor(private readonly prisma: PrismaService) {}
+  constructor(
+    private readonly prisma: PrismaService,
+    private readonly context: RequestContextService = new RequestContextService(),
+  ) {}
 
   async analyzeDocument(dto: AnalyzeDocumentDto) {
     const key = `analyze:${dto.fileName}:${dto.fileBase64.length}`;
@@ -70,6 +74,7 @@ export class AiService {
 
     await this.prisma.dailyUsage.create({
       data: {
+        tenantId: this.context.get('tenantId') ?? '',
         usageDate,
         metricKey,
         metricValue,

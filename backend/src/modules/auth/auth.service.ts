@@ -6,7 +6,7 @@ import { randomBytes } from 'crypto';
 import { PrismaService } from '../../prisma/prisma.service';
 import { LoginDto, MfaTotpDto, RefreshTokenDto, RegisterDto } from './dto/auth.dto';
 
-interface TokenPair {
+export interface TokenPair {
   accessToken: string;
   refreshToken: string;
 }

@@ -398,6 +398,7 @@ model Pericia {
   logStatuses      LogStatus[]
   bankTransactions BankTransaction[]
   cnjSyncs         CnjSync[]
+  teleSlots        TeleSlot[]
 
   @@unique([tenantId, processoCNJ])
   @@index([tenantId, processoCNJ])
@@ -464,7 +465,7 @@ model CaseDocument {
   updatedBy      String?  @db.Uuid
 
   tenant  Tenant  @relation(fields: [tenantId], references: [id], onDelete: Cascade)
-  pericia Pericia @relation(fields: [periciaId], references: [id], onDelete: Cascade)
+  pericia  Pericia @relation(fields: [periciaId], references: [id], onDelete: Cascade)
 
   @@index([tenantId, periciaId])
 }
@@ -506,7 +507,8 @@ model ExamPlan {
   updatedBy    String?  @db.Uuid
 
   tenant  Tenant  @relation(fields: [tenantId], references: [id], onDelete: Cascade)
-  pericia Pericia @relation(fields: [periciaId], references: [id], onDelete: Cascade)
+  pericia        Pericia         @relation(fields: [periciaId], references: [id], onDelete: Cascade)
+  examsPerformed ExamPerformed[]
 
   @@index([tenantId, periciaId])
 }

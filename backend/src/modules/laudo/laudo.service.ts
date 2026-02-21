@@ -1,5 +1,6 @@
 import { Injectable, NotFoundException } from '@nestjs/common';
-import { ExamStatus } from '@prisma/client';
+import { ExamStatus, Prisma } from '@prisma/client';
+import { RequestContextService } from '../../common/request-context.service';
 import { PrismaService } from '../../prisma/prisma.service';
 import {
   CoherenceCheckDto,
@@ -13,40 +14,49 @@ import {
 
 @Injectable()
 export class LaudoService {
-  constructor(private readonly prisma: PrismaService) {}
+  constructor(
+    private readonly prisma: PrismaService,
+    private readonly context: RequestContextService = new RequestContextService(),
+  ) {}
 
   createPreLaudo(dto: CreatePreLaudoDto) {
+    const tenantId = this.context.get('tenantId') ?? '';
     return this.prisma.preLaudo.create({
       data: {
+        tenantId,
         periciaId: dto.periciaId,
-        sections: dto.sections,
-        templateName: dto.templateName,
+        ...(dto.sections ? { sections: dto.sections as Prisma.InputJsonValue } : {}),
+        ...(dto.templateName ? { templateName: dto.templateName } : {}),
       },
     });
   }
 
   async updateSections(dto: UpdateSectionsDto) {
     await this.ensurePreLaudo(dto.preLaudoId);
-    return this.prisma.preLaudo.update({ where: { id: dto.preLaudoId }, data: { sections: dto.sections } });
+    return this.prisma.preLaudo.update({ where: { id: dto.preLaudoId }, data: { sections: dto.sections as Prisma.InputJsonValue } });
   }
 
   createExamPlan(dto: CreateExamPlanDto) {
+    const tenantId = this.context.get('tenantId') ?? '';
     return this.prisma.examPlan.create({
       data: {
+        tenantId,
         periciaId: dto.periciaId,
         title: dto.title,
-        description: dto.description,
+        ...(dto.description ? { description: dto.description } : {}),
       },
     });
   }
 
   createExamPerformed(dto: CreateExamPerformedDto) {
+    const tenantId = this.context.get('tenantId') ?? '';
     return this.prisma.examPerformed.create({
       data: {
+        tenantId,
         periciaId: dto.periciaId,
-        examPlanId: dto.examPlanId,
+        ...(dto.examPlanId ? { examPlanId: dto.examPlanId } : {}),
         status: dto.status ?? ExamStatus.NOT_STARTED,
-        findings: dto.findings,
+        ...(dto.findings ? { findings: dto.findings as Prisma.InputJsonValue } : {}),
       },
     });
   }
@@ -62,7 +72,7 @@ export class LaudoService {
           provider: 'gemini-proxy',
           chars: dto.audioBase64.length,
           text: 'Transcrição simulada para validação de fluxo backend.',
-        },
+        } as Prisma.InputJsonValue,
         status: ExamStatus.DONE,
       },
     });
@@ -70,22 +80,12 @@ export class LaudoService {
 
   async exportPdf(dto: ExportPdfDto) {
     const preLaudo = await this.ensurePreLaudo(dto.preLaudoId);
-    return {
-      preLaudoId: preLaudo.id,
-      jobQueued: true,
-      queue: 'pdf-generation',
-      downloadPath: `exports/laudo-${preLaudo.id}.pdf`,
-    };
+    return { preLaudoId: preLaudo.id, jobQueued: true, queue: 'pdf-generation', downloadPath: `exports/laudo-${preLaudo.id}.pdf` };
   }
 
   async coherenceCheck(dto: CoherenceCheckDto) {
     const preLaudo = await this.ensurePreLaudo(dto.preLaudoId);
-    return {
-      preLaudoId: preLaudo.id,
-      coherent: true,
-      issues: [],
-      score: 0.91,
-    };
+    return { preLaudoId: preLaudo.id, coherent: true, issues: [], score: 0.91 };
   }
 
   private async ensurePreLaudo(id: string) {

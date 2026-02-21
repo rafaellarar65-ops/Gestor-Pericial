@@ -5,7 +5,6 @@ import { ThrottlerGuard, ThrottlerModule } from '@nestjs/throttler';
 import { BullModule } from '@nestjs/bullmq';
 import { AppConfigModule } from './config/config.module';
 import { PrismaModule } from './prisma/prisma.module';
-import { RequestContextService } from './common/request-context.service';
 import { JwtAuthGuard } from './common/guards/jwt-auth.guard';
 import { RolesGuard } from './common/guards/roles.guard';
 import { TenantInterceptor } from './common/interceptors/tenant.interceptor';
@@ -59,7 +58,6 @@ import { DocumentsModule } from './modules/documents/documents.module';
     DocumentsModule,
   ],
   providers: [
-    RequestContextService,
     { provide: APP_GUARD, useClass: ThrottlerGuard },
     { provide: APP_GUARD, useClass: JwtAuthGuard },
     { provide: APP_GUARD, useClass: RolesGuard },

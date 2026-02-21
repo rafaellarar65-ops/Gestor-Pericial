@@ -20,7 +20,7 @@ describe('AiService', () => {
     prisma.dailyUsage.findFirst.mockResolvedValue(null);
     prisma.dailyUsage.create.mockResolvedValue({ id: 'du-1' });
 
-    const result = await service.analyzeDocument({ fileName: 'doc.pdf', fileBase64: 'aGVsbG8=' });
+    const result = (await service.analyzeDocument({ fileName: 'doc.pdf', fileBase64: 'aGVsbG8=' })) as any;
 
     expect(result.summary).toContain('doc.pdf');
     expect(result.cached).toBe(false);

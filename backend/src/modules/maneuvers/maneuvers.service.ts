@@ -1,18 +1,25 @@
 import { Injectable, NotFoundException } from '@nestjs/common';
+import { Prisma } from '@prisma/client';
+import { RequestContextService } from '../../common/request-context.service';
 import { PrismaService } from '../../prisma/prisma.service';
 import { CreateManeuversDto, MediaUploadDto, ProtocolDto, SearchManeuversDto, UpdateManeuversDto } from './dto/maneuvers.dto';
 
 @Injectable()
 export class ManeuversService {
-  constructor(private readonly prisma: PrismaService) {}
+  constructor(
+    private readonly prisma: PrismaService,
+    private readonly context: RequestContextService = new RequestContextService(),
+  ) {}
 
   create(dto: CreateManeuversDto) {
+    const tenantId = this.context.get('tenantId') ?? '';
     return this.prisma.physicalManeuver.create({
       data: {
+        tenantId,
         name: dto.name,
-        category: dto.category,
-        summary: dto.summary,
-        procedure: dto.procedure,
+        ...(dto.category ? { category: dto.category } : {}),
+        ...(dto.summary ? { summary: dto.summary } : {}),
+        ...(dto.procedure ? { procedure: dto.procedure as Prisma.InputJsonValue } : {}),
         tags: dto.tags ?? [],
         active: dto.active ?? true,
       },
@@ -22,8 +29,8 @@ export class ManeuversService {
   findAll(query?: SearchManeuversDto) {
     return this.prisma.physicalManeuver.findMany({
       where: {
-        category: query?.category,
-        tags: query?.tags?.length ? { hasSome: query.tags } : undefined,
+        ...(query?.category ? { category: query.category } : {}),
+        ...(query?.tags?.length ? { tags: { hasSome: query.tags } } : {}),
       },
       orderBy: { createdAt: 'desc' },
     });
@@ -45,12 +52,12 @@ export class ManeuversService {
     const evidence = Array.isArray(current.evidence) ? current.evidence : [];
     return this.prisma.physicalManeuver.update({
       where: { id: dto.maneuverId },
-      data: { evidence: [...evidence, { mediaUrl: dto.mediaUrl, uploadedAt: new Date().toISOString() }] },
+      data: { evidence: [...evidence, { mediaUrl: dto.mediaUrl, uploadedAt: new Date().toISOString() }] as Prisma.InputJsonValue },
     });
   }
 
   async protocols(dto: ProtocolDto) {
     await this.findOne(dto.maneuverId);
-    return this.prisma.physicalManeuver.update({ where: { id: dto.maneuverId }, data: { procedure: dto.protocol } });
+    return this.prisma.physicalManeuver.update({ where: { id: dto.maneuverId }, data: { procedure: dto.protocol as Prisma.InputJsonValue } });
   }
 }

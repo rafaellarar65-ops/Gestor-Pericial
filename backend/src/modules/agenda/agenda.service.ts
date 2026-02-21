@@ -1,18 +1,24 @@
 import { Injectable, NotFoundException } from '@nestjs/common';
 import { AgendaTaskStatus } from '@prisma/client';
+import { RequestContextService } from '../../common/request-context.service';
 import { PrismaService } from '../../prisma/prisma.service';
 import { BatchScheduleDto, CreateAgendaEventDto, CreateAgendaTaskDto, UpdateAgendaEventDto } from './dto/agenda.dto';
 
 @Injectable()
 export class AgendaService {
-  constructor(private readonly prisma: PrismaService) {}
+  constructor(
+    private readonly prisma: PrismaService,
+    private readonly context: RequestContextService = new RequestContextService(),
+  ) {}
 
   createEvent(dto: CreateAgendaEventDto) {
+    const tenantId = this.context.get('tenantId') as string;
     return this.prisma.agendaEvent.create({
       data: {
+        tenantId,
         ...dto,
         startAt: new Date(dto.startAt),
-        endAt: dto.endAt ? new Date(dto.endAt) : undefined,
+        ...(dto.endAt ? { endAt: new Date(dto.endAt) } : {}),
       },
     });
   }
@@ -36,11 +42,13 @@ export class AgendaService {
   }
 
   createTask(dto: CreateAgendaTaskDto) {
+    const tenantId = this.context.get('tenantId') as string;
     return this.prisma.agendaTask.create({
       data: {
+        tenantId,
         ...dto,
         status: dto.status ?? AgendaTaskStatus.TODO,
-        dueAt: dto.dueAt ? new Date(dto.dueAt) : undefined,
+        ...(dto.dueAt ? { dueAt: new Date(dto.dueAt) } : {}),
       },
     });
   }
@@ -50,15 +58,17 @@ export class AgendaService {
   }
 
   async batchScheduling(dto: BatchScheduleDto) {
+    const tenantId = this.context.get('tenantId') as string;
     const created = await this.prisma.$transaction(
       dto.items.map((item) =>
         this.prisma.agendaEvent.create({
           data: {
+            tenantId,
             title: item.title,
             type: item.type,
-            periciaId: item.periciaId,
+            ...(item.periciaId ? { periciaId: item.periciaId } : {}),
             startAt: new Date(item.startAt),
-            endAt: item.endAt ? new Date(item.endAt) : undefined,
+            ...(item.endAt ? { endAt: new Date(item.endAt) } : {}),
           },
         }),
       ),

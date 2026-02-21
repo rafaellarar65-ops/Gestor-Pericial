@@ -1,21 +1,27 @@
 import { Injectable } from '@nestjs/common';
 import { PaymentMatchStatus, Prisma } from '@prisma/client';
+import { RequestContextService } from '../../common/request-context.service';
 import { PrismaService } from '../../prisma/prisma.service';
 import { CreateDespesaDto, CreateRecebimentoDto, ImportRecebimentosDto, ReconcileDto } from './dto/financial.dto';
 
 @Injectable()
 export class FinancialService {
-  constructor(private readonly prisma: PrismaService) {}
+  constructor(
+    private readonly prisma: PrismaService,
+    private readonly context: RequestContextService = new RequestContextService(),
+  ) {}
 
   createRecebimento(dto: CreateRecebimentoDto) {
+    const tenantId = this.context.get('tenantId') ?? '';
     return this.prisma.recebimento.create({
       data: {
+        tenantId,
         periciaId: dto.periciaId,
         fontePagamento: dto.fontePagamento,
         dataRecebimento: new Date(dto.dataRecebimento),
         valorBruto: new Prisma.Decimal(dto.valorBruto),
-        valorLiquido: dto.valorLiquido ? new Prisma.Decimal(dto.valorLiquido) : undefined,
-        descricao: dto.descricao,
+        ...(dto.valorLiquido ? { valorLiquido: new Prisma.Decimal(dto.valorLiquido) } : {}),
+        ...(dto.descricao ? { descricao: dto.descricao } : {}),
       },
     });
   }
@@ -25,13 +31,15 @@ export class FinancialService {
   }
 
   createDespesa(dto: CreateDespesaDto) {
+    const tenantId = this.context.get('tenantId') ?? '';
     return this.prisma.despesa.create({
       data: {
+        tenantId,
         categoria: dto.categoria,
         descricao: dto.descricao,
         valor: new Prisma.Decimal(dto.valor),
         dataCompetencia: new Date(dto.dataCompetencia),
-        periciaId: dto.periciaId,
+        ...(dto.periciaId ? { periciaId: dto.periciaId } : {}),
       },
     });
   }
@@ -41,9 +49,11 @@ export class FinancialService {
   }
 
   async importBatch(dto: ImportRecebimentosDto) {
+    const tenantId = this.context.get('tenantId') ?? '';
     const batch = await this.prisma.importBatch.create({
       data: {
-        sourceFileName: dto.sourceFileName,
+        tenantId,
+        ...(dto.sourceFileName ? { sourceFileName: dto.sourceFileName } : {}),
         totalRecords: dto.rows.length,
         status: 'PROCESSING',
       },
@@ -53,13 +63,14 @@ export class FinancialService {
       dto.rows.map((row) =>
         this.prisma.recebimento.create({
           data: {
+            tenantId,
             importBatchId: batch.id,
             periciaId: row.periciaId,
             fontePagamento: row.fontePagamento,
             dataRecebimento: new Date(row.dataRecebimento),
             valorBruto: new Prisma.Decimal(row.valorBruto),
-            valorLiquido: row.valorLiquido ? new Prisma.Decimal(row.valorLiquido) : undefined,
-            descricao: row.descricao,
+            ...(row.valorLiquido ? { valorLiquido: new Prisma.Decimal(row.valorLiquido) } : {}),
+            ...(row.descricao ? { descricao: row.descricao } : {}),
           },
         }),
       ),
@@ -74,16 +85,13 @@ export class FinancialService {
   }
 
   unmatched() {
-    return this.prisma.unmatchedPayment.findMany({
-      where: { matchStatus: PaymentMatchStatus.UNMATCHED },
-      orderBy: { createdAt: 'desc' },
-    });
+    return this.prisma.unmatchedPayment.findMany({ where: { matchStatus: PaymentMatchStatus.UNMATCHED }, orderBy: { createdAt: 'desc' } });
   }
 
   async reconcile(dto: ReconcileDto) {
     const result = await this.prisma.unmatchedPayment.updateMany({
       where: { id: { in: dto.unmatchedIds } },
-      data: { matchStatus: PaymentMatchStatus.MATCHED, notes: dto.note },
+      data: { matchStatus: PaymentMatchStatus.MATCHED, ...(dto.note ? { notes: dto.note } : {}) },
     });
 
     return { reconciled: result.count };
@@ -100,14 +108,8 @@ export class FinancialService {
     const totalDespesas = Number(totalDespesaAgg._sum.valor ?? 0);
 
     return {
-      totals: {
-        recebido: totalRecebido,
-        despesas: totalDespesas,
-        resultado: totalRecebido - totalDespesas,
-      },
-      agingBuckets: {
-        atrasados,
-      },
+      totals: { recebido: totalRecebido, despesas: totalDespesas, resultado: totalRecebido - totalDespesas },
+      agingBuckets: { atrasados },
       financialScore: totalRecebido > 0 ? Math.max(0, Math.min(100, Math.round(((totalRecebido - totalDespesas) / totalRecebido) * 100))) : 0,
     };
   }

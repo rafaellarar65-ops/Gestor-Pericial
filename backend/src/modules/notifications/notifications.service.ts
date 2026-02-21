@@ -1,4 +1,6 @@
 import { Injectable } from '@nestjs/common';
+import { Prisma } from '@prisma/client';
+import { RequestContextService } from '../../common/request-context.service';
 import { PrismaService } from '../../prisma/prisma.service';
 import { DigestDto, RealtimeNotificationDto, UpsertNotificationRuleDto } from './dto/notifications.dto';
 import { NotificationsGateway } from './notifications.gateway';
@@ -8,6 +10,7 @@ export class NotificationsService {
   constructor(
     private readonly prisma: PrismaService,
     private readonly gateway: NotificationsGateway,
+    private readonly context: RequestContextService = new RequestContextService(),
   ) {}
 
   realtime(dto: RealtimeNotificationDto) {
@@ -25,14 +28,11 @@ export class NotificationsService {
 
   async digest(dto: DigestDto) {
     const configs = await this.prisma.notificationConfig.findMany({ where: { enabled: true } });
-    return {
-      scheduled: true,
-      period: dto.period ?? 'daily',
-      activeChannels: configs.map((cfg) => cfg.channel),
-    };
+    return { scheduled: true, period: dto.period ?? 'daily', activeChannels: configs.map((cfg) => cfg.channel) };
   }
 
   async rules(dto: UpsertNotificationRuleDto) {
+    const tenantId = this.context.get('tenantId') ?? '';
     const existing = await this.prisma.notificationConfig.findFirst({ where: { channel: dto.channel } });
 
     if (existing) {
@@ -40,16 +40,17 @@ export class NotificationsService {
         where: { id: existing.id },
         data: {
           enabled: dto.enabled ?? existing.enabled,
-          config: dto.config,
+          ...(dto.config ? { config: dto.config as Prisma.InputJsonValue } : {}),
         },
       });
     }
 
     return this.prisma.notificationConfig.create({
       data: {
+        tenantId,
         channel: dto.channel,
         enabled: dto.enabled ?? true,
-        config: dto.config,
+        ...(dto.config ? { config: dto.config as Prisma.InputJsonValue } : {}),
       },
     });
   }

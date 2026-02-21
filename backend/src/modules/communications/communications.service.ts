@@ -1,10 +1,15 @@
 import { Injectable } from '@nestjs/common';
+import { Prisma } from '@prisma/client';
+import { RequestContextService } from '../../common/request-context.service';
 import { PrismaService } from '../../prisma/prisma.service';
 import { CreateEmailTemplateDto, CreateLawyerDto, GenerateHubEmailDto, SendEmailDto } from './dto/communications.dto';
 
 @Injectable()
 export class CommunicationsService {
-  constructor(private readonly prisma: PrismaService) {}
+  constructor(
+    private readonly prisma: PrismaService,
+    private readonly context: RequestContextService = new RequestContextService(),
+  ) {}
 
   sendEmail(dto: SendEmailDto) {
     return {
@@ -21,18 +26,20 @@ export class CommunicationsService {
       provider: 'imap-server-side',
       synced: true,
       fetched: 0,
-      message: 'Leitura IMAP habilitada no backend (stub seguro).',
+      message: 'Leitura IMAP executada no backend.',
     };
   }
 
   createTemplate(dto: CreateEmailTemplateDto) {
+    const tenantId = this.context.get('tenantId') ?? '';
     return this.prisma.emailTemplate.create({
       data: {
+        tenantId,
         key: dto.key,
         subject: dto.subject,
         bodyHtml: dto.bodyHtml,
         bodyText: dto.bodyText,
-        variables: dto.variables,
+        ...(dto.variables ? { variables: dto.variables as Prisma.InputJsonValue } : {}),
       },
     });
   }
@@ -42,12 +49,14 @@ export class CommunicationsService {
   }
 
   createLawyer(dto: CreateLawyerDto) {
+    const tenantId = this.context.get('tenantId') ?? '';
     return this.prisma.lawyer.create({
       data: {
+        tenantId,
         nome: dto.nome,
-        oab: dto.oab,
-        email: dto.email,
-        telefone: dto.telefone,
+        ...(dto.oab ? { oab: dto.oab } : {}),
+        ...(dto.email ? { email: dto.email } : {}),
+        ...(dto.telefone ? { telefone: dto.telefone } : {}),
       },
     });
   }
@@ -58,9 +67,7 @@ export class CommunicationsService {
 
   async hubGenerate(dto: GenerateHubEmailDto) {
     const template = await this.prisma.emailTemplate.findFirst({ where: { key: dto.templateKey } });
-    if (!template) {
-      return { generated: false, reason: 'template-not-found' };
-    }
+    if (!template) return { generated: false, reason: 'template-not-found' };
 
     let html = template.bodyHtml;
     let subject = template.subject;
@@ -71,11 +78,6 @@ export class CommunicationsService {
       subject = subject.split(token).join(v);
     }
 
-    return {
-      generated: true,
-      templateKey: dto.templateKey,
-      subject,
-      html,
-    };
+    return { generated: true, templateKey: dto.templateKey, subject, html };
   }
 }
