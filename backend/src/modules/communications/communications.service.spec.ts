@@ -1,20 +1,29 @@
-import { NotFoundException } from '@nestjs/common';
 import { CommunicationsService } from './communications.service';
 
 describe('CommunicationsService', () => {
+  const prisma = {
+    emailTemplate: { create: jest.fn(), findMany: jest.fn(), findFirst: jest.fn() },
+    lawyer: { create: jest.fn(), findMany: jest.fn() },
+  } as any;
+
+  const context = { get: jest.fn().mockReturnValue('t-1') };
+
   let service: CommunicationsService;
 
   beforeEach(() => {
-    service = new CommunicationsService();
+    jest.clearAllMocks();
+    service = new CommunicationsService(prisma, context as any);
   });
 
-  it('creates and returns a record (happy path)', () => {
-    const created = service.create({ name: 'demo' } as any);
-    expect(created).toHaveProperty('id');
-    expect(service.findAll()).toHaveLength(1);
+  it('creates template (happy path)', async () => {
+    prisma.emailTemplate.create.mockResolvedValue({ id: 'tpl-1' });
+    const result = await service.createTemplate({ key: 'k1', subject: 's', bodyHtml: '<b>h</b>' });
+    expect(result.id).toBe('tpl-1');
   });
 
-  it('throws NotFoundException on missing record (edge case)', () => {
-    expect(() => service.findOne('404')).toThrow(NotFoundException);
+  it('returns template-not-found on hub generate missing template (edge case)', async () => {
+    prisma.emailTemplate.findFirst.mockResolvedValue(null);
+    const result = await service.hubGenerate({ templateKey: 'missing' });
+    expect(result.generated).toBe(false);
   });
 });

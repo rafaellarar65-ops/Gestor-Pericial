@@ -17,11 +17,13 @@ describe('PericiasService', () => {
     $transaction: jest.fn(),
   } as any;
 
+  const context = { get: jest.fn().mockReturnValue('t-1') };
+
   let service: PericiasService;
 
   beforeEach(() => {
     jest.clearAllMocks();
-    service = new PericiasService(prisma);
+    service = new PericiasService(prisma, context as any);
   });
 
   it('creates a pericia (happy path)', async () => {

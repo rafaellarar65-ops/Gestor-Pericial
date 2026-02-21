@@ -1,7 +1,8 @@
-import { Controller, Post } from '@nestjs/common';
-import { ApiBearerAuth, ApiTags } from '@nestjs/swagger';
+import { Body, Controller, Post } from '@nestjs/common';
+import { ApiBearerAuth, ApiOperation, ApiTags } from '@nestjs/swagger';
 import { Throttle } from '@nestjs/throttler';
 import { AiService } from './ai.service';
+import { AnalyzeDocumentDto, BatchActionDto, LaudoAssistDto } from './dto/ai.dto';
 
 @ApiTags('ai')
 @ApiBearerAuth()
@@ -11,17 +12,20 @@ export class AiController {
   constructor(private readonly service: AiService) {}
 
   @Post('analyze-document')
-  analyzeDocument() {
-    return { action: 'analyze-document', module: 'ai' };
+  @ApiOperation({ summary: 'Analisa documento PDF e retorna insights' })
+  analyzeDocument(@Body() dto: AnalyzeDocumentDto) {
+    return this.service.analyzeDocument(dto);
   }
 
   @Post('batch-action')
-  batchAction() {
-    return { action: 'batch-action', module: 'ai' };
+  @ApiOperation({ summary: 'Gera plano de ação em lote baseado em instrução natural' })
+  batchAction(@Body() dto: BatchActionDto) {
+    return this.service.batchAction(dto);
   }
 
   @Post('laudo-assist')
-  laudoAssist() {
-    return { action: 'laudo-assist', module: 'ai' };
+  @ApiOperation({ summary: 'Sugere texto para seção do laudo' })
+  laudoAssist(@Body() dto: LaudoAssistDto) {
+    return this.service.laudoAssist(dto);
   }
 }

@@ -1,7 +1,7 @@
-import { Body, Controller, Delete, Get, Param, Patch, Post } from '@nestjs/common';
-import { ApiBearerAuth, ApiTags } from '@nestjs/swagger';
+import { Body, Controller, Post } from '@nestjs/common';
+import { ApiBearerAuth, ApiOperation, ApiTags } from '@nestjs/swagger';
 import { DocumentsService } from './documents.service';
-import { CreateDocumentsDto, UpdateDocumentsDto } from './dto/documents.dto';
+import { CategorizeDocumentDto, LinkPericiaDocumentDto, SignedUrlDto, UploadDocumentDto } from './dto/documents.dto';
 
 @ApiTags('documents')
 @ApiBearerAuth()
@@ -10,12 +10,24 @@ export class DocumentsController {
   constructor(private readonly service: DocumentsService) {}
 
   @Post('upload')
-  upload() { return { action: 'upload', module: 'documents' }; }
-  @Get('download-signed-url')
-  download_signed_url() { return { action: 'download-signed-url', module: 'documents' }; }
-  @Post('categorize')
-  categorize() { return { action: 'categorize', module: 'documents' }; }
-  @Post('link-pericia')
-  link_pericia() { return { action: 'link-pericia', module: 'documents' }; }
+  @ApiOperation({ summary: 'Registra upload de documento para storage' })
+  upload(@Body() dto: UploadDocumentDto) {
+    return this.service.upload(dto);
+  }
 
+  @Post('download-signed-url')
+  @ApiOperation({ summary: 'Gera signed URL temporária para download' })
+  downloadSignedUrl(@Body() dto: SignedUrlDto) {
+    return this.service.downloadSignedUrl(dto);
+  }
+
+  @Post('categorize')
+  categorize(@Body() dto: CategorizeDocumentDto) {
+    return this.service.categorize(dto);
+  }
+
+  @Post('link-pericia')
+  linkPericia(@Body() dto: LinkPericiaDocumentDto) {
+    return this.service.linkPericia(dto);
+  }
 }

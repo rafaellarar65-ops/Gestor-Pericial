@@ -1,5 +1,6 @@
 import { Injectable, NotFoundException } from '@nestjs/common';
 import { Prisma } from '@prisma/client';
+import { RequestContextService } from '../../common/request-context.service';
 import { PrismaService } from '../../prisma/prisma.service';
 import {
   BatchUpdatePericiasDto,
@@ -12,36 +13,48 @@ import {
 
 @Injectable()
 export class PericiasService {
-  constructor(private readonly prisma: PrismaService) {}
+  constructor(
+    private readonly prisma: PrismaService,
+    private readonly context: RequestContextService,
+  ) {}
 
   create(dto: CreatePericiasDto) {
+    const tenantId = this.context.get('tenantId') ?? '';
     return this.prisma.pericia.create({
       data: {
-        ...dto,
-        dataNomeacao: dto.dataNomeacao ? new Date(dto.dataNomeacao) : undefined,
+        tenantId,
+        processoCNJ: dto.processoCNJ,
+        ...(dto.cidadeId ? { cidadeId: dto.cidadeId } : {}),
+        ...(dto.varaId ? { varaId: dto.varaId } : {}),
+        ...(dto.tipoPericiaId ? { tipoPericiaId: dto.tipoPericiaId } : {}),
+        ...(dto.modalidadeId ? { modalidadeId: dto.modalidadeId } : {}),
+        ...(dto.statusId ? { statusId: dto.statusId } : {}),
+        ...(dto.localId ? { localId: dto.localId } : {}),
+        ...(dto.periciadoNome ? { periciadoNome: dto.periciadoNome } : {}),
+        ...(dto.observacoes ? { observacoes: dto.observacoes } : {}),
+        ...(dto.pagamentoStatus ? { pagamentoStatus: dto.pagamentoStatus } : {}),
+        ...(dto.dataNomeacao ? { dataNomeacao: new Date(dto.dataNomeacao) } : {}),
       },
     });
   }
 
   async findAll(query: ListPericiasDto) {
     const where: Prisma.PericiaWhereInput = {
-      statusId: query.statusId,
-      cidadeId: query.cidadeId,
-      tipoPericiaId: query.tipoPericiaId,
-      dataNomeacao:
-        query.dateFrom || query.dateTo
-          ? {
-              gte: query.dateFrom ? new Date(query.dateFrom) : undefined,
-              lte: query.dateTo ? new Date(query.dateTo) : undefined,
-            }
-          : undefined,
-      OR: query.search
-        ? [
-            { processoCNJ: { contains: query.search, mode: 'insensitive' } },
-            { periciadoNome: { contains: query.search, mode: 'insensitive' } },
-            { observacoes: { contains: query.search, mode: 'insensitive' } },
-          ]
-        : undefined,
+      ...(query.statusId ? { statusId: query.statusId } : {}),
+      ...(query.cidadeId ? { cidadeId: query.cidadeId } : {}),
+      ...(query.tipoPericiaId ? { tipoPericiaId: query.tipoPericiaId } : {}),
+      ...(query.dateFrom || query.dateTo
+        ? { dataNomeacao: { ...(query.dateFrom ? { gte: new Date(query.dateFrom) } : {}), ...(query.dateTo ? { lte: new Date(query.dateTo) } : {}) } }
+        : {}),
+      ...(query.search
+        ? {
+            OR: [
+              { processoCNJ: { contains: query.search, mode: 'insensitive' } },
+              { periciadoNome: { contains: query.search, mode: 'insensitive' } },
+              { observacoes: { contains: query.search, mode: 'insensitive' } },
+            ],
+          }
+        : {}),
     };
 
     const [items, total] = await this.prisma.$transaction([
@@ -55,10 +68,7 @@ export class PericiasService {
       this.prisma.pericia.count({ where }),
     ]);
 
-    return {
-      items,
-      pagination: { page: query.page, limit: query.limit, total },
-    };
+    return { items, pagination: { page: query.page, limit: query.limit, total } };
   }
 
   async findOne(id: string) {
@@ -77,21 +87,28 @@ export class PericiasService {
   }
 
   async batchUpdate(dto: BatchUpdatePericiasDto) {
-    const result = await this.prisma.pericia.updateMany({
-      where: { id: { in: dto.ids } },
-      data: dto.data,
-    });
-
+    const result = await this.prisma.pericia.updateMany({ where: { id: { in: dto.ids } }, data: dto.data });
     return { updated: result.count };
   }
 
   async importCsv(dto: ImportPericiasDto) {
+    const tenantId = this.context.get('tenantId') ?? '';
     const created = await this.prisma.$transaction(
       dto.rows.map((row) =>
         this.prisma.pericia.create({
           data: {
-            ...row,
-            dataNomeacao: row.dataNomeacao ? new Date(row.dataNomeacao) : undefined,
+            tenantId,
+            processoCNJ: row.processoCNJ,
+            ...(row.cidadeId ? { cidadeId: row.cidadeId } : {}),
+            ...(row.varaId ? { varaId: row.varaId } : {}),
+            ...(row.tipoPericiaId ? { tipoPericiaId: row.tipoPericiaId } : {}),
+            ...(row.modalidadeId ? { modalidadeId: row.modalidadeId } : {}),
+            ...(row.statusId ? { statusId: row.statusId } : {}),
+            ...(row.localId ? { localId: row.localId } : {}),
+            ...(row.periciadoNome ? { periciadoNome: row.periciadoNome } : {}),
+            ...(row.observacoes ? { observacoes: row.observacoes } : {}),
+            ...(row.pagamentoStatus ? { pagamentoStatus: row.pagamentoStatus } : {}),
+            ...(row.dataNomeacao ? { dataNomeacao: new Date(row.dataNomeacao) } : {}),
             origemImportacao: 'CSV',
           },
         }),
@@ -107,22 +124,20 @@ export class PericiasService {
   }
 
   async changeStatus(dto: ChangeStatusPericiaDto, actorId?: string) {
+    const tenantId = this.context.get('tenantId') ?? '';
     const current = await this.findOne(dto.periciaId);
 
-    const updated = await this.prisma.pericia.update({
-      where: { id: dto.periciaId },
-      data: { statusId: dto.statusId },
-      include: { status: true },
-    });
+    const updated = await this.prisma.pericia.update({ where: { id: dto.periciaId }, data: { statusId: dto.statusId }, include: { status: true } });
 
     await this.prisma.logStatus.create({
       data: {
+        tenantId,
         periciaId: dto.periciaId,
-        statusAnterior: current.statusId ?? undefined,
+        ...(current.statusId ? { statusAnterior: current.statusId } : {}),
         statusNovo: dto.statusId,
-        motivo: dto.motivo,
+        ...(dto.motivo ? { motivo: dto.motivo } : {}),
         metadata: { source: 'pericias.changeStatus' },
-        createdBy: actorId,
+        ...(actorId ? { createdBy: actorId } : {}),
       },
     });
 

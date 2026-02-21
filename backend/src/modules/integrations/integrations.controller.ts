@@ -1,7 +1,13 @@
-import { Body, Controller, Delete, Get, Param, Patch, Post } from '@nestjs/common';
-import { ApiBearerAuth, ApiTags } from '@nestjs/swagger';
+import { Body, Controller, Post } from '@nestjs/common';
+import { ApiBearerAuth, ApiOperation, ApiTags } from '@nestjs/swagger';
+import {
+  DatajudCnjDto,
+  DatajudSyncDto,
+  SaveIntegrationSettingsDto,
+  SisperjudConsultDto,
+  TjmgUtilsDto,
+} from './dto/integrations.dto';
 import { IntegrationsService } from './integrations.service';
-import { CreateIntegrationsDto, UpdateIntegrationsDto } from './dto/integrations.dto';
 
 @ApiTags('integrations')
 @ApiBearerAuth()
@@ -9,13 +15,29 @@ import { CreateIntegrationsDto, UpdateIntegrationsDto } from './dto/integrations
 export class IntegrationsController {
   constructor(private readonly service: IntegrationsService) {}
 
-  @Post('datajud-cnj')
-  datajud_cnj() { return { action: 'datajud-cnj', module: 'integrations' }; }
-  @Post('datajud-sync')
-  datajud_sync() { return { action: 'datajud-sync', module: 'integrations' }; }
-  @Post('sisperjud-consult')
-  sisperjud_consult() { return { action: 'sisperjud-consult', module: 'integrations' }; }
-  @Post('tjmg-utils')
-  tjmg_utils() { return { action: 'tjmg-utils', module: 'integrations' }; }
+  @Post('settings')
+  @ApiOperation({ summary: 'Configura/atualiza provider de integração' })
+  saveSettings(@Body() dto: SaveIntegrationSettingsDto) {
+    return this.service.saveSettings(dto);
+  }
 
+  @Post('datajud-cnj')
+  datajudCnj(@Body() dto: DatajudCnjDto) {
+    return this.service.datajudByCnj(dto);
+  }
+
+  @Post('datajud-sync')
+  datajudSync(@Body() dto: DatajudSyncDto) {
+    return this.service.datajudSync(dto);
+  }
+
+  @Post('sisperjud-consult')
+  sisperjudConsult(@Body() dto: SisperjudConsultDto) {
+    return this.service.sisperjudConsult(dto);
+  }
+
+  @Post('tjmg-utils')
+  tjmgUtils(@Body() dto: TjmgUtilsDto) {
+    return this.service.tjmgUtils(dto);
+  }
 }

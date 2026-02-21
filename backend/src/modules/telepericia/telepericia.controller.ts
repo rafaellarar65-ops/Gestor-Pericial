@@ -1,7 +1,7 @@
-import { Body, Controller, Delete, Get, Param, Patch, Post } from '@nestjs/common';
-import { ApiBearerAuth, ApiTags } from '@nestjs/swagger';
+import { Body, Controller, Get, Post } from '@nestjs/common';
+import { ApiBearerAuth, ApiOperation, ApiTags } from '@nestjs/swagger';
+import { BookTeleSlotDto, CreateTeleSlotDto, UploadSessionDto, WhatsappContactDto } from './dto/telepericia.dto';
 import { TelepericiaService } from './telepericia.service';
-import { CreateTelepericiaDto, UpdateTelepericiaDto } from './dto/telepericia.dto';
 
 @ApiTags('telepericia')
 @ApiBearerAuth()
@@ -10,12 +10,28 @@ export class TelepericiaController {
   constructor(private readonly service: TelepericiaService) {}
 
   @Post('slots')
-  slots() { return { action: 'slots', module: 'telepericia' }; }
-  @Post('booking')
-  booking() { return { action: 'booking', module: 'telepericia' }; }
-  @Post('whatsapp-contact')
-  whatsapp_contact() { return { action: 'whatsapp-contact', module: 'telepericia' }; }
-  @Post('upload-sessions')
-  upload_sessions() { return { action: 'upload-sessions', module: 'telepericia' }; }
+  createSlot(@Body() dto: CreateTeleSlotDto) {
+    return this.service.createSlot(dto);
+  }
 
+  @Get('slots')
+  listSlots() {
+    return this.service.listSlots();
+  }
+
+  @Post('booking')
+  booking(@Body() dto: BookTeleSlotDto) {
+    return this.service.booking(dto);
+  }
+
+  @Post('whatsapp-contact')
+  @ApiOperation({ summary: 'Gera link WhatsApp de contato para slot/perícia' })
+  whatsappContact(@Body() dto: WhatsappContactDto) {
+    return this.service.whatsappContact(dto);
+  }
+
+  @Post('upload-sessions')
+  uploadSessions(@Body() dto: UploadSessionDto) {
+    return this.service.uploadSessions(dto);
+  }
 }

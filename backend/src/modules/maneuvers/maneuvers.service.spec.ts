@@ -2,19 +2,32 @@ import { NotFoundException } from '@nestjs/common';
 import { ManeuversService } from './maneuvers.service';
 
 describe('ManeuversService', () => {
+  const prisma = {
+    physicalManeuver: {
+      create: jest.fn(),
+      findMany: jest.fn(),
+      findFirst: jest.fn(),
+      update: jest.fn(),
+    },
+  } as any;
+
+  const context = { get: jest.fn().mockReturnValue('t-1') };
+
   let service: ManeuversService;
 
   beforeEach(() => {
-    service = new ManeuversService();
+    jest.clearAllMocks();
+    service = new ManeuversService(prisma, context as any);
   });
 
-  it('creates and returns a record (happy path)', () => {
-    const created = service.create({ name: 'demo' } as any);
-    expect(created).toHaveProperty('id');
-    expect(service.findAll()).toHaveLength(1);
+  it('creates physical maneuver (happy path)', async () => {
+    prisma.physicalManeuver.create.mockResolvedValue({ id: 'm-1' });
+    const result = await service.create({ name: 'Lasègue' } as any);
+    expect(result.id).toBe('m-1');
   });
 
-  it('throws NotFoundException on missing record (edge case)', () => {
-    expect(() => service.findOne('404')).toThrow(NotFoundException);
+  it('throws NotFoundException for missing maneuver (edge case)', async () => {
+    prisma.physicalManeuver.findFirst.mockResolvedValue(null);
+    await expect(service.findOne('404')).rejects.toThrow(NotFoundException);
   });
 });

@@ -1,15 +1,60 @@
 import { ApiProperty, ApiPropertyOptional } from '@nestjs/swagger';
-import { IsObject, IsOptional, IsString } from 'class-validator';
+import { TeleSlotStatus } from '@prisma/client';
+import { Type } from 'class-transformer';
+import { IsDateString, IsEnum, IsOptional, IsString, IsUUID } from 'class-validator';
 
-export class CreateTelepericiaDto {
+export class CreateTeleSlotDto {
   @ApiProperty()
-  @IsString()
-  name!: string;
+  @IsDateString()
+  startAt!: string;
 
-  @ApiPropertyOptional({ type: Object })
+  @ApiProperty()
+  @IsDateString()
+  endAt!: string;
+
+  @ApiPropertyOptional({ enum: TeleSlotStatus })
   @IsOptional()
-  @IsObject()
-  payload?: Record<string, unknown>;
+  @IsEnum(TeleSlotStatus)
+  status?: TeleSlotStatus;
+
+  @ApiPropertyOptional()
+  @IsOptional()
+  @IsString()
+  platform?: string;
 }
 
-export class UpdateTelepericiaDto extends CreateTelepericiaDto {}
+export class BookTeleSlotDto {
+  @ApiProperty()
+  @IsUUID()
+  slotId!: string;
+
+  @ApiProperty()
+  @IsUUID()
+  periciaId!: string;
+
+  @ApiPropertyOptional()
+  @IsOptional()
+  @IsString()
+  meetingUrl?: string;
+}
+
+export class WhatsappContactDto {
+  @ApiProperty()
+  @IsUUID()
+  slotId!: string;
+
+  @ApiProperty()
+  @IsString()
+  phone!: string;
+}
+
+export class UploadSessionDto {
+  @ApiProperty()
+  @IsUUID()
+  slotId!: string;
+
+  @ApiPropertyOptional({ description: 'Expiração em minutos', default: 30 })
+  @Type(() => Number)
+  @IsOptional()
+  expiresInMinutes = 30;
+}

@@ -17,6 +17,8 @@ describe('AuthService', () => {
     verify: jest.fn(),
   } as unknown as JwtService;
 
+  const context = { get: jest.fn().mockReturnValue('t-1') };
+
   let service: AuthService;
 
   beforeEach(() => {

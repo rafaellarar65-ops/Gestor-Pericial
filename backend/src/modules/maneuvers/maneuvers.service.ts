@@ -1,30 +1,63 @@
 import { Injectable, NotFoundException } from '@nestjs/common';
-import { CreateManeuversDto, UpdateManeuversDto } from './dto/maneuvers.dto';
+import { Prisma } from '@prisma/client';
+import { RequestContextService } from '../../common/request-context.service';
+import { PrismaService } from '../../prisma/prisma.service';
+import { CreateManeuversDto, MediaUploadDto, ProtocolDto, SearchManeuversDto, UpdateManeuversDto } from './dto/maneuvers.dto';
 
 @Injectable()
 export class ManeuversService {
-  private readonly records: Array<Record<string, unknown>> = [];
+  constructor(
+    private readonly prisma: PrismaService,
+    private readonly context: RequestContextService,
+  ) {}
 
   create(dto: CreateManeuversDto) {
-    const item = { id: String(this.records.length + 1), ...dto };
-    this.records.push(item);
+    const tenantId = this.context.get('tenantId') ?? '';
+    return this.prisma.physicalManeuver.create({
+      data: {
+        tenantId,
+        name: dto.name,
+        ...(dto.category ? { category: dto.category } : {}),
+        ...(dto.summary ? { summary: dto.summary } : {}),
+        ...(dto.procedure ? { procedure: dto.procedure as Prisma.InputJsonValue } : {}),
+        tags: dto.tags ?? [],
+        active: dto.active ?? true,
+      },
+    });
+  }
+
+  findAll(query?: SearchManeuversDto) {
+    return this.prisma.physicalManeuver.findMany({
+      where: {
+        ...(query?.category ? { category: query.category } : {}),
+        ...(query?.tags?.length ? { tags: { hasSome: query.tags } } : {}),
+      },
+      orderBy: { createdAt: 'desc' },
+    });
+  }
+
+  async update(id: string, dto: UpdateManeuversDto) {
+    await this.findOne(id);
+    return this.prisma.physicalManeuver.update({ where: { id }, data: dto });
+  }
+
+  async findOne(id: string) {
+    const item = await this.prisma.physicalManeuver.findFirst({ where: { id } });
+    if (!item) throw new NotFoundException('Manobra não encontrada.');
     return item;
   }
 
-  findAll() {
-    return this.records;
+  async mediaUpload(dto: MediaUploadDto) {
+    const current = await this.findOne(dto.maneuverId);
+    const evidence = Array.isArray(current.evidence) ? current.evidence : [];
+    return this.prisma.physicalManeuver.update({
+      where: { id: dto.maneuverId },
+      data: { evidence: [...evidence, { mediaUrl: dto.mediaUrl, uploadedAt: new Date().toISOString() }] as Prisma.InputJsonValue },
+    });
   }
 
-  findOne(id: string) {
-    const found = this.records.find((item) => item.id === id);
-    if (!found) throw new NotFoundException('maneuvers not found');
-    return found;
-  }
-
-  update(id: string, dto: UpdateManeuversDto) {
-    const index = this.records.findIndex((item) => item.id === id);
-    if (index < 0) throw new NotFoundException('maneuvers not found');
-    this.records[index] = { ...this.records[index], ...dto };
-    return this.records[index];
+  async protocols(dto: ProtocolDto) {
+    await this.findOne(dto.maneuverId);
+    return this.prisma.physicalManeuver.update({ where: { id: dto.maneuverId }, data: { procedure: dto.protocol as Prisma.InputJsonValue } });
   }
 }

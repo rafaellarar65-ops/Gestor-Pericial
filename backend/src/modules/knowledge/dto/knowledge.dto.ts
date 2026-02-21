@@ -1,15 +1,85 @@
 import { ApiProperty, ApiPropertyOptional } from '@nestjs/swagger';
-import { IsObject, IsOptional, IsString } from 'class-validator';
+import { Type } from 'class-transformer';
+import { IsArray, IsBoolean, IsOptional, IsString } from 'class-validator';
 
 export class CreateKnowledgeDto {
   @ApiProperty()
   @IsString()
-  name!: string;
+  title!: string;
+
+  @ApiPropertyOptional()
+  @IsOptional()
+  @IsString()
+  category?: string;
 
   @ApiPropertyOptional({ type: Object })
   @IsOptional()
-  @IsObject()
-  payload?: Record<string, unknown>;
+  content?: Record<string, unknown>;
+
+  @ApiPropertyOptional()
+  @IsOptional()
+  @IsString()
+  source?: string;
+
+  @ApiPropertyOptional({ type: [String] })
+  @IsOptional()
+  @IsArray()
+  @IsString({ each: true })
+  tags?: string[];
+
+  @ApiPropertyOptional()
+  @Type(() => Boolean)
+  @IsOptional()
+  @IsBoolean()
+  active?: boolean;
 }
 
-export class UpdateKnowledgeDto extends CreateKnowledgeDto {}
+export class UpdateKnowledgeDto {
+  @ApiPropertyOptional()
+  @IsOptional()
+  @IsString()
+  title?: string;
+
+  @ApiPropertyOptional()
+  @IsOptional()
+  @IsString()
+  category?: string;
+
+  @ApiPropertyOptional({ type: Object })
+  @IsOptional()
+  content?: Record<string, unknown>;
+
+  @ApiPropertyOptional({ type: [String] })
+  @IsOptional()
+  @IsArray()
+  @IsString({ each: true })
+  tags?: string[];
+
+  @ApiPropertyOptional()
+  @Type(() => Boolean)
+  @IsOptional()
+  @IsBoolean()
+  active?: boolean;
+}
+
+export class SearchKnowledgeDto {
+  @ApiPropertyOptional()
+  @IsOptional()
+  @IsString()
+  q?: string;
+
+  @ApiPropertyOptional()
+  @IsOptional()
+  @IsString()
+  category?: string;
+}
+
+export class CategorizeKnowledgeDto {
+  @ApiProperty()
+  @IsString()
+  itemId!: string;
+
+  @ApiProperty()
+  @IsString()
+  category!: string;
+}

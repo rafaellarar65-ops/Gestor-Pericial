@@ -1,30 +1,74 @@
 import { Injectable, NotFoundException } from '@nestjs/common';
-import { CreateKnowledgeDto, UpdateKnowledgeDto } from './dto/knowledge.dto';
+import { Prisma } from '@prisma/client';
+import { RequestContextService } from '../../common/request-context.service';
+import { PrismaService } from '../../prisma/prisma.service';
+import { CategorizeKnowledgeDto, CreateKnowledgeDto, SearchKnowledgeDto, UpdateKnowledgeDto } from './dto/knowledge.dto';
 
 @Injectable()
 export class KnowledgeService {
-  private readonly records: Array<Record<string, unknown>> = [];
+  constructor(
+    private readonly prisma: PrismaService,
+    private readonly context: RequestContextService,
+  ) {}
 
   create(dto: CreateKnowledgeDto) {
-    const item = { id: String(this.records.length + 1), ...dto };
-    this.records.push(item);
-    return item;
+    const tenantId = this.context.get('tenantId') ?? '';
+    return this.prisma.knowledgeItem.create({
+      data: {
+        tenantId,
+        title: dto.title,
+        ...(dto.category ? { category: dto.category } : {}),
+        ...(dto.content ? { content: dto.content as Prisma.InputJsonValue } : {}),
+        tags: dto.tags ?? [],
+        active: dto.active ?? true,
+      },
+    });
   }
 
   findAll() {
-    return this.records;
+    return this.prisma.knowledgeItem.findMany({ orderBy: { createdAt: 'desc' } });
   }
 
-  findOne(id: string) {
-    const found = this.records.find((item) => item.id === id);
-    if (!found) throw new NotFoundException('knowledge not found');
-    return found;
+  async update(id: string, dto: UpdateKnowledgeDto) {
+    await this.findOne(id);
+    return this.prisma.knowledgeItem.update({
+      where: { id },
+      data: {
+        ...(dto.title ? { title: dto.title } : {}),
+        ...(dto.category ? { category: dto.category } : {}),
+        ...(dto.content ? { content: dto.content as Prisma.InputJsonValue } : {}),
+        ...(dto.tags ? { tags: dto.tags } : {}),
+        ...(typeof dto.active === 'boolean' ? { active: dto.active } : {}),
+      },
+    });
   }
 
-  update(id: string, dto: UpdateKnowledgeDto) {
-    const index = this.records.findIndex((item) => item.id === id);
-    if (index < 0) throw new NotFoundException('knowledge not found');
-    this.records[index] = { ...this.records[index], ...dto };
-    return this.records[index];
+  async findOne(id: string) {
+    const item = await this.prisma.knowledgeItem.findFirst({ where: { id } });
+    if (!item) throw new NotFoundException('Knowledge item não encontrado.');
+    return item;
+  }
+
+  searchFulltext(query: SearchKnowledgeDto) {
+    return this.prisma.knowledgeItem.findMany({
+      where: {
+        ...(query.category ? { category: query.category } : {}),
+        ...(query.q
+          ? {
+              OR: [
+                { title: { contains: query.q, mode: 'insensitive' } },
+                { source: { contains: query.q, mode: 'insensitive' } },
+              ],
+            }
+          : {}),
+      },
+      orderBy: { createdAt: 'desc' },
+      take: 100,
+    });
+  }
+
+  async categorize(dto: CategorizeKnowledgeDto) {
+    await this.findOne(dto.itemId);
+    return this.prisma.knowledgeItem.update({ where: { id: dto.itemId }, data: { category: dto.category } });
   }
 }
