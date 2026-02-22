@@ -27,12 +27,12 @@ export class IntegrationsService {
     if (existing) {
       return this.prisma.integrationSettings.update({
         where: { id: existing.id },
-        data: { config: dto.config as Prisma.JsonValue, active: dto.active ?? true },
+        data: { config: dto.config as Prisma.InputJsonValue, active: dto.active ?? true },
       });
     }
 
     return this.prisma.integrationSettings.create({
-      data: { tenantId, provider: dto.provider, config: dto.config as Prisma.JsonValue, active: dto.active ?? true },
+      data: { tenantId, provider: dto.provider, config: dto.config as Prisma.InputJsonValue, active: dto.active ?? true },
     });
   }
 
@@ -65,7 +65,7 @@ export class IntegrationsService {
               { data: new Date().toISOString(), descricao: 'Distribuição' },
               { data: new Date().toISOString(), descricao: 'Concluso para decisão' },
             ],
-          } as Prisma.JsonValue,
+          } as Prisma.InputJsonValue,
         },
       }),
     );
