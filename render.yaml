@@ -1,0 +1,43 @@
+services:
+  - type: web
+    name: gestor-pericial-api
+    runtime: node
+    rootDir: backend
+    buildCommand: npm install && npx prisma generate && npm run build
+    startCommand: npx prisma migrate deploy && node dist/main.js
+    healthCheckPath: /docs
+    envVars:
+      - key: NODE_ENV
+        value: production
+      - key: PORT
+        value: 3000
+      - key: DATABASE_URL
+        fromDatabase:
+          name: gestor-pericial-db
+          property: connectionString
+      - key: JWT_SECRET
+        generateValue: true
+      - key: JWT_REFRESH_SECRET
+        generateValue: true
+      - key: JWT_ACCESS_EXPIRES_IN
+        value: 15m
+      - key: JWT_REFRESH_EXPIRES_IN
+        value: 7d
+      - key: FRONTEND_URL
+        value: https://gestor-pericial.vercel.app,https://gestor-pericial-git-main-rafaellarar65-ops-projects.vercel.app,https://gestor-pericial-bqgedbte1-rafaellarar65-ops-projects.vercel.app
+      # Opcionais — preencha no painel do Render conforme necessário
+      # - key: REDIS_URL
+      # - key: GEMINI_API_KEY
+      # - key: SUPABASE_URL
+      # - key: SUPABASE_KEY
+      # - key: SUPABASE_BUCKET
+      # - key: SMTP_HOST
+      # - key: SMTP_PORT
+      # - key: SMTP_USER
+      # - key: SMTP_PASS
+
+databases:
+  - name: gestor-pericial-db
+    plan: free
+    databaseName: pericias_manager
+    user: pericias_admin
