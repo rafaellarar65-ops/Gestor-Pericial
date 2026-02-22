@@ -1,0 +1,16 @@
+import { create } from 'zustand';
+import type { AuthTokens, LoginResponse } from '@/types/api';
+
+type AuthState = {
+  user: LoginResponse['user'] | null;
+  tokens: AuthTokens | null;
+  setSession: (payload: LoginResponse) => void;
+  logout: () => void;
+};
+
+export const useAuthStore = create<AuthState>((set) => ({
+  user: null,
+  tokens: null,
+  setSession: (payload) => set({ user: payload.user, tokens: payload.tokens }),
+  logout: () => set({ user: null, tokens: null }),
+}));
