@@ -1,0 +1,93 @@
+name: CI
+
+on:
+  pull_request:
+    branches: [main, develop]
+
+concurrency:
+  group: ci-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  validate:
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Setup Node 20
+        uses: actions/setup-node@v4
+        with:
+          node-version: 20
+          cache: npm
+          cache-dependency-path: |
+            frontend/package-lock.json
+            backend/package-lock.json
+
+      - name: Cache build/test artifacts
+        uses: actions/cache@v4
+        with:
+          path: |
+            frontend/node_modules
+            backend/node_modules
+            frontend/.next
+            ~/.cache/prisma
+          key: ${{ runner.os }}-deps-${{ hashFiles('frontend/package-lock.json', 'backend/package-lock.json') }}
+
+      - name: Install frontend dependencies
+        working-directory: frontend
+        run: npm ci
+
+      - name: Install backend dependencies
+        working-directory: backend
+        run: npm ci
+
+      - name: Lint frontend
+        working-directory: frontend
+        run: npm run lint
+
+      - name: Lint backend
+        working-directory: backend
+        run: npm run lint -- --no-fix
+
+      - name: Prettier check (frontend)
+        working-directory: frontend
+        run: npx prettier --check .
+
+      - name: Prettier check (backend)
+        working-directory: backend
+        run: npx prettier --check .
+
+      - name: Type check frontend
+        working-directory: frontend
+        run: npm run typecheck
+
+      - name: Type check backend
+        working-directory: backend
+        run: npx tsc -p tsconfig.json --noEmit
+
+      - name: Unit tests frontend (Vitest)
+        working-directory: frontend
+        run: npm run test -- --coverage
+
+      - name: Unit tests backend (Jest)
+        working-directory: backend
+        run: npm run test:cov
+
+      - name: Build frontend
+        working-directory: frontend
+        run: npm run build
+
+      - name: Build backend
+        working-directory: backend
+        run: npm run build
+
+      - name: Upload coverage artifacts
+        uses: actions/upload-artifact@v4
+        with:
+          name: coverage-${{ github.run_id }}
+          path: |
+            frontend/coverage
+            backend/coverage
+          if-no-files-found: warn

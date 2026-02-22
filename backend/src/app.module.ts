@@ -24,8 +24,10 @@ import { AiModule } from './modules/ai/ai.module';
 import { TelepericiaModule } from './modules/telepericia/telepericia.module';
 import { NotificationsModule } from './modules/notifications/notifications.module';
 import { DocumentsModule } from './modules/documents/documents.module';
+import { HealthController } from './health.controller';
 
 @Module({
+  controllers: [HealthController],
   imports: [
     AppConfigModule,
     PrismaModule,
