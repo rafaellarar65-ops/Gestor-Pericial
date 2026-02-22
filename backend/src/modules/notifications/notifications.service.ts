@@ -40,7 +40,7 @@ export class NotificationsService {
         where: { id: existing.id },
         data: {
           enabled: dto.enabled ?? existing.enabled,
-          ...(dto.config ? { config: dto.config as Prisma.InputJsonValue } : {}),
+          ...(dto.config ? { config: dto.config as Prisma.JsonValue } : {}),
         },
       });
     }
@@ -50,7 +50,7 @@ export class NotificationsService {
         tenantId,
         channel: dto.channel,
         enabled: dto.enabled ?? true,
-        ...(dto.config ? { config: dto.config as Prisma.InputJsonValue } : {}),
+        ...(dto.config ? { config: dto.config as Prisma.JsonValue } : {}),
       },
     });
   }

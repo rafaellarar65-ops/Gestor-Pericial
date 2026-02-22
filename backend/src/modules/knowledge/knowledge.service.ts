@@ -18,7 +18,7 @@ export class KnowledgeService {
         tenantId,
         title: dto.title,
         ...(dto.category ? { category: dto.category } : {}),
-        ...(dto.content ? { content: dto.content as Prisma.InputJsonValue } : {}),
+        ...(dto.content ? { content: dto.content as Prisma.JsonValue } : {}),
         tags: dto.tags ?? [],
         active: dto.active ?? true,
       },
@@ -36,7 +36,7 @@ export class KnowledgeService {
       data: {
         ...(dto.title ? { title: dto.title } : {}),
         ...(dto.category ? { category: dto.category } : {}),
-        ...(dto.content ? { content: dto.content as Prisma.InputJsonValue } : {}),
+        ...(dto.content ? { content: dto.content as Prisma.JsonValue } : {}),
         ...(dto.tags ? { tags: dto.tags } : {}),
         ...(typeof dto.active === 'boolean' ? { active: dto.active } : {}),
       },

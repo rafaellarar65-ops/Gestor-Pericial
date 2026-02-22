@@ -6,6 +6,9 @@ COPY frontend/package*.json ./
 RUN npm ci
 
 FROM deps AS build
+WORKDIR /app
+ARG VITE_API_URL=http://localhost:3001
+ENV VITE_API_URL=$VITE_API_URL
 COPY frontend/ ./
 RUN npm run build
 

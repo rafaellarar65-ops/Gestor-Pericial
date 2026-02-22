@@ -3,16 +3,19 @@
 FROM node:20-alpine AS deps
 WORKDIR /app
 COPY backend/package*.json ./
+COPY backend/prisma ./prisma
 RUN npm ci
 
 FROM deps AS build
+WORKDIR /app
 COPY backend/ ./
-RUN npm run build
+RUN npx prisma generate && npm run build
 
 FROM node:20-alpine AS prod-deps
 WORKDIR /app
 COPY backend/package*.json ./
-RUN npm ci --omit=dev && npm cache clean --force
+COPY backend/prisma ./prisma
+RUN npm ci --omit=dev && npx prisma generate && npm cache clean --force
 
 FROM node:20-alpine AS runtime
 WORKDIR /app
@@ -20,7 +23,8 @@ ENV NODE_ENV=production
 COPY --from=prod-deps /app/node_modules ./node_modules
 COPY --from=build /app/dist ./dist
 COPY backend/package.json ./package.json
+COPY backend/prisma ./prisma
 EXPOSE 3001
 HEALTHCHECK --interval=30s --timeout=5s --start-period=30s --retries=3 \
   CMD wget -qO- http://127.0.0.1:3001/health >/dev/null || exit 1
-CMD ["node", "dist/main.js"]
+CMD ["sh", "-c", "npx prisma db push && node dist/main.js"]

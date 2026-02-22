@@ -19,7 +19,7 @@ export class ManeuversService {
         name: dto.name,
         ...(dto.category ? { category: dto.category } : {}),
         ...(dto.summary ? { summary: dto.summary } : {}),
-        ...(dto.procedure ? { procedure: dto.procedure as Prisma.InputJsonValue } : {}),
+        ...(dto.procedure ? { procedure: dto.procedure as Prisma.JsonValue } : {}),
         tags: dto.tags ?? [],
         active: dto.active ?? true,
       },
@@ -52,12 +52,12 @@ export class ManeuversService {
     const evidence = Array.isArray(current.evidence) ? current.evidence : [];
     return this.prisma.physicalManeuver.update({
       where: { id: dto.maneuverId },
-      data: { evidence: [...evidence, { mediaUrl: dto.mediaUrl, uploadedAt: new Date().toISOString() }] as Prisma.InputJsonValue },
+      data: { evidence: [...evidence, { mediaUrl: dto.mediaUrl, uploadedAt: new Date().toISOString() }] as Prisma.JsonValue },
     });
   }
 
   async protocols(dto: ProtocolDto) {
     await this.findOne(dto.maneuverId);
-    return this.prisma.physicalManeuver.update({ where: { id: dto.maneuverId }, data: { procedure: dto.protocol as Prisma.InputJsonValue } });
+    return this.prisma.physicalManeuver.update({ where: { id: dto.maneuverId }, data: { procedure: dto.protocol as Prisma.JsonValue } });
   }
 }
