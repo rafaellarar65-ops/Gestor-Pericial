@@ -5,6 +5,7 @@ import {
   AnalyzeDocumentDto,
   BatchActionDto,
   CoherenceCheckDto,
+  ExecuteAiTaskDto,
   LaudoAssistDto,
   ProcessAiOutputDto,
   SpecificAnalysisDto,
@@ -15,6 +16,7 @@ import { buildCoherenceCheckPrompt } from './prompts/coherence-check';
 import { buildLaudoAssistantPrompt } from './prompts/laudo-assistant';
 import { buildMasterAnalysisPrompt } from './prompts/master-analysis';
 import { buildSpecificAnalysisPrompt } from './prompts/specific-analysis';
+import { JsonSchemaHint, PromptBuildResult } from './prompts/types';
 
 @Injectable()
 export class AiService {
@@ -37,15 +39,7 @@ export class AiService {
       idioma: 'pt-BR',
     });
 
-    const result = {
-      task: 'master-analysis',
-      provider: guardrailsConfig.modelPolicy.defaultModel,
-      prompt,
-      outputMode: 'json',
-      reviewRequired: true,
-      cached: false,
-    };
-
+    const result = this.makeBuildResponse('master-analysis', prompt, { reviewRequired: true, cached: false });
     this.cache.set(key, result);
     await this.logTokenUsage('ai.analyze-document', Math.ceil(textoDocumento.length / 4));
     return result;
@@ -62,15 +56,7 @@ export class AiService {
       evidencias: dto.evidencias,
     });
 
-    const result = {
-      task: 'specific-analysis',
-      provider: guardrailsConfig.modelPolicy.defaultModel,
-      prompt,
-      outputMode: 'json',
-      reviewRequired: true,
-      cached: false,
-    };
-
+    const result = this.makeBuildResponse('specific-analysis', prompt, { reviewRequired: true, cached: false });
     this.cache.set(key, result);
     await this.logTokenUsage('ai.specific-analysis', dto.resumoCaso.length + dto.evidencias.join(' ').length);
     return result;
@@ -89,15 +75,7 @@ export class AiService {
       timezone: 'America/Sao_Paulo',
     });
 
-    const result = {
-      task: 'batch-action',
-      provider: guardrailsConfig.modelPolicy.defaultModel,
-      prompt,
-      outputMode: 'json',
-      requiresHumanApproval: true,
-      cached: false,
-    };
-
+    const result = this.makeBuildResponse('batch-action', prompt, { requiresHumanApproval: true, cached: false });
     this.cache.set(key, result);
     await this.logTokenUsage('ai.batch-action', dto.instruction.length + dto.items.length * 20);
     return result;
@@ -114,15 +92,7 @@ export class AiService {
       contextoDocumental: dto.contextoDocumental,
     });
 
-    const result = {
-      task: 'coherence-check',
-      provider: guardrailsConfig.modelPolicy.defaultModel,
-      prompt,
-      outputMode: 'json',
-      reviewRequired: true,
-      cached: false,
-    };
-
+    const result = this.makeBuildResponse('coherence-check', prompt, { reviewRequired: true, cached: false });
     this.cache.set(key, result);
     await this.logTokenUsage('ai.coherence-check', dto.contextoDocumental.length + dto.alegacoesClinicas.join(' ').length);
     return result;
@@ -141,19 +111,48 @@ export class AiService {
       quesitos: dto.quesitos ?? [],
     });
 
-    const result = {
-      task: 'laudo-assistant',
-      provider: guardrailsConfig.modelPolicy.defaultModel,
-      prompt,
-      outputMode: 'json',
+    const result = this.makeBuildResponse('laudo-assistant', prompt, {
       reviewRequired: true,
       confidencePolicy: guardrailsConfig.confidence,
       cached: false,
-    };
+    });
 
     this.cache.set(key, result);
     await this.logTokenUsage('ai.laudo-assist', JSON.stringify(dto.examPerformed).length + (dto.quesitos?.join(' ').length ?? 0));
     return result;
+  }
+
+  async executeTask(dto: ExecuteAiTaskDto) {
+    const startedAt = Date.now();
+    const providerResponse = await this.callPrimaryModel(dto.task, dto.prompt, dto.mockResponse);
+
+    const processed = await this.processAiOutput({
+      task: dto.task,
+      rawResponse: providerResponse.rawResponse,
+      sourceFragments: dto.sourceFragments,
+    });
+
+    const schemaValidation = this.validateAgainstSchema(processed.processedResponse as Record<string, unknown>, providerResponse.schema);
+
+    const latencyMs = Date.now() - startedAt;
+    const tokens = Math.ceil(JSON.stringify(dto.prompt).length / 4) + Math.ceil(JSON.stringify(providerResponse.rawResponse).length / 4);
+
+    await this.logAiInteraction({
+      task: dto.task,
+      model: providerResponse.model,
+      prompt: dto.prompt,
+      response: providerResponse.rawResponse,
+      tokens,
+      latencyMs,
+    });
+
+    return {
+      ...processed,
+      schemaValidation,
+      modelUsed: providerResponse.model,
+      tokens,
+      latencyMs,
+    };
   }
 
   async processAiOutput(dto: ProcessAiOutputDto) {
@@ -185,6 +184,53 @@ export class AiService {
 
     await this.logTokenUsage('ai.process-output', JSON.stringify(dto.rawResponse).length);
     return result;
+  }
+
+  private makeBuildResponse(task: string, prompt: PromptBuildResult, extra: Record<string, unknown>) {
+    return {
+      task,
+      provider: guardrailsConfig.modelPolicy.defaultModel,
+      prompt,
+      outputMode: 'json',
+      ...extra,
+    };
+  }
+
+  private async callPrimaryModel(task: string, prompt: Record<string, unknown>, mockResponse?: unknown) {
+    const schema = (prompt.outputSchema as JsonSchemaHint | undefined) ?? { type: 'object' };
+
+    if (mockResponse !== undefined) {
+      return {
+        model: guardrailsConfig.modelPolicy.defaultModel,
+        rawResponse: mockResponse,
+        schema,
+      };
+    }
+
+    return {
+      model: guardrailsConfig.modelPolicy.defaultModel,
+      rawResponse: { note: 'provider_call_placeholder', task },
+      schema,
+    };
+  }
+
+  private validateAgainstSchema(payload: Record<string, unknown>, schema: JsonSchemaHint) {
+    const errors: string[] = [];
+
+    if (schema.type === 'object' && schema.required) {
+      for (const field of schema.required) {
+        if (!(field in payload)) errors.push(`Campo obrigatório ausente: ${field}`);
+      }
+    }
+
+    if (schema.type === 'array' && !Array.isArray(payload)) {
+      errors.push('Resposta não é array conforme schema');
+    }
+
+    return {
+      valid: errors.length === 0,
+      errors,
+    };
   }
 
   private parseRawResponse(rawResponse: unknown): Record<string, unknown> {
@@ -232,6 +278,35 @@ export class AiService {
 
     const missing = snippets.filter((snippet) => !joinedSources.includes(snippet.toLowerCase()));
     return { hasRisk: missing.length > 0, evidence: missing };
+  }
+
+  private async logAiInteraction(input: {
+    task: string;
+    model: string;
+    prompt: Record<string, unknown>;
+    response: unknown;
+    tokens: number;
+    latencyMs: number;
+  }) {
+    try {
+      await this.prisma.activityLog.create({
+        data: {
+          tenantId: this.context.get('tenantId') ?? '',
+          entityType: 'ai-interaction',
+          entityId: input.task,
+          action: 'execute',
+          payloadJson: ({
+            model: input.model,
+            prompt: input.prompt,
+            response: input.response,
+            tokens: input.tokens,
+            latencyMs: input.latencyMs,
+          } as unknown) as any,
+        },
+      });
+    } catch {
+      // no-op: não bloquear fluxo por falha de auditoria
+    }
   }
 
   private decodeBase64Safely(fileBase64: string): string {

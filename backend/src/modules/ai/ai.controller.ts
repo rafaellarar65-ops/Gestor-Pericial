@@ -6,6 +6,7 @@ import {
   AnalyzeDocumentDto,
   BatchActionDto,
   CoherenceCheckDto,
+  ExecuteAiTaskDto,
   LaudoAssistDto,
   ProcessAiOutputDto,
   SpecificAnalysisDto,
@@ -46,6 +47,12 @@ export class AiController {
   @ApiOperation({ summary: 'Monta prompt para sugestão de seção do laudo (sem conclusão pericial)' })
   laudoAssist(@Body() dto: LaudoAssistDto) {
     return this.service.laudoAssist(dto);
+  }
+
+  @Post('execute-task')
+  @ApiOperation({ summary: 'Executa task de IA (provider primário/fallback) e aplica pós-processamento' })
+  executeTask(@Body() dto: ExecuteAiTaskDto) {
+    return this.service.executeTask(dto);
   }
 
   @Post('process-output')

@@ -158,3 +158,22 @@ export class ProcessAiOutputDto {
   @IsOptional()
   sourceFragments?: string[];
 }
+
+export class ExecuteAiTaskDto {
+  @ApiProperty({ enum: taskTypes })
+  @IsIn(taskTypes)
+  task!: (typeof taskTypes)[number];
+
+  @ApiProperty({ description: 'Payload de prompt retornado pelos endpoints de construção' })
+  @IsObject()
+  prompt!: Record<string, unknown>;
+
+  @ApiPropertyOptional({ description: 'Mock opcional para testes locais sem chamada externa real' })
+  @IsOptional()
+  mockResponse?: unknown;
+
+  @ApiPropertyOptional({ type: [String] })
+  @IsArray()
+  @IsOptional()
+  sourceFragments?: string[];
+}
