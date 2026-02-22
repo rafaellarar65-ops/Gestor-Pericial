@@ -25,7 +25,7 @@ export class LaudoService {
       data: {
         tenantId,
         periciaId: dto.periciaId,
-        ...(dto.sections ? { sections: dto.sections as Prisma.JsonValue } : {}),
+        ...(dto.sections ? { sections: dto.sections as Prisma.InputJsonValue } : {}),
         ...(dto.templateName ? { templateName: dto.templateName } : {}),
       },
     });
@@ -33,7 +33,7 @@ export class LaudoService {
 
   async updateSections(dto: UpdateSectionsDto) {
     await this.ensurePreLaudo(dto.preLaudoId);
-    return this.prisma.preLaudo.update({ where: { id: dto.preLaudoId }, data: { sections: dto.sections as Prisma.JsonValue } });
+    return this.prisma.preLaudo.update({ where: { id: dto.preLaudoId }, data: { sections: dto.sections as Prisma.InputJsonValue } });
   }
 
   createExamPlan(dto: CreateExamPlanDto) {
@@ -56,7 +56,7 @@ export class LaudoService {
         periciaId: dto.periciaId,
         ...(dto.examPlanId ? { examPlanId: dto.examPlanId } : {}),
         status: dto.status ?? ExamStatus.NOT_STARTED,
-        ...(dto.findings ? { findings: dto.findings as Prisma.JsonValue } : {}),
+        ...(dto.findings ? { findings: dto.findings as Prisma.InputJsonValue } : {}),
       },
     });
   }
@@ -72,7 +72,7 @@ export class LaudoService {
           provider: 'gemini-proxy',
           chars: dto.audioBase64.length,
           text: 'Transcrição simulada para validação de fluxo backend.',
-        } as Prisma.JsonValue,
+        } as Prisma.InputJsonValue,
         status: ExamStatus.DONE,
       },
     });
