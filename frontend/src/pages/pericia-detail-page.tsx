@@ -8,7 +8,7 @@ import { usePericiaDetailQuery } from '@/hooks/use-pericias';
 
 const tabs = ['Dados', 'Docs', 'Financeiro', 'Laudo', 'Timeline'];
 
-export const PericiaDetailPage = () => {
+const PericiaDetailPage = () => {
   const { id = '' } = useParams();
   const [activeTab, setActiveTab] = useState(tabs[0]);
   const { data, isLoading, isError } = usePericiaDetailQuery(id);
@@ -31,3 +31,5 @@ export const PericiaDetailPage = () => {
     </div>
   );
 };
+
+export default PericiaDetailPage;

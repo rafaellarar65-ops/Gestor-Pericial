@@ -4,7 +4,7 @@ import { Card } from '@/components/ui/card';
 import { Input } from '@/components/ui/input';
 import { useBatchSchedule } from '@/hooks/use-agenda';
 
-export const AgendarLotePage = () => {
+const AgendarLotePage = () => {
   const [date, setDate] = useState('');
   const [time, setTime] = useState('');
   const mutation = useBatchSchedule();
@@ -29,3 +29,5 @@ export const AgendarLotePage = () => {
     </div>
   );
 };
+
+export default AgendarLotePage;
