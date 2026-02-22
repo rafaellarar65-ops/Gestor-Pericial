@@ -10,9 +10,9 @@ class EnvironmentVariables {
   @IsNotEmpty()
   JWT_SECRET!: string;
 
+  @IsOptional()
   @IsString()
-  @IsNotEmpty()
-  REDIS_URL!: string;
+  REDIS_URL?: string;
 
   @IsOptional()
   @IsInt()
