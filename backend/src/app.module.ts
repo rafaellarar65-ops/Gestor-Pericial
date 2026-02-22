@@ -35,14 +35,16 @@ import { HealthController } from './health.controller';
     ThrottlerModule.forRoot([
       { ttl: 60_000, limit: 100 },
     ]),
-    BullModule.forRoot({
-      connection: { url: process.env.REDIS_URL },
-    }),
-    BullModule.registerQueue(
-      { name: 'pdf-generation' },
-      { name: 'datajud-sync' },
-      { name: 'charge-dispatch' },
-    ),
+    ...(process.env.REDIS_URL
+      ? [
+          BullModule.forRoot({ connection: { url: process.env.REDIS_URL } }),
+          BullModule.registerQueue(
+            { name: 'pdf-generation' },
+            { name: 'datajud-sync' },
+            { name: 'charge-dispatch' },
+          ),
+        ]
+      : []),
     AuthModule,
     UsersModule,
     PericiasModule,
