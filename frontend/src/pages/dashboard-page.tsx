@@ -4,7 +4,7 @@ import { DataTable } from '@/components/ui/data-table';
 import { EmptyState, ErrorState, LoadingState } from '@/components/ui/state';
 import { useDashboardQuery } from '@/hooks/use-pericias';
 
-export const DashboardPage = () => {
+const DashboardPage = () => {
   const { data, isLoading, isError } = useDashboardQuery();
 
   if (isLoading) return <LoadingState />;
@@ -42,3 +42,5 @@ export const DashboardPage = () => {
     </div>
   );
 };
+
+export default DashboardPage;

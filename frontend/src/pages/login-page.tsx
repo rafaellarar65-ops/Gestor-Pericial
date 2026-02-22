@@ -5,7 +5,7 @@ import { Card } from '@/components/ui/card';
 import { Input } from '@/components/ui/input';
 import { useLogin } from '@/hooks/use-auth';
 
-export const LoginPage = () => {
+const LoginPage = () => {
   const navigate = useNavigate();
   const [email, setEmail] = useState('');
   const [password, setPassword] = useState('');
@@ -37,3 +37,5 @@ export const LoginPage = () => {
     </div>
   );
 };
+
+export default LoginPage;

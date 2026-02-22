@@ -3,7 +3,7 @@ import { DataTable } from '@/components/ui/data-table';
 import { EmptyState, ErrorState, LoadingState } from '@/components/ui/state';
 import { useFinancialQuery } from '@/hooks/use-financial';
 
-export const FinanceiroPage = () => {
+const FinanceiroPage = () => {
   const { data, isLoading, isError } = useFinancialQuery();
 
   if (isLoading) return <LoadingState />;
@@ -37,3 +37,5 @@ export const FinanceiroPage = () => {
     </div>
   );
 };
+
+export default FinanceiroPage;

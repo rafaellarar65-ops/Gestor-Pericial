@@ -4,6 +4,7 @@ import { FilterBar } from '@/components/domain/filter-bar';
 import { StatusBadge } from '@/components/domain/status-badge';
 import { DataTable } from '@/components/ui/data-table';
 import { EmptyState, ErrorState, LoadingState } from '@/components/ui/state';
+import { VirtualizedList } from '@/components/ui/virtualized-list';
 import { usePericiasQuery } from '@/hooks/use-pericias';
 
 export const PericiasPage = () => {
@@ -13,17 +14,9 @@ export const PericiasPage = () => {
 
   const rows = useMemo(
     () =>
-      (data?.items ?? [])
-        .filter((item) =>
-          `${item.processoCNJ} ${item.autorNome} ${item.cidade}`.toLowerCase().includes(search.toLowerCase()),
-        )
-        .map((item) => ({
-          ...item,
-          processoCNJ: item.processoCNJ,
-          autorNome: item.autorNome,
-          cidade: item.cidade,
-          status: item.status,
-        })),
+      (data?.items ?? []).filter((item) =>
+        `${item.processoCNJ} ${item.autorNome} ${item.cidade}`.toLowerCase().includes(search.toLowerCase()),
+      ),
     [data?.items, search],
   );
 
@@ -36,15 +29,30 @@ export const PericiasPage = () => {
       <h1 className="text-2xl font-semibold">Lista de Perícias</h1>
       <FilterBar onSearchChange={setSearch} search={search} />
       <div className="rounded border p-2">
-        {rows.map((row) => (
-          <div className="flex items-center justify-between border-b py-2" key={row.id}>
-            <Link className="text-primary underline" to={`/pericias/${row.id}`}>
-              {row.processoCNJ}
-            </Link>
-            <span>{row.autorNome}</span>
-            <StatusBadge status={row.status} />
-          </div>
-        ))}
+        {rows.length > 100 ? (
+          <VirtualizedList
+            items={rows}
+            renderItem={(row) => (
+              <div className="flex items-center justify-between border-b px-2 py-3" key={row.id}>
+                <Link className="text-primary underline" to={`/pericias/${row.id}`}>
+                  {row.processoCNJ}
+                </Link>
+                <span>{row.autorNome}</span>
+                <StatusBadge status={row.status} />
+              </div>
+            )}
+          />
+        ) : (
+          rows.map((row) => (
+            <div className="flex items-center justify-between border-b py-2" key={row.id}>
+              <Link className="text-primary underline" to={`/pericias/${row.id}`}>
+                {row.processoCNJ}
+              </Link>
+              <span>{row.autorNome}</span>
+              <StatusBadge status={row.status} />
+            </div>
+          ))
+        )}
       </div>
       <DataTable
         columns={[
@@ -60,3 +68,5 @@ export const PericiasPage = () => {
     </div>
   );
 };
+
+export default PericiasPage;
