@@ -31,6 +31,13 @@ const LoginPage = () => {
 
   const submit = async (event: React.FormEvent<HTMLFormElement>) => {
     event.preventDefault();
+
+    try {
+      await mutation.mutateAsync({ email, password });
+      navigate('/');
+    } catch {
+      // Erro exibido na UI via mutation.error
+    }
     await mutation.mutateAsync({ tenantId: TENANT_ID, email, password });
     navigate('/');
   };
