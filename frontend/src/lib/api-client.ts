@@ -9,6 +9,8 @@ export const apiClient = axios.create({
   headers: { 'Content-Type': 'application/json' },
 });
 
+let refreshPromise: Promise<string> | null = null;
+
 const applyTokens = (tokens: AuthTokens | null): void => {
   if (tokens?.accessToken) {
     apiClient.defaults.headers.common.Authorization = `Bearer ${tokens.accessToken}`;
@@ -35,20 +37,36 @@ apiClient.interceptors.response.use(
     }
 
     const status = error.response?.status;
-    if (status === 401 && !original.headers['x-retried']) {
+    const requestUrl = original.url ?? '';
+    const isRefreshRequest = requestUrl.includes('/auth/refresh');
+
+    if (status === 401 && !isRefreshRequest && !original.headers['x-retried']) {
       original.headers['x-retried'] = '1';
       const { tokens, logout, setSession, user } = useAuthStore.getState();
+
       if (tokens?.refreshToken && user) {
         try {
-          const refresh = await axios.post<{ accessToken: string }>(`${API_URL}/auth/refresh`, {
-            refreshToken: tokens.refreshToken,
-          });
-          const nextTokens = { ...tokens, accessToken: refresh.data.accessToken };
+          refreshPromise ??= axios
+            .post<{ accessToken: string }>(`${API_URL}/auth/refresh`, {
+              refreshToken: tokens.refreshToken,
+            })
+            .then((refresh) => refresh.data.accessToken)
+            .finally(() => {
+              refreshPromise = null;
+            });
+
+          const accessToken = await refreshPromise;
+          const nextTokens = { ...tokens, accessToken };
           setSession({ user, tokens: nextTokens });
           applyTokens(nextTokens);
+
           return apiClient(original);
-        } catch {
-          logout();
+        } catch (refreshError) {
+          const refreshStatus = axios.isAxiosError(refreshError) ? refreshError.response?.status : undefined;
+
+          if (refreshStatus === 401 || refreshStatus === 403) {
+            logout();
+          }
         }
       }
     }
