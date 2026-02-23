@@ -6,6 +6,7 @@ export type AuthTokens = {
 };
 
 export type LoginRequest = {
+  tenantId: string;
   email: string;
   password: string;
 };

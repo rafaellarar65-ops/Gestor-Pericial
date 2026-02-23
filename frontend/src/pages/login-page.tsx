@@ -6,6 +6,9 @@ import { Input } from '@/components/ui/input';
 import type { ApiError } from '@/types/api';
 import { useLogin } from '@/hooks/use-auth';
 
+const DEFAULT_TENANT_ID = '11111111-1111-1111-1111-111111111111';
+const TENANT_ID = import.meta.env.VITE_TENANT_ID ?? DEFAULT_TENANT_ID;
+
 const getErrorMessage = (error: unknown): string => {
   const fallback = 'Não foi possível entrar. Verifique os dados e tente novamente.';
   if (!error || typeof error !== 'object' || !('message' in error)) {
@@ -35,6 +38,8 @@ const LoginPage = () => {
     } catch {
       // Erro exibido na UI via mutation.error
     }
+    await mutation.mutateAsync({ tenantId: TENANT_ID, email, password });
+    navigate('/');
   };
 
   return (
