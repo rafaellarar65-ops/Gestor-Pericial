@@ -145,13 +145,104 @@ export class PericiasService {
   }
 
   async dashboard() {
-    const [total, urgentes, finalizadas, pendentesPagamento] = await this.prisma.$transaction([
+    const [total, urgentes, finalizadas, pendentesPagamento, pericias] = await this.prisma.$transaction([
       this.prisma.pericia.count(),
       this.prisma.pericia.count({ where: { isUrgent: true } }),
       this.prisma.pericia.count({ where: { finalizada: true } }),
       this.prisma.pericia.count({ where: { pagamentoStatus: 'PENDENTE' } }),
+      this.prisma.pericia.findMany({
+        where: { isUrgent: true },
+        take: 5,
+        orderBy: { createdAt: 'desc' },
+        include: { cidade: true, status: true },
+      }),
     ]);
 
-    return { total, urgentes, finalizadas, pendentesPagamento };
+    return {
+      kpis: [
+        { label: 'Total de Perícias', value: String(total) },
+        { label: 'Urgentes', value: String(urgentes), trend: urgentes > 0 ? 'up' : 'stable' },
+        { label: 'Finalizadas', value: String(finalizadas) },
+        { label: 'Pendentes Pagamento', value: String(pendentesPagamento) },
+      ],
+      chart: [
+        { name: 'Total', value: total },
+        { name: 'Urgentes', value: urgentes },
+        { name: 'Finalizadas', value: finalizadas },
+        { name: 'Pend. Pgto', value: pendentesPagamento },
+      ],
+      critical: pericias.map((p) => ({
+        id: p.id,
+        processoCNJ: p.processoCNJ,
+        autorNome: p.autorNome ?? '',
+        cidade: p.cidade?.nome ?? '',
+        dataAgendamento: p.dataAgendamento?.toISOString(),
+        status: (p.status?.codigo ?? 'NOVA_NOMEACAO') as string,
+      })),
+    };
+  }
+
+  async pericias_hoje() {
+    const start = new Date();
+    start.setHours(0, 0, 0, 0);
+    const end = new Date();
+    end.setHours(23, 59, 59, 999);
+
+    const items = await this.prisma.pericia.findMany({
+      where: { dataAgendamento: { gte: start, lte: end } },
+      include: { cidade: true, status: true },
+      orderBy: { dataAgendamento: 'asc' },
+    });
+
+    return {
+      items: items.map((p) => ({
+        id: p.id,
+        processoCNJ: p.processoCNJ,
+        autorNome: p.autorNome ?? '',
+        cidade: p.cidade?.nome ?? '',
+        dataAgendamento: p.dataAgendamento?.toISOString(),
+        status: p.status?.codigo ?? '',
+      })),
+    };
+  }
+
+  async nomeacoes() {
+    const items = await this.prisma.pericia.findMany({
+      where: { agendada: false, finalizada: false },
+      include: { cidade: true, status: true },
+      orderBy: { dataNomeacao: 'desc' },
+      take: 50,
+    });
+
+    return {
+      items: items.map((p) => ({
+        id: p.id,
+        processoCNJ: p.processoCNJ,
+        autorNome: p.autorNome ?? '',
+        cidade: p.cidade?.nome ?? '',
+        dataNomeacao: p.dataNomeacao?.toISOString(),
+        status: p.status?.codigo ?? '',
+      })),
+    };
+  }
+
+  async laudosPendentes() {
+    const items = await this.prisma.pericia.findMany({
+      where: { agendada: true, laudoEnviado: false, finalizada: false },
+      include: { cidade: true, status: true },
+      orderBy: { dataAgendamento: 'asc' },
+      take: 50,
+    });
+
+    return {
+      items: items.map((p) => ({
+        id: p.id,
+        processoCNJ: p.processoCNJ,
+        autorNome: p.autorNome ?? '',
+        cidade: p.cidade?.nome ?? '',
+        dataAgendamento: p.dataAgendamento?.toISOString(),
+        status: p.status?.codigo ?? '',
+      })),
+    };
   }
 }

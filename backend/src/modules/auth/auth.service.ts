@@ -74,9 +74,14 @@ export class AuthService {
   }
 
   async refresh(dto: RefreshTokenDto): Promise<TokenPair> {
-    const payload = this.jwtService.verify<{ sub: string; email: string; role: UserRole; tenantId: string }>(dto.refreshToken, {
-      secret: process.env.JWT_REFRESH_SECRET,
-    });
+    let payload: { sub: string; email: string; role: UserRole; tenantId: string };
+    try {
+      payload = this.jwtService.verify<{ sub: string; email: string; role: UserRole; tenantId: string }>(dto.refreshToken, {
+        secret: process.env.JWT_REFRESH_SECRET,
+      });
+    } catch {
+      throw new UnauthorizedException('Refresh token inválido ou expirado.');
+    }
 
     const refreshHash = this.refreshTokenStore.get(payload.sub);
     if (!refreshHash) {
