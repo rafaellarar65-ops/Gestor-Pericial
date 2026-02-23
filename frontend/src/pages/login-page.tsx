@@ -3,10 +3,25 @@ import { useNavigate } from 'react-router-dom';
 import { Button } from '@/components/ui/button';
 import { Card } from '@/components/ui/card';
 import { Input } from '@/components/ui/input';
+import type { ApiError } from '@/types/api';
 import { useLogin } from '@/hooks/use-auth';
 
 const DEFAULT_TENANT_ID = '11111111-1111-1111-1111-111111111111';
 const TENANT_ID = import.meta.env.VITE_TENANT_ID ?? DEFAULT_TENANT_ID;
+
+const getErrorMessage = (error: unknown): string => {
+  const fallback = 'Não foi possível entrar. Verifique os dados e tente novamente.';
+  if (!error || typeof error !== 'object' || !('message' in error)) {
+    return fallback;
+  }
+
+  const message = (error as ApiError).message;
+  if (Array.isArray(message)) {
+    return message.join(' • ');
+  }
+
+  return message || fallback;
+};
 
 const LoginPage = () => {
   const navigate = useNavigate();
@@ -32,6 +47,7 @@ const LoginPage = () => {
             value={password}
             onChange={(event) => setPassword(event.target.value)}
           />
+          {mutation.isError ? <p className="text-sm text-red-600">{getErrorMessage(mutation.error)}</p> : null}
           <Button disabled={mutation.isPending} type="submit">
             {mutation.isPending ? 'Entrando...' : 'Entrar'}
           </Button>

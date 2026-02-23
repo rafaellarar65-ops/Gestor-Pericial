@@ -59,6 +59,6 @@ export type FinancialItem = {
 };
 
 export type ApiError = {
-  message: string;
+  message: string | string[];
   statusCode?: number;
 };
