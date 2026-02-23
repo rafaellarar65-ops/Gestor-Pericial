@@ -2,7 +2,7 @@ import { DomainPageTemplate } from '@/components/domain/domain-page-template';
 import { useDomainData } from '@/hooks/use-domain-data';
 
 const Page = () => {
-  const { data = [], isLoading, isError } = useDomainData('despesas', '/despesas');
+  const { data = [], isLoading, isError } = useDomainData('despesas', '/financial/despesas');
 
   return (
     <DomainPageTemplate
