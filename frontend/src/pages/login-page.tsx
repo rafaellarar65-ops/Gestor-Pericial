@@ -33,13 +33,11 @@ const LoginPage = () => {
     event.preventDefault();
 
     try {
-      await mutation.mutateAsync({ email, password });
+      await mutation.mutateAsync({ tenantId: TENANT_ID, email, password });
       navigate('/');
     } catch {
       // Erro exibido na UI via mutation.error
     }
-    await mutation.mutateAsync({ tenantId: TENANT_ID, email, password });
-    navigate('/');
   };
 
   return (
