@@ -1,4 +1,4 @@
-import { BadRequestException, Injectable, UnauthorizedException } from '@nestjs/common';
+import { BadRequestException, Injectable, InternalServerErrorException, UnauthorizedException } from '@nestjs/common';
 import { JwtService } from '@nestjs/jwt';
 import { UserRole } from '@prisma/client';
 import * as bcrypt from 'bcryptjs';
@@ -51,10 +51,15 @@ export class AuthService {
   }
 
   async login(dto: LoginDto) {
-    const user = await this.prisma.user.findFirst({
-      where: { email: dto.email, tenantId: dto.tenantId, isActive: true },
-      include: { profile: true },
-    });
+    let user: Awaited<ReturnType<typeof this.prisma.user.findFirst>>;
+    try {
+      user = await this.prisma.user.findFirst({
+        where: { email: dto.email, tenantId: dto.tenantId, isActive: true },
+        include: { profile: true },
+      });
+    } catch {
+      throw new InternalServerErrorException('Serviço de autenticação temporariamente indisponível. Verifique a conexão com o banco de dados.');
+    }
 
     if (!user?.passwordHash) {
       throw new UnauthorizedException('Credenciais inválidas.');

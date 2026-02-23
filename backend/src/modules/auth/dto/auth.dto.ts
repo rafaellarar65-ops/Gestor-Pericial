@@ -1,10 +1,13 @@
 import { ApiProperty, ApiPropertyOptional } from '@nestjs/swagger';
 import { UserRole } from '@prisma/client';
-import { IsEmail, IsEnum, IsNotEmpty, IsOptional, IsString, IsUUID, MinLength } from 'class-validator';
+import { IsEmail, IsEnum, IsNotEmpty, IsOptional, IsString, Matches, MinLength } from 'class-validator';
+
+const UUID_REGEX = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
 
 export class RegisterDto {
   @ApiProperty({ example: '4fef6af9-58a3-4022-8f2c-85bb70e68f31' })
-  @IsUUID()
+  @IsString()
+  @Matches(UUID_REGEX, { message: 'tenantId must be a UUID' })
   tenantId!: string;
 
   @ApiProperty({ example: 'medico@pericias.com' })
@@ -28,7 +31,8 @@ export class RegisterDto {
 
 export class LoginDto {
   @ApiProperty({ example: '4fef6af9-58a3-4022-8f2c-85bb70e68f31' })
-  @IsUUID()
+  @IsString()
+  @Matches(UUID_REGEX, { message: 'tenantId must be a UUID' })
   tenantId!: string;
 
   @ApiProperty({ example: 'medico@pericias.com' })
