@@ -6,12 +6,13 @@ export type AuthTokens = {
 };
 
 export type LoginRequest = {
+  tenantId: string;
   email: string;
   password: string;
 };
 
 export type LoginResponse = {
-  user: { id: string; name: string; role: UserRole };
+  user: { id: string; email: string; role: UserRole; tenantId: string; fullName?: string };
   tokens: AuthTokens;
 };
 

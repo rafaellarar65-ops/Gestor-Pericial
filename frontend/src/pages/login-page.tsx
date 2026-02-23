@@ -5,6 +5,9 @@ import { Card } from '@/components/ui/card';
 import { Input } from '@/components/ui/input';
 import { useLogin } from '@/hooks/use-auth';
 
+const DEFAULT_TENANT_ID = '11111111-1111-1111-1111-111111111111';
+const TENANT_ID = import.meta.env.VITE_TENANT_ID ?? DEFAULT_TENANT_ID;
+
 const LoginPage = () => {
   const navigate = useNavigate();
   const [email, setEmail] = useState('');
@@ -13,7 +16,7 @@ const LoginPage = () => {
 
   const submit = async (event: React.FormEvent<HTMLFormElement>) => {
     event.preventDefault();
-    await mutation.mutateAsync({ email, password });
+    await mutation.mutateAsync({ tenantId: TENANT_ID, email, password });
     navigate('/');
   };
 
