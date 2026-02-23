@@ -1,6 +1,6 @@
 import { BadRequestException, Injectable, InternalServerErrorException, UnauthorizedException } from '@nestjs/common';
 import { JwtService } from '@nestjs/jwt';
-import { UserRole } from '@prisma/client';
+import { Prisma, UserRole } from '@prisma/client';
 import * as bcrypt from 'bcryptjs';
 import { randomBytes } from 'crypto';
 import { PrismaService } from '../../prisma/prisma.service';
@@ -51,7 +51,7 @@ export class AuthService {
   }
 
   async login(dto: LoginDto) {
-    let user: Awaited<ReturnType<typeof this.prisma.user.findFirst>>;
+    let user: Prisma.UserGetPayload<{ include: { profile: true } }> | null;
     try {
       user = await this.prisma.user.findFirst({
         where: { email: dto.email, tenantId: dto.tenantId, isActive: true },
