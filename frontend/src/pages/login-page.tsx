@@ -3,7 +3,22 @@ import { useNavigate } from 'react-router-dom';
 import { Button } from '@/components/ui/button';
 import { Card } from '@/components/ui/card';
 import { Input } from '@/components/ui/input';
+import type { ApiError } from '@/types/api';
 import { useLogin } from '@/hooks/use-auth';
+
+const getErrorMessage = (error: unknown): string => {
+  const fallback = 'Não foi possível entrar. Verifique os dados e tente novamente.';
+  if (!error || typeof error !== 'object' || !('message' in error)) {
+    return fallback;
+  }
+
+  const message = (error as ApiError).message;
+  if (Array.isArray(message)) {
+    return message.join(' • ');
+  }
+
+  return message || fallback;
+};
 
 const LoginPage = () => {
   const navigate = useNavigate();
@@ -13,8 +28,13 @@ const LoginPage = () => {
 
   const submit = async (event: React.FormEvent<HTMLFormElement>) => {
     event.preventDefault();
-    await mutation.mutateAsync({ email, password });
-    navigate('/');
+
+    try {
+      await mutation.mutateAsync({ email, password });
+      navigate('/');
+    } catch {
+      // Erro exibido na UI via mutation.error
+    }
   };
 
   return (
@@ -29,6 +49,7 @@ const LoginPage = () => {
             value={password}
             onChange={(event) => setPassword(event.target.value)}
           />
+          {mutation.isError ? <p className="text-sm text-red-600">{getErrorMessage(mutation.error)}</p> : null}
           <Button disabled={mutation.isPending} type="submit">
             {mutation.isPending ? 'Entrando...' : 'Entrar'}
           </Button>

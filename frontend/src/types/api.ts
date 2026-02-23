@@ -11,7 +11,7 @@ export type LoginRequest = {
 };
 
 export type LoginResponse = {
-  user: { id: string; name: string; role: UserRole };
+  user: { id: string; email: string; role: UserRole; tenantId: string; fullName?: string };
   tokens: AuthTokens;
 };
 
@@ -58,6 +58,6 @@ export type FinancialItem = {
 };
 
 export type ApiError = {
-  message: string;
+  message: string | string[];
   statusCode?: number;
 };
