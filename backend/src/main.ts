@@ -8,6 +8,19 @@ import * as bcrypt from 'bcryptjs';
 
 const BOOTSTRAP_TENANT_ID = '11111111-1111-1111-1111-111111111111';
 
+async function logDatabaseConnectionStatus(): Promise<void> {
+  const prisma = new PrismaClient();
+
+  try {
+    await prisma.$queryRaw`SELECT 1`;
+    console.log('[Bootstrap] Conexão com banco validada com sucesso.');
+  } catch (err) {
+    console.error('[Bootstrap] Falha ao conectar no banco de dados durante inicialização:', (err as Error).message);
+  } finally {
+    await prisma.$disconnect();
+  }
+}
+
 async function seedAdminIfNeeded(): Promise<void> {
   const email = process.env.ADMIN_EMAIL;
   const password = process.env.ADMIN_PASSWORD;
@@ -85,6 +98,7 @@ async function bootstrap() {
   const document = SwaggerModule.createDocument(app, config);
   SwaggerModule.setup('docs', app, document);
 
+  await logDatabaseConnectionStatus();
   await seedAdminIfNeeded();
 
   await app.listen(process.env.PORT ?? 3000);

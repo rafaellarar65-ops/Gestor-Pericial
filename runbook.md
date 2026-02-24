@@ -7,11 +7,11 @@
    - `vercel pull --yes --environment=production`
    - `vercel build --prod`
    - `vercel deploy --prebuilt --prod`
-3. Faça deploy do backend:
-   - `railway up --service <service-name> --detach`
-4. Rode migrations:
+3. Execute a etapa de release/migração (job separado), antes de subir a aplicação web:
    - `cd backend`
-   - `npx prisma migrate deploy --schema prisma/schema.prisma`
+   - `npm run prisma:migrate:deploy`
+4. Faça deploy do backend (somente aplicação):
+   - `railway up --service <service-name> --detach`
 5. Valide saúde:
    - `curl -fsSL https://api.seudominio.com/health`
 
@@ -49,6 +49,11 @@ Checklist rápido:
 2. Confirmar locks longos no Postgres.
 3. Validar endpoints críticos após migration.
 
+Ordem recomendada no pipeline de deploy/release:
+1. **Migration/Release job**: aplicar `npm --prefix backend run prisma:migrate:deploy` (ou `preDeployCommand` no Render).
+2. **Deploy web job**: publicar a aplicação backend (`node dist/main.js`).
+3. **Validação pós-deploy**: checar `/health` e endpoints críticos.
+
 ## 7) Backup e restauração (Supabase)
 - Backups automáticos já providos no plano gerenciado.
 - Para restaurar:
@@ -69,3 +74,8 @@ Checklist rápido:
 - TLS obrigatório em todas as conexões externas.
 - Nunca commitar secrets: usar Vercel/Railway/Supabase secrets.
 - Rotacionar `JWT_SECRET` e tokens de integração periodicamente.
+
+
+## 10) Pipeline de deploy/release (referência)
+- Consulte também: `docs/deploy-pipeline.md`.
+- Sequência mandatória: migration/release -> deploy web -> validação.
