@@ -36,4 +36,12 @@ export const agendaService = {
     const { data } = await apiClient.post<AgendaTask>('/agenda/tasks', payload);
     return data;
   },
+
+  scheduleBatch: async (payload: {
+    date: string;
+    time: string;
+    periciaIds: string[];
+  }): Promise<void> => {
+    await apiClient.post('/agenda/batch-schedule', payload);
+  },
 };

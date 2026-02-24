@@ -6,7 +6,7 @@ type Column<T> = {
   header: string;
 };
 
-type DataTableProps<T extends Record<string, string | number | undefined>> = {
+type DataTableProps<T extends Record<string, string | number | boolean | null | undefined>> = {
   rows: T[];
   columns: Column<T>[];
   page: number;
@@ -14,7 +14,7 @@ type DataTableProps<T extends Record<string, string | number | undefined>> = {
   onPageChange: (next: number) => void;
 };
 
-export const DataTable = <T extends Record<string, string | number | undefined>>({
+export const DataTable = <T extends Record<string, string | number | boolean | null | undefined>>({
   rows,
   columns,
   page,
