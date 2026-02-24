@@ -26,8 +26,11 @@ export class FinancialService {
     });
   }
 
-  listRecebimentos() {
-    return this.prisma.recebimento.findMany({ orderBy: { dataRecebimento: 'desc' } });
+  listRecebimentos(periciaId?: string) {
+    return this.prisma.recebimento.findMany({
+      where: periciaId ? { periciaId } : undefined,
+      orderBy: { dataRecebimento: 'desc' },
+    });
   }
 
   createDespesa(dto: CreateDespesaDto) {

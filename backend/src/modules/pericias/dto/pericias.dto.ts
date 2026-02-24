@@ -80,6 +80,26 @@ export class UpdatePericiasDto {
   @IsOptional()
   @IsBoolean()
   isUrgent?: boolean;
+
+  @ApiPropertyOptional()
+  @IsOptional()
+  @IsDateString()
+  dataNomeacao?: string;
+
+  @ApiPropertyOptional()
+  @IsOptional()
+  @IsDateString()
+  dataAgendamento?: string;
+
+  @ApiPropertyOptional()
+  @IsOptional()
+  @IsDateString()
+  dataRealizacao?: string;
+
+  @ApiPropertyOptional()
+  @IsOptional()
+  @IsDateString()
+  dataEnvioLaudo?: string;
 }
 
 export class ListPericiasDto {

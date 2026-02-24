@@ -83,7 +83,20 @@ export class PericiasService {
 
   async update(id: string, dto: UpdatePericiasDto) {
     await this.findOne(id);
-    return this.prisma.pericia.update({ where: { id }, data: dto });
+
+    return this.prisma.pericia.update({
+      where: { id },
+      data: {
+        ...(dto.periciadoNome !== undefined ? { periciadoNome: dto.periciadoNome } : {}),
+        ...(dto.observacoes !== undefined ? { observacoes: dto.observacoes } : {}),
+        ...(dto.statusId !== undefined ? { statusId: dto.statusId } : {}),
+        ...(dto.isUrgent !== undefined ? { isUrgent: dto.isUrgent } : {}),
+        ...(dto.dataNomeacao !== undefined ? { dataNomeacao: new Date(dto.dataNomeacao) } : {}),
+        ...(dto.dataAgendamento !== undefined ? { dataAgendamento: new Date(dto.dataAgendamento) } : {}),
+        ...(dto.dataRealizacao !== undefined ? { dataRealizacao: new Date(dto.dataRealizacao) } : {}),
+        ...(dto.dataEnvioLaudo !== undefined ? { dataEnvioLaudo: new Date(dto.dataEnvioLaudo) } : {}),
+      },
+    });
   }
 
   async batchUpdate(dto: BatchUpdatePericiasDto) {
@@ -245,4 +258,121 @@ export class PericiasService {
       })),
     };
   }
+
+  async timeline(id: string) {
+    const pericia = await this.findOne(id);
+
+    const logs = await this.prisma.logStatus.findMany({
+      where: { periciaId: id },
+      orderBy: { createdAt: 'desc' },
+    });
+
+    const statusIds = Array.from(
+      new Set(
+        logs
+          .flatMap((log) => [log.statusAnterior, log.statusNovo])
+          .filter((value): value is string => Boolean(value)),
+      ),
+    );
+
+    const statusMap = new Map<string, string>();
+    if (statusIds.length) {
+      const statuses = await this.prisma.status.findMany({ where: { id: { in: statusIds } } });
+      statuses.forEach((status) => statusMap.set(status.id, status.nome));
+    }
+
+    const marcos = [
+      { label: 'Data de Nomeação', date: pericia.dataNomeacao },
+      { label: 'Data de Agendamento', date: pericia.dataAgendamento },
+      { label: 'Data de Realização', date: pericia.dataRealizacao },
+      { label: 'Data de Envio do Laudo', date: pericia.dataEnvioLaudo },
+    ]
+      .filter((item) => Boolean(item.date))
+      .map((item) => ({
+        type: 'MARCO',
+        event: item.label,
+        description: item.label,
+        date: item.date?.toISOString(),
+      }));
+
+    const movimentacoes = logs.map((log) => ({
+      type: 'STATUS',
+      event: `Status alterado para ${statusMap.get(log.statusNovo) ?? log.statusNovo}`,
+      description: log.motivo ?? null,
+      fromStatus: log.statusAnterior ? statusMap.get(log.statusAnterior) ?? log.statusAnterior : null,
+      toStatus: statusMap.get(log.statusNovo) ?? log.statusNovo,
+      date: log.createdAt.toISOString(),
+    }));
+
+    return {
+      periciaId: id,
+      items: [...marcos, ...movimentacoes].sort((a, b) => {
+        if (!a.date || !b.date) return 0;
+        return new Date(b.date).getTime() - new Date(a.date).getTime();
+      }),
+    };
+  }
+
+  async cityOverview(cidadeId: string) {
+    const cidade = await this.prisma.cidade.findFirst({ where: { id: cidadeId } });
+    if (!cidade) throw new NotFoundException('Cidade não encontrada.');
+
+    const pericias = await this.prisma.pericia.findMany({
+      where: { cidadeId },
+      include: { status: true },
+      orderBy: { createdAt: 'desc' },
+    });
+
+    const recebimentos = await this.prisma.recebimento.findMany({
+      where: { pericia: { cidadeId } },
+      select: { valorLiquido: true, valorBruto: true },
+    });
+
+    const totalRecebido = recebimentos.reduce(
+      (acc, current) => acc + Number(current.valorLiquido ?? current.valorBruto ?? 0),
+      0,
+    );
+
+    const grouped = {
+      avaliar: pericias.filter((p) => !p.agendada && !p.finalizada),
+      agendar: pericias.filter((p) => p.agendada && !p.laudoEnviado),
+      laudos: pericias.filter((p) => p.agendada && !p.laudoEnviado && !p.finalizada),
+      esclarecimentos: pericias.filter((p) => Boolean(p.extraObservation)),
+      pagamento: pericias.filter((p) => p.pagamentoStatus === 'PENDENTE'),
+      criticos: pericias.filter((p) => p.pagamentoStatus === 'ATRASADO' || p.isUrgent),
+      finalizada: pericias.filter((p) => p.finalizada),
+    };
+
+    const toCnj = (items: typeof pericias) => items.slice(0, 20).map((item) => item.processoCNJ);
+
+    return {
+      cidade: { id: cidade.id, nome: cidade.nome, uf: cidade.uf },
+      metrics: {
+        score: pericias.length ? Math.round((grouped.finalizada.length / pericias.length) * 100) : 0,
+        totalPericias: pericias.length,
+        aReceberTotal: pericias.reduce((acc, item) => acc + Number(item.honorariosPrevistosJG ?? 0), 0),
+        atrasoCritico: grouped.criticos.length,
+      },
+      buckets: {
+        avaliar: { total: grouped.avaliar.length, cnjs: toCnj(grouped.avaliar) },
+        agendar: { total: grouped.agendar.length, cnjs: toCnj(grouped.agendar) },
+        laudos: { total: grouped.laudos.length, cnjs: toCnj(grouped.laudos) },
+        esclarecimentos: { total: grouped.esclarecimentos.length, cnjs: toCnj(grouped.esclarecimentos) },
+        pagamento: { total: grouped.pagamento.length, cnjs: toCnj(grouped.pagamento), recebido: totalRecebido },
+        criticos: { total: grouped.criticos.length, cnjs: toCnj(grouped.criticos) },
+        finalizada: { total: grouped.finalizada.length },
+      },
+    };
+  }
+
+  async cityOverviewList() {
+    const cidades = await this.prisma.cidade.findMany({
+      orderBy: { nome: 'asc' },
+      select: { id: true, nome: true, uf: true },
+    });
+
+    const rows = await Promise.all(cidades.map((cidade) => this.cityOverview(cidade.id)));
+    return { items: rows };
+  }
+
 }
