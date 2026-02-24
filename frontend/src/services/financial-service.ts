@@ -1,11 +1,15 @@
 import { apiClient } from '@/lib/api-client';
-import type { ApiListResponse, FinancialItem } from '@/types/api';
+import type { ApiListResponse, Despesa, FinancialAnalytics, FinancialItem, Recebimento } from '@/types/api';
 
 type RecebimentoRaw = {
   id: string;
   fontePagamento: string;
   valorBruto: string | number;
+  valorLiquido?: string | number;
   descricao?: string;
+  dataRecebimento?: string;
+  periciaId?: string;
+  createdAt?: string;
 };
 
 export const financialService = {
@@ -20,6 +24,44 @@ export const financialService = {
       }));
       return { items, total: items.length, page: 1, pageSize: items.length };
     }
+    return data;
+  },
+
+  listRecebimentos: async (): Promise<Recebimento[]> => {
+    const { data } = await apiClient.get<Recebimento[]>('/financial/recebimentos');
+    return Array.isArray(data) ? data : [];
+  },
+
+  createRecebimento: async (payload: {
+    periciaId?: string;
+    fontePagamento: string;
+    dataRecebimento: string;
+    valorBruto: number;
+    valorLiquido?: number;
+    descricao?: string;
+  }): Promise<Recebimento> => {
+    const { data } = await apiClient.post<Recebimento>('/financial/recebimentos', payload);
+    return data;
+  },
+
+  listDespesas: async (): Promise<Despesa[]> => {
+    const { data } = await apiClient.get<Despesa[]>('/financial/despesas');
+    return Array.isArray(data) ? data : [];
+  },
+
+  createDespesa: async (payload: {
+    categoria: string;
+    descricao: string;
+    valor: number;
+    dataCompetencia: string;
+    periciaId?: string;
+  }): Promise<Despesa> => {
+    const { data } = await apiClient.post<Despesa>('/financial/despesas', payload);
+    return data;
+  },
+
+  analytics: async (): Promise<FinancialAnalytics> => {
+    const { data } = await apiClient.get<FinancialAnalytics>('/financial/analytics');
     return data;
   },
 };
