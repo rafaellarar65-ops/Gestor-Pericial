@@ -2,50 +2,51 @@ export type SidebarItem = {
   label: string;
   href: string;
   permission?: 'ADMIN' | 'ASSISTANT';
-  children?: SidebarItem[];
 };
 
-export const sidebarConfig: SidebarItem[] = [
-  { label: 'Dashboard', href: '/' },
-  { label: 'Nomeações', href: '/nomeacoes' },
+export type SidebarSection = {
+  section: string;
+  items: SidebarItem[];
+};
+
+export const sidebarSections: SidebarSection[] = [
   {
-    label: 'Agenda',
-    href: '/agenda',
-    children: [
+    section: 'GERAL',
+    items: [
+      { label: 'Dashboard', href: '/' },
       { label: 'Perícias do Dia', href: '/pericias-hoje' },
+      { label: 'Todas Perícias', href: '/pericias' },
+      { label: 'Cidades', href: '/cidades' },
+    ],
+  },
+  {
+    section: 'OPERACIONAL',
+    items: [
+      { label: 'Nomeações', href: '/nomeacoes' },
+      { label: 'Tarefas', href: '/agendar' },
+      { label: 'Fila de Agendamento', href: '/agendar' },
       { label: 'Teleperícias', href: '/telepericias' },
-      { label: 'Agendar em Lote', href: '/agendar' },
+      { label: 'Esclarecimentos', href: '/comunicacao' },
+      { label: 'Agenda', href: '/agenda' },
     ],
   },
   {
-    label: 'Perícias',
-    href: '/pericias',
-    children: [
-      { label: 'Laudos Pendentes', href: '/laudos-pendentes' },
-      { label: 'Laudo V2', href: '/laudo-v2' },
+    section: 'CENTRAL TÉCNICA',
+    items: [
+      { label: 'Elaboração de Laudos', href: '/laudos-pendentes' },
       { label: 'Base de Conhecimento', href: '/base-conhecimento' },
-      { label: 'Manobras', href: '/manobras' },
+      { label: 'Banco de Manobras', href: '/manobras' },
     ],
   },
   {
-    label: 'Financeiro',
-    href: '/financeiro',
-    children: [
-      { label: 'Cobrança', href: '/cobranca' },
-      { label: 'Relatórios Financeiros', href: '/relatorios-financeiros' },
-      { label: 'Despesas', href: '/despesas' },
+    section: 'FINANCEIRO',
+    items: [
+      { label: 'Central de Cobrança', href: '/cobranca' },
+      { label: 'Importações', href: '/relatorios-financeiros' },
+      { label: 'Análise Financeira', href: '/financeiro' },
     ],
   },
-  {
-    label: 'Cadastros',
-    href: '/cidades',
-    children: [{ label: 'Advogados', href: '/advogados' }],
-  },
-  {
-    label: 'Comunicação',
-    href: '/comunicacao',
-    children: [{ label: 'Inbox de Email', href: '/inbox-email' }],
-  },
-  { label: 'Configurações', href: '/configuracoes', permission: 'ADMIN' },
-  { label: 'Documentação', href: '/documentacao' },
 ];
+
+// Flat list kept for command palette
+export const sidebarConfig: SidebarItem[] = sidebarSections.flatMap((s) => s.items);
