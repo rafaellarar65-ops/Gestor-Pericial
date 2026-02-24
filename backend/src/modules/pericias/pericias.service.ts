@@ -329,6 +329,7 @@ export class PericiasService {
         isUrgent: true,
         honorariosPrevistosJG: true,
       },
+      include: { status: true },
       orderBy: { createdAt: 'desc' },
     });
 
@@ -440,6 +441,7 @@ export class PericiasService {
 
     return {
       cidade: { id: cidade.id, nome: cidade.nome, uf: cidade.uf ?? undefined },
+      cidade: { id: cidade.id, nome: cidade.nome, uf: cidade.uf },
       metrics: {
         score: pericias.length ? Math.round((grouped.finalizada.length / pericias.length) * 100) : 0,
         totalPericias: pericias.length,
@@ -456,6 +458,16 @@ export class PericiasService {
         finalizada: { total: grouped.finalizada.length },
       },
     };
+  }
+
+  async cityOverviewList() {
+    const cidades = await this.prisma.cidade.findMany({
+      orderBy: { nome: 'asc' },
+      select: { id: true, nome: true, uf: true },
+    });
+
+    const rows = await Promise.all(cidades.map((cidade) => this.cityOverview(cidade.id)));
+    return { items: rows };
   }
 
 }
