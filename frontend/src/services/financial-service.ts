@@ -3,7 +3,7 @@ import type { ApiListResponse, FinancialItem } from '@/types/api';
 
 export const financialService = {
   list: async (): Promise<ApiListResponse<FinancialItem>> => {
-    const { data } = await apiClient.get<ApiListResponse<FinancialItem>>('/financial');
+    const { data } = await apiClient.get<ApiListResponse<FinancialItem>>('/financial/recebimentos');
     return data;
   },
 };

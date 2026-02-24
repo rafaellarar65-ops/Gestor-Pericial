@@ -8,7 +8,7 @@ export const periciaService = {
   },
   list: async (page: number): Promise<ApiListResponse<Pericia>> => {
     const { data } = await apiClient.get<ApiListResponse<Pericia>>('/pericias', {
-      params: { page, pageSize: 10 },
+      params: { page, limit: 10 },
     });
     return data;
   },

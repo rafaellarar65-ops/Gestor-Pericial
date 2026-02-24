@@ -88,16 +88,6 @@ export class AuthService {
       throw new UnauthorizedException('Refresh token inválido ou expirado.');
     }
 
-    const refreshHash = this.refreshTokenStore.get(payload.sub);
-    if (!refreshHash) {
-      throw new UnauthorizedException('Sessão inválida.');
-    }
-
-    const isValid = await bcrypt.compare(dto.refreshToken, refreshHash);
-    if (!isValid) {
-      throw new UnauthorizedException('Refresh token inválido.');
-    }
-
     return this.issueTokens(payload.sub, payload.email, payload.role, payload.tenantId);
   }
 
