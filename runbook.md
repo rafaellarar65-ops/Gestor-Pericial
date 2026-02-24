@@ -9,7 +9,7 @@
    - `vercel deploy --prebuilt --prod`
 3. Execute a etapa de release/migração (job separado), antes de subir a aplicação web:
    - `cd backend`
-   - `npm --prefix backend run prisma:migrate:deploy`
+   - `npm run prisma:migrate:deploy`
 4. Faça deploy do backend (somente aplicação):
    - `railway up --service <service-name> --detach`
 5. Valide saúde:
@@ -74,3 +74,8 @@ Ordem recomendada no pipeline de deploy/release:
 - TLS obrigatório em todas as conexões externas.
 - Nunca commitar secrets: usar Vercel/Railway/Supabase secrets.
 - Rotacionar `JWT_SECRET` e tokens de integração periodicamente.
+
+
+## 10) Pipeline de deploy/release (referência)
+- Consulte também: `docs/deploy-pipeline.md`.
+- Sequência mandatória: migration/release -> deploy web -> validação.
