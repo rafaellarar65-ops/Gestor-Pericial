@@ -4,6 +4,7 @@ services:
     runtime: node
     rootDir: backend
     buildCommand: npm install --include=dev && npx prisma generate && npm run build
+    preDeployCommand: npm run prisma:migrate:deploy
     startCommand: node dist/main.js
     healthCheckPath: /docs
     envVars:

@@ -13,7 +13,8 @@
     "test:cov": "jest --coverage",
     "prisma:validate": "prisma validate --schema prisma/schema.prisma",
     "prisma:generate": "prisma generate --schema prisma/schema.prisma",
-    "create:admin": "ts-node scripts/create-admin.ts"
+    "create:admin": "ts-node scripts/create-admin.ts",
+    "prisma:migrate:deploy": "prisma migrate deploy --schema prisma/schema.prisma"
   },
   "dependencies": {
     "@nestjs/bullmq": "^10.2.3",

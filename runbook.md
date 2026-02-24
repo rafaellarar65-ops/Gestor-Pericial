@@ -9,7 +9,7 @@
    - `vercel deploy --prebuilt --prod`
 3. Execute a etapa de release/migração (job separado), antes de subir a aplicação web:
    - `cd backend`
-   - `npx prisma migrate deploy --schema prisma/schema.prisma`
+   - `npm --prefix backend run prisma:migrate:deploy`
 4. Faça deploy do backend (somente aplicação):
    - `railway up --service <service-name> --detach`
 5. Valide saúde:
@@ -50,7 +50,7 @@ Checklist rápido:
 3. Validar endpoints críticos após migration.
 
 Ordem recomendada no pipeline de deploy/release:
-1. **Migration/Release job**: aplicar `prisma migrate deploy`.
+1. **Migration/Release job**: aplicar `npm --prefix backend run prisma:migrate:deploy` (ou `preDeployCommand` no Render).
 2. **Deploy web job**: publicar a aplicação backend (`node dist/main.js`).
 3. **Validação pós-deploy**: checar `/health` e endpoints críticos.
 
