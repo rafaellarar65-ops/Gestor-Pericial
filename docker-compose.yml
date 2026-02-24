@@ -12,7 +12,7 @@ services:
     env_file:
       - .env
     environment:
-      VITE_API_URL: ${VITE_API_URL:-http://localhost:3001}
+      VITE_API_URL: ${VITE_API_URL:-http://localhost:3000}
     volumes:
       - ./frontend:/app
       - /app/node_modules
@@ -29,11 +29,11 @@ services:
     working_dir: /app
     command: npm run start:dev
     ports:
-      - '3001:3001'
+      - '3000:3000'
     env_file:
       - .env
     environment:
-      PORT: 3001
+      PORT: 3000
       DATABASE_URL: ${DATABASE_URL:-postgresql://postgres:postgres@postgres:5432/pericias_manager_pro}
       REDIS_URL: ${REDIS_URL:-redis://redis:6379}
     volumes:
