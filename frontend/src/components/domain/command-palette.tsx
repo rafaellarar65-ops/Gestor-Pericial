@@ -7,10 +7,7 @@ import { sidebarConfig } from '@/config/sidebar-config';
 type SearchItem = { label: string; href: string };
 
 const flattenItems = (): SearchItem[] =>
-  sidebarConfig.flatMap((item) => [
-    { label: item.label, href: item.href },
-    ...(item.children?.map((child) => ({ label: `${item.label} / ${child.label}`, href: child.href })) ?? []),
-  ]);
+  sidebarConfig.map((item) => ({ label: item.label, href: item.href }));
 
 export const CommandPalette = () => {
   const [query, setQuery] = useState('');
