@@ -9,11 +9,6 @@ type TabType = (typeof tabs)[number];
 
 const toMoney = (value: number) =>
   value.toLocaleString('pt-BR', { style: 'currency', currency: 'BRL' });
-import { useMemo, useState } from 'react';
-import { useNavigate, useParams } from 'react-router-dom';
-import { ArrowLeft, Building2 } from 'lucide-react';
-
-const tabs = ['Visão Geral', 'Processos', 'Cadastro', 'Financeiro V2'];
 
 const CidadeDetailPage = () => {
   const { id = '' } = useParams();
