@@ -319,6 +319,16 @@ export class PericiasService {
 
     const pericias = await this.prisma.pericia.findMany({
       where: { cidadeId },
+      select: {
+        processoCNJ: true,
+        agendada: true,
+        laudoEnviado: true,
+        finalizada: true,
+        extraObservation: true,
+        pagamentoStatus: true,
+        isUrgent: true,
+        honorariosPrevistosJG: true,
+      },
       include: { status: true },
       orderBy: { createdAt: 'desc' },
     });
@@ -333,6 +343,90 @@ export class PericiasService {
       0,
     );
 
+    return this.buildCityOverview(cidade, pericias, totalRecebido);
+  }
+
+  async cityOverviewList() {
+    const cidades = await this.prisma.cidade.findMany({
+      orderBy: { nome: 'asc' },
+      select: { id: true, nome: true, uf: true },
+    });
+
+    if (cidades.length === 0) return { items: [] };
+
+    const cidadeIds = cidades.map((cidade) => cidade.id);
+
+    const pericias = await this.prisma.pericia.findMany({
+      where: { cidadeId: { in: cidadeIds } },
+      select: {
+        id: true,
+        cidadeId: true,
+        processoCNJ: true,
+        agendada: true,
+        laudoEnviado: true,
+        finalizada: true,
+        extraObservation: true,
+        pagamentoStatus: true,
+        isUrgent: true,
+        honorariosPrevistosJG: true,
+      },
+      orderBy: { createdAt: 'desc' },
+    });
+
+    const recebimentos = await this.prisma.recebimento.findMany({
+      where: { pericia: { cidadeId: { in: cidadeIds } } },
+      select: { periciaId: true, valorLiquido: true, valorBruto: true },
+    });
+
+    const periciasByCidade = new Map<string, typeof pericias>();
+    pericias.forEach((pericia) => {
+      if (!pericia.cidadeId) return;
+      const current = periciasByCidade.get(pericia.cidadeId) ?? [];
+      current.push(pericia);
+      periciasByCidade.set(pericia.cidadeId, current);
+    });
+
+    const cidadeByPericiaId = new Map<string, string>();
+    pericias.forEach((item) => {
+      if (item.cidadeId) cidadeByPericiaId.set(item.id, item.cidadeId);
+    });
+
+    const recebidosByCidade = new Map<string, number>();
+    recebimentos.forEach((recebimento) => {
+      const cidadeId = cidadeByPericiaId.get(recebimento.periciaId);
+      if (!cidadeId) return;
+      const current = recebidosByCidade.get(cidadeId) ?? 0;
+      const valor = Number(recebimento.valorLiquido ?? recebimento.valorBruto ?? 0);
+      recebidosByCidade.set(cidadeId, current + valor);
+    });
+
+    return {
+      items: cidades.map((cidade) =>
+        this.buildCityOverview(
+          cidade,
+          periciasByCidade.get(cidade.id) ?? [],
+          recebidosByCidade.get(cidade.id) ?? 0,
+        ),
+      ),
+    };
+  }
+
+  private buildCityOverview(
+    cidade: { id: string; nome: string; uf: string | null },
+    pericias: Array<{
+      id?: string;
+      cidadeId?: string | null;
+      processoCNJ: string;
+      agendada: boolean;
+      laudoEnviado: boolean;
+      finalizada: boolean;
+      extraObservation: string | null;
+      pagamentoStatus: string;
+      isUrgent: boolean;
+      honorariosPrevistosJG: Prisma.Decimal | null;
+    }>,
+    totalRecebido: number,
+  ) {
     const grouped = {
       avaliar: pericias.filter((p) => !p.agendada && !p.finalizada),
       agendar: pericias.filter((p) => p.agendada && !p.laudoEnviado),
@@ -346,6 +440,7 @@ export class PericiasService {
     const toCnj = (items: typeof pericias) => items.slice(0, 20).map((item) => item.processoCNJ);
 
     return {
+      cidade: { id: cidade.id, nome: cidade.nome, uf: cidade.uf ?? undefined },
       cidade: { id: cidade.id, nome: cidade.nome, uf: cidade.uf },
       metrics: {
         score: pericias.length ? Math.round((grouped.finalizada.length / pericias.length) * 100) : 0,

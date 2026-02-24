@@ -1,3 +1,14 @@
+import { useState } from 'react';
+import { useNavigate, useParams } from 'react-router-dom';
+import { ArrowLeft, Building2 } from 'lucide-react';
+import { ErrorState, LoadingState } from '@/components/ui/state';
+import { useCityOverviewQuery } from '@/hooks/use-pericias';
+
+const tabs = ['Visão Geral', 'Processos', 'Cadastro', 'Financeiro V2'] as const;
+type TabType = (typeof tabs)[number];
+
+const toMoney = (value: number) =>
+  value.toLocaleString('pt-BR', { style: 'currency', currency: 'BRL' });
 import { useMemo, useState } from 'react';
 import { useNavigate, useParams } from 'react-router-dom';
 import { ArrowLeft, Building2 } from 'lucide-react';
