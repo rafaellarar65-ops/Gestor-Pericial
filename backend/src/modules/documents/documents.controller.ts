@@ -1,4 +1,4 @@
-import { Body, Controller, Post } from '@nestjs/common';
+import { Body, Controller, Get, Post, Query } from '@nestjs/common';
 import { ApiBearerAuth, ApiOperation, ApiTags } from '@nestjs/swagger';
 import { DocumentsService } from './documents.service';
 import { CategorizeDocumentDto, LinkPericiaDocumentDto, SignedUrlDto, UploadDocumentDto } from './dto/documents.dto';
@@ -8,6 +8,11 @@ import { CategorizeDocumentDto, LinkPericiaDocumentDto, SignedUrlDto, UploadDocu
 @Controller('documents')
 export class DocumentsController {
   constructor(private readonly service: DocumentsService) {}
+
+  @Get()
+  list(@Query('periciaId') periciaId?: string) {
+    return this.service.list(periciaId);
+  }
 
   @Post('upload')
   @ApiOperation({ summary: 'Registra upload de documento para storage' })

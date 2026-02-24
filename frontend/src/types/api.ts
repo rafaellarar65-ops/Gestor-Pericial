@@ -180,6 +180,67 @@ export type ConfigItem = {
   tribunalId?: string;
 };
 
+
+
+export type PericiaDetail = {
+  id: string;
+  processoCNJ: string;
+  autorNome?: string;
+  reuNome?: string;
+  periciadoNome?: string;
+  cidade?: { id: string; nome: string; uf?: string } | null;
+  vara?: { id: string; nome: string } | null;
+  status?: { id: string; nome: string; codigo?: string } | null;
+  pagamentoStatus?: string;
+  dataNomeacao?: string;
+  dataAgendamento?: string;
+  dataRealizacao?: string;
+  dataEnvioLaudo?: string;
+  honorariosPrevistosJG?: number | string;
+};
+
+export type PericiaTimelineItem = {
+  type: 'MARCO' | 'STATUS';
+  event: string;
+  description?: string | null;
+  date?: string;
+};
+
+export type PericiaTimelineResponse = {
+  periciaId: string;
+  items: PericiaTimelineItem[];
+};
+
+export type CaseDocument = {
+  id: string;
+  periciaId: string;
+  nome: string;
+  categoria?: string;
+  tipo?: string;
+  createdAt?: string;
+};
+
+export type CityOverview = {
+  cidade: { id: string; nome: string; uf?: string };
+  metrics: {
+    score: number;
+    totalPericias: number;
+    aReceberTotal: number;
+    atrasoCritico: number;
+  };
+  buckets: {
+    avaliar: { total: number; cnjs: string[] };
+    agendar: { total: number; cnjs: string[] };
+    laudos: { total: number; cnjs: string[] };
+    esclarecimentos: { total: number; cnjs: string[] };
+    pagamento: { total: number; cnjs: string[]; recebido: number };
+    criticos: { total: number; cnjs: string[] };
+    finalizada: { total: number };
+  };
+};
+
+export type CityOverviewList = { items: CityOverview[] };
+
 export type ApiError = {
   message: string | string[];
   statusCode?: number;
