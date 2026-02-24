@@ -5,7 +5,7 @@ services:
     rootDir: backend
     buildCommand: npm install --include=dev && npx prisma generate && npm run build
     startCommand: npx prisma db push && node dist/main.js
-    healthCheckPath: /docs
+    healthCheckPath: /health
     envVars:
       - key: NODE_ENV
         value: production
