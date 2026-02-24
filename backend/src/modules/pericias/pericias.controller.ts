@@ -30,6 +30,25 @@ export class PericiasController {
     return this.service.dashboard();
   }
 
+
+  @Get(':id/timeline')
+  @ApiOperation({ summary: 'Timeline real de eventos da perícia' })
+  timeline(@Param('id') id: string) {
+    return this.service.timeline(id);
+  }
+
+  @Get('cidades/:cidadeId/overview')
+  @ApiOperation({ summary: 'Resumo operacional e financeiro da cidade' })
+  cityOverview(@Param('cidadeId') cidadeId: string) {
+    return this.service.cityOverview(cidadeId);
+  }
+
+  @Get('cidades-overview')
+  @ApiOperation({ summary: 'Resumo operacional de todas as cidades' })
+  cityOverviewList() {
+    return this.service.cityOverviewList();
+  }
+
   @Get(':id')
   get(@Param('id') id: string) {
     return this.service.findOne(id);

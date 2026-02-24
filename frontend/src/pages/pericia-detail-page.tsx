@@ -1,63 +1,103 @@
 import { useMemo, useState } from 'react';
 import { Link, useParams } from 'react-router-dom';
+import { CalendarDays, Landmark, MapPin, Pencil, Plus, Save } from 'lucide-react';
 import {
-  CalendarDays,
-  Clock3,
-  Landmark,
-  MapPin,
-  Mic,
-  Pencil,
-  Plus,
-  Save,
-} from 'lucide-react';
-import { StatusBadge } from '@/components/domain/status-badge';
-import { EmptyState, ErrorState, LoadingState } from '@/components/ui/state';
-import { usePericiaDetailQuery } from '@/hooks/use-pericias';
+  usePericiaCnjQuery,
+  usePericiaDetailQuery,
+  usePericiaDocumentsQuery,
+  usePericiaRecebimentosQuery,
+  usePericiaTimelineQuery,
+  useUpdatePericiaDatesMutation,
+} from '@/hooks/use-pericias';
 import { cn } from '@/lib/utils';
+import { EmptyState, ErrorState, LoadingState } from '@/components/ui/state';
 
-const tabs = ['Visão 360°', 'Documentos', 'Pré-Laudo (IA)', 'Timeline', 'Financeiro', 'CNJ'];
+const tabs = ['Visão 360°', 'Documentos', 'Timeline', 'Financeiro', 'CNJ'] as const;
+
+type TabType = (typeof tabs)[number];
+
+const toDateInput = (iso?: string) => (iso ? new Date(iso).toISOString().slice(0, 10) : '');
+const toDateBR = (iso?: string) => (iso ? new Date(iso).toLocaleDateString('pt-BR') : '—');
+const toMoney = (value?: number | string) =>
+  Number(value ?? 0).toLocaleString('pt-BR', { style: 'currency', currency: 'BRL' });
 
 const PericiaDetailPage = () => {
   const { id = '' } = useParams();
-  const [activeTab, setActiveTab] = useState(tabs[0]);
+  const [activeTab, setActiveTab] = useState<TabType>('Visão 360°');
   const [showDatesModal, setShowDatesModal] = useState(false);
-  const { data, isLoading, isError } = usePericiaDetailQuery(id);
 
-  const timelineItems = useMemo(
-    () => [
-      { date: '28/01/2026', title: 'Processo cadastrado', description: 'Importação ou cadastro manual.' },
-      { date: '26/01/2021', title: 'Data de nomeação', description: 'Referência inicial do processo.' },
-    ],
-    [],
+  const detailQuery = usePericiaDetailQuery(id);
+  const timelineQuery = usePericiaTimelineQuery(id);
+  const documentsQuery = usePericiaDocumentsQuery(id);
+  const recebimentosQuery = usePericiaRecebimentosQuery(id);
+
+  const cnjQuery = usePericiaCnjQuery(
+    id,
+    detailQuery.data?.processoCNJ,
+    activeTab === 'CNJ' && Boolean(detailQuery.data?.processoCNJ),
   );
 
-  if (isLoading) return <LoadingState />;
-  if (isError) return <ErrorState message="Erro ao carregar perícia" />;
-  if (!data) return <EmptyState title="Perícia não encontrada" />;
+  const updateDates = useUpdatePericiaDatesMutation(id);
+
+  const [dates, setDates] = useState({
+    dataNomeacao: '',
+    dataAgendamento: '',
+    dataRealizacao: '',
+    dataEnvioLaudo: '',
+  });
+
+  const detail = detailQuery.data;
+
+  const financial = useMemo(() => {
+    const recebimentos = recebimentosQuery.data ?? [];
+    const recebido = recebimentos.reduce(
+      (acc, item) => acc + Number(item.valorLiquido ?? item.valorBruto ?? 0),
+      0,
+    );
+    const previsto = Number(detail?.honorariosPrevistosJG ?? 0);
+
+    return { previsto, recebido, saldo: previsto - recebido, items: recebimentos };
+  }, [detail?.honorariosPrevistosJG, recebimentosQuery.data]);
+
+  if (detailQuery.isLoading) return <LoadingState />;
+  if (detailQuery.isError) return <ErrorState message="Erro ao carregar perícia" />;
+  if (!detail) return <EmptyState title="Perícia não encontrada" />;
 
   return (
     <div className="space-y-4">
       <section className="rounded-xl border bg-white p-4 shadow-sm">
         <div className="flex flex-wrap items-start justify-between gap-4">
           <div>
-            <p className="text-xs font-semibold uppercase tracking-wide text-muted-foreground">Erro médico | Presencial</p>
-            <h1 className="mt-2 text-3xl font-bold text-slate-800">{data.processoCNJ}</h1>
+            <h1 className="mt-2 text-3xl font-bold text-slate-800">{detail.processoCNJ}</h1>
             <p className="mt-1 text-sm text-slate-600">
-              Autor: <strong>{data.autorNome}</strong> • Réu: {data.reuNome ?? 'Não informado'}
+              Autor: <strong>{detail.autorNome ?? '—'}</strong> • Réu: {detail.reuNome ?? '—'}
             </p>
             <div className="mt-3 flex flex-wrap items-center gap-3 text-sm text-slate-600">
-              <span className="inline-flex items-center gap-1"><MapPin size={14} />{data.cidade}</span>
-              <StatusBadge status={data.status} />
+              <span className="inline-flex items-center gap-1">
+                <MapPin size={14} />
+                {detail.cidade?.nome ?? 'Sem cidade'}
+              </span>
+              <span className="rounded-full bg-blue-100 px-2 py-1 text-xs font-semibold text-blue-700">
+                {detail.status?.nome ?? detail.status?.codigo ?? 'Sem status'}
+              </span>
             </div>
           </div>
 
           <div className="flex flex-wrap gap-2">
-            <button className="inline-flex items-center gap-2 rounded-md bg-indigo-600 px-4 py-2 text-sm font-semibold text-white">
+            <button className="inline-flex items-center gap-2 rounded-md bg-indigo-600 px-4 py-2 text-sm font-semibold text-white" type="button">
               <Pencil size={14} /> Editor V2
             </button>
             <button
               className="rounded-md border px-3 py-2 text-sm"
-              onClick={() => setShowDatesModal(true)}
+              onClick={() => {
+                setDates({
+                  dataNomeacao: toDateInput(detail.dataNomeacao),
+                  dataAgendamento: toDateInput(detail.dataAgendamento),
+                  dataRealizacao: toDateInput(detail.dataRealizacao),
+                  dataEnvioLaudo: toDateInput(detail.dataEnvioLaudo),
+                });
+                setShowDatesModal(true);
+              }}
               type="button"
             >
               Editar Datas
@@ -66,12 +106,6 @@ const PericiaDetailPage = () => {
               CNJ
             </Link>
           </div>
-        </div>
-
-        <div className="mt-4 flex flex-wrap gap-2 border-t pt-4">
-          <button className="rounded-md bg-blue-600 px-4 py-2 text-sm font-semibold text-white">Agendar</button>
-          <button className="rounded-md bg-amber-500 px-4 py-2 text-sm font-semibold text-white">Majorar</button>
-          <Link className="rounded-md border px-4 py-2 text-sm" to="/cidades">Ver Cidade</Link>
         </div>
       </section>
 
@@ -100,15 +134,18 @@ const PericiaDetailPage = () => {
               <div className="rounded-lg border p-4">
                 <h3 className="font-semibold text-slate-800">Resumo do Caso</h3>
                 <ul className="mt-3 space-y-2 text-sm text-slate-600">
-                  <li className="flex justify-between"><span>Status Atual</span><strong>{data.status}</strong></li>
-                  <li className="flex justify-between"><span>Cidade / Vara</span><span>{data.cidade}</span></li>
-                  <li className="flex justify-between"><span>Data Nomeação</span><span>26/01/2021</span></li>
+                  <li className="flex justify-between"><span>Status Atual</span><strong>{detail.status?.nome ?? '—'}</strong></li>
+                  <li className="flex justify-between"><span>Cidade / Vara</span><span>{detail.cidade?.nome ?? '—'} / {detail.vara?.nome ?? '—'}</span></li>
+                  <li className="flex justify-between"><span>Data Nomeação</span><span>{toDateBR(detail.dataNomeacao)}</span></li>
                 </ul>
               </div>
               <div className="rounded-lg border p-4">
-                <h3 className="font-semibold text-slate-800">Prazos e KPIs</h3>
-                <p className="mt-3 text-sm text-slate-600">Laudo → Pagamento</p>
-                <p className="mt-1 text-sm font-semibold text-emerald-600">Pendente</p>
+                <h3 className="font-semibold text-slate-800">Prazos</h3>
+                <ul className="mt-3 space-y-2 text-sm text-slate-600">
+                  <li className="flex justify-between"><span>Agendamento</span><span>{toDateBR(detail.dataAgendamento)}</span></li>
+                  <li className="flex justify-between"><span>Realização</span><span>{toDateBR(detail.dataRealizacao)}</span></li>
+                  <li className="flex justify-between"><span>Envio Laudo</span><span>{toDateBR(detail.dataEnvioLaudo)}</span></li>
+                </ul>
               </div>
             </div>
           )}
@@ -118,60 +155,64 @@ const PericiaDetailPage = () => {
               <div className="flex items-center justify-between rounded-lg border bg-slate-50 p-4">
                 <div>
                   <p className="font-semibold">Central de Documentos</p>
-                  <p className="text-sm text-muted-foreground">Envie o processo completo para análise da IA.</p>
+                  <p className="text-sm text-muted-foreground">Documentos reais vinculados ao processo.</p>
                 </div>
-                <button className="inline-flex items-center gap-2 rounded-md bg-blue-600 px-3 py-2 text-sm font-semibold text-white">
+                <button className="inline-flex items-center gap-2 rounded-md bg-blue-600 px-3 py-2 text-sm font-semibold text-white" type="button">
                   <Plus size={14} /> Adicionar Documento
                 </button>
               </div>
-              <div className="flex h-52 items-center justify-center rounded-lg border border-dashed text-sm text-muted-foreground">
-                Nenhum documento anexado ainda.
-              </div>
-            </div>
-          )}
-
-          {activeTab === 'Pré-Laudo (IA)' && (
-            <div className="grid gap-4 lg:grid-cols-[2fr,1fr]">
-              <div className="space-y-3 rounded-lg border p-4">
-                <h3 className="font-semibold">Importar Pré-Laudo Externo</h3>
-                <textarea className="h-28 w-full rounded-md border p-3 text-sm" placeholder="Cole aqui o texto gerado por outra IA..." />
-                <div className="flex justify-end gap-2">
-                  <button className="rounded-md bg-violet-200 px-3 py-2 text-sm font-medium text-violet-700">Organizar com IA</button>
-                  <button className="inline-flex items-center gap-1 rounded-md bg-blue-600 px-3 py-2 text-sm font-semibold text-white"><Save size={14} />Salvar</button>
+              {documentsQuery.isLoading ? (
+                <LoadingState />
+              ) : (
+                <div className="space-y-2">
+                  {(documentsQuery.data ?? []).map((doc) => (
+                    <div className="rounded-md border p-3 text-sm" key={doc.id}>
+                      <p className="font-semibold">{doc.nome}</p>
+                      <p className="text-slate-500">Categoria: {doc.categoria ?? '—'} • Tipo: {doc.tipo ?? '—'}</p>
+                    </div>
+                  ))}
+                  {(documentsQuery.data ?? []).length === 0 && (
+                    <div className="rounded-md border border-dashed p-4 text-sm text-muted-foreground">Nenhum documento anexado.</div>
+                  )}
                 </div>
-              </div>
-              <div className="rounded-lg border p-4">
-                <h3 className="font-semibold">Ditado</h3>
-                <button className="mt-4 flex h-14 w-14 items-center justify-center rounded-full bg-red-100 text-red-600">
-                  <Mic size={20} />
-                </button>
-              </div>
+              )}
             </div>
           )}
 
           {activeTab === 'Timeline' && (
-            <div className="space-y-4">
-              {timelineItems.map((item) => (
-                <div className="flex gap-3" key={item.title}>
-                  <Clock3 className="mt-1 text-slate-400" size={16} />
-                  <div>
-                    <p className="text-xs text-slate-500">{item.date}</p>
-                    <p className="font-semibold">{item.title}</p>
-                    <p className="text-sm text-slate-600">{item.description}</p>
-                  </div>
+            <div className="space-y-3">
+              {timelineQuery.isLoading && <LoadingState />}
+              {(timelineQuery.data?.items ?? []).map((item, index) => (
+                <div className="rounded-md border p-3" key={`${item.event}-${index}`}>
+                  <p className="text-xs text-slate-500">{toDateBR(item.date)}</p>
+                  <p className="font-semibold">{item.event}</p>
+                  {item.description && <p className="text-sm text-slate-600">{item.description}</p>}
                 </div>
               ))}
+              {(timelineQuery.data?.items ?? []).length === 0 && !timelineQuery.isLoading && (
+                <div className="rounded-md border border-dashed p-4 text-sm text-muted-foreground">Sem eventos de timeline.</div>
+              )}
             </div>
           )}
 
           {activeTab === 'Financeiro' && (
             <div className="space-y-4">
               <div className="grid gap-3 md:grid-cols-3">
-                <div className="rounded-lg border p-3"><p className="text-xs">Honorários previstos</p><p className="text-2xl font-bold">R$ 0,00</p></div>
-                <div className="rounded-lg border border-emerald-200 bg-emerald-50 p-3"><p className="text-xs">Recebido (bruto)</p><p className="text-2xl font-bold text-emerald-700">R$ 0,00</p></div>
-                <div className="rounded-lg border border-red-200 bg-red-50 p-3"><p className="text-xs">Saldo a receber</p><p className="text-2xl font-bold text-red-700">R$ 0,00</p></div>
+                <div className="rounded-lg border p-3"><p className="text-xs">Honorários previstos</p><p className="text-2xl font-bold">{toMoney(financial.previsto)}</p></div>
+                <div className="rounded-lg border border-emerald-200 bg-emerald-50 p-3"><p className="text-xs">Recebido</p><p className="text-2xl font-bold text-emerald-700">{toMoney(financial.recebido)}</p></div>
+                <div className="rounded-lg border border-red-200 bg-red-50 p-3"><p className="text-xs">Saldo</p><p className="text-2xl font-bold text-red-700">{toMoney(financial.saldo)}</p></div>
               </div>
-              <p className="rounded-md border p-3 text-center text-sm font-semibold">STATUS FINANCEIRO: AGUARDANDO PAGAMENTO</p>
+              <div className="space-y-2">
+                {financial.items.map((item) => (
+                  <div className="rounded-md border p-3 text-sm" key={item.id}>
+                    <p className="font-semibold">{item.fontePagamento}</p>
+                    <p className="text-slate-500">{toDateBR(item.dataRecebimento)} • {toMoney(item.valorLiquido ?? item.valorBruto)}</p>
+                  </div>
+                ))}
+                {financial.items.length === 0 && (
+                  <div className="rounded-md border border-dashed p-4 text-sm text-muted-foreground">Nenhum recebimento registrado.</div>
+                )}
+              </div>
             </div>
           )}
 
@@ -179,13 +220,11 @@ const PericiaDetailPage = () => {
             <div className="space-y-4">
               <div className="flex items-center justify-between rounded-lg border bg-slate-50 p-4">
                 <div className="inline-flex items-center gap-2 font-semibold"><Landmark size={16} /> Dados DataJud (CNJ)</div>
-                <button className="rounded-md bg-indigo-600 px-3 py-2 text-sm font-semibold text-white">Atualizar Agora</button>
               </div>
-              <div className="rounded-lg border p-4 text-sm">
-                <p><strong>Classe:</strong> Procedimento Comum Cível</p>
-                <p><strong>Assunto:</strong> Erro Médico</p>
-                <p><strong>Tribunal:</strong> TJMG</p>
-              </div>
+              {cnjQuery.isLoading && <LoadingState />}
+              {!cnjQuery.isLoading && cnjQuery.data && (
+                <pre className="overflow-x-auto rounded-md border bg-slate-50 p-3 text-xs">{JSON.stringify(cnjQuery.data, null, 2)}</pre>
+              )}
             </div>
           )}
         </div>
@@ -199,18 +238,43 @@ const PericiaDetailPage = () => {
               <button onClick={() => setShowDatesModal(false)} type="button">×</button>
             </div>
             <div className="space-y-3 p-4">
-              {['Data Nomeação', 'Data Agendamento', 'Data Realização', 'Data Envio Laudo'].map((label) => (
-                <label className="block text-sm" key={label}>
-                  <span className="mb-1 block text-xs font-semibold uppercase text-muted-foreground">{label}</span>
+              {[
+                { key: 'dataNomeacao', label: 'Data Nomeação' },
+                { key: 'dataAgendamento', label: 'Data Agendamento' },
+                { key: 'dataRealizacao', label: 'Data Realização' },
+                { key: 'dataEnvioLaudo', label: 'Data Envio Laudo' },
+              ].map((field) => (
+                <label className="block text-sm" key={field.key}>
+                  <span className="mb-1 block text-xs font-semibold uppercase text-muted-foreground">{field.label}</span>
                   <div className="relative">
-                    <input className="w-full rounded-md border px-3 py-2" placeholder="dd/mm/aaaa" />
+                    <input
+                      className="w-full rounded-md border px-3 py-2"
+                      onChange={(e) => setDates((prev) => ({ ...prev, [field.key]: e.target.value }))}
+                      type="date"
+                      value={dates[field.key as keyof typeof dates]}
+                    />
                     <CalendarDays className="absolute right-3 top-2.5 text-slate-400" size={16} />
                   </div>
                 </label>
               ))}
               <div className="flex justify-end gap-2 pt-2">
                 <button className="rounded-md px-3 py-2 text-sm" onClick={() => setShowDatesModal(false)} type="button">Cancelar</button>
-                <button className="inline-flex items-center gap-1 rounded-md bg-blue-600 px-3 py-2 text-sm font-semibold text-white" type="button"><Save size={14} />Salvar</button>
+                <button
+                  className="inline-flex items-center gap-1 rounded-md bg-blue-600 px-3 py-2 text-sm font-semibold text-white"
+                  disabled={updateDates.isPending}
+                  onClick={async () => {
+                    await updateDates.mutateAsync({
+                      dataNomeacao: dates.dataNomeacao || undefined,
+                      dataAgendamento: dates.dataAgendamento || undefined,
+                      dataRealizacao: dates.dataRealizacao || undefined,
+                      dataEnvioLaudo: dates.dataEnvioLaudo || undefined,
+                    });
+                    setShowDatesModal(false);
+                  }}
+                  type="button"
+                >
+                  <Save size={14} />Salvar
+                </button>
               </div>
             </div>
           </div>

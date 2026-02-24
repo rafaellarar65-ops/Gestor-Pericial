@@ -7,9 +7,20 @@ const tabs = ['Visão Geral', 'Processos', 'Cadastro', 'Financeiro V2'];
 const CidadeDetailPage = () => {
   const { id = '' } = useParams();
   const navigate = useNavigate();
-  const [activeTab, setActiveTab] = useState(tabs[0]);
+  const [activeTab, setActiveTab] = useState<TabType>('Visão Geral');
+  const { data, isLoading, isError } = useCityOverviewQuery(id);
 
-  const cityName = useMemo(() => id.replaceAll('-', ' ').toUpperCase() || 'CIDADE', [id]);
+  if (isLoading) return <LoadingState />;
+  if (isError || !data) return <ErrorState message="Erro ao carregar central da cidade" />;
+
+  const buckets = [
+    { label: 'Avaliar', values: data.buckets.avaliar.cnjs },
+    { label: 'Agendar', values: data.buckets.agendar.cnjs },
+    { label: 'Laudos', values: data.buckets.laudos.cnjs },
+    { label: 'Esclarecimentos', values: data.buckets.esclarecimentos.cnjs },
+    { label: 'Pagamento', values: data.buckets.pagamento.cnjs },
+    { label: 'Críticos', values: data.buckets.criticos.cnjs },
+  ];
 
   return (
     <div className="space-y-4">
@@ -23,18 +34,18 @@ const CidadeDetailPage = () => {
               <Building2 size={24} />
             </div>
             <div>
-              <h1 className="text-4xl font-bold">{cityName}</h1>
+              <h1 className="text-4xl font-bold">{data.cidade.nome.toUpperCase()}</h1>
               <p className="text-white/80">Gerenciamento Integrado</p>
             </div>
           </div>
-          <button className="rounded-md bg-white/20 px-4 py-2 text-sm font-semibold">Sincronizar CNJ</button>
+          <button className="rounded-md bg-white/20 px-4 py-2 text-sm font-semibold" type="button">Sincronizar CNJ</button>
         </div>
 
         <div className="mt-6 grid gap-4 text-center md:grid-cols-4">
-          <CityMetric label="Score Fin." value="79/100" />
-          <CityMetric label="A Receber Total" value="R$ 19 MIL" />
-          <CityMetric label="Atraso Crítico" value="R$ 1,1 MIL" />
-          <CityMetric label="Prazo Médio" value="6 DIAS" />
+          <CityMetric label="Score Fin." value={`${data.metrics.score}/100`} />
+          <CityMetric label="A Receber Total" value={toMoney(data.metrics.aReceberTotal)} />
+          <CityMetric label="Atraso Crítico" value={String(data.metrics.atrasoCritico)} />
+          <CityMetric label="Total Perícias" value={String(data.metrics.totalPericias)} />
         </div>
       </section>
 
@@ -55,22 +66,42 @@ const CidadeDetailPage = () => {
         <div className="p-4">
           {activeTab === 'Visão Geral' && (
             <div className="grid gap-3 md:grid-cols-3 lg:grid-cols-6">
-              {['Avaliar', 'Agendar', 'Laudos', 'Esclarecimentos', 'Pagamento', 'Críticos'].map((bucket, i) => (
-                <div className="min-h-40 rounded-lg border bg-slate-50 p-3" key={bucket}>
-                  <p className="mb-2 border-b pb-2 text-center font-semibold uppercase">{bucket}</p>
+              {buckets.map((bucket) => (
+                <div className="min-h-40 rounded-lg border bg-slate-50 p-3" key={bucket.label}>
+                  <p className="mb-2 border-b pb-2 text-center font-semibold uppercase">{bucket.label}</p>
                   <ul className="space-y-1 text-xs text-slate-700">
-                    <li>500{i}8601420238130016</li>
-                    <li>500{i}34561120258130016</li>
-                    <li>500{i}26797020188130016</li>
+                    {bucket.values.length === 0 && <li>Sem processos</li>}
+                    {bucket.values.map((cnj) => (
+                      <li key={cnj}>{cnj}</li>
+                    ))}
                   </ul>
                 </div>
               ))}
             </div>
           )}
 
-          {activeTab !== 'Visão Geral' && (
-            <div className="flex h-72 items-center justify-center rounded-lg border border-dashed text-sm text-muted-foreground">
-              Conteúdo da aba "{activeTab}" será integrado na próxima etapa.
+          {activeTab === 'Processos' && (
+            <div className="rounded-lg border p-4 text-sm">
+              <p><strong>Avaliar:</strong> {data.buckets.avaliar.total}</p>
+              <p><strong>Agendar:</strong> {data.buckets.agendar.total}</p>
+              <p><strong>Laudos:</strong> {data.buckets.laudos.total}</p>
+              <p><strong>Finalizadas:</strong> {data.buckets.finalizada.total}</p>
+            </div>
+          )}
+
+          {activeTab === 'Cadastro' && (
+            <div className="rounded-lg border p-4 text-sm">
+              <p><strong>Cidade:</strong> {data.cidade.nome}</p>
+              <p><strong>UF:</strong> {data.cidade.uf ?? '—'}</p>
+              <p><strong>ID:</strong> {data.cidade.id}</p>
+            </div>
+          )}
+
+          {activeTab === 'Financeiro V2' && (
+            <div className="rounded-lg border p-4 text-sm">
+              <p><strong>A Receber:</strong> {toMoney(data.metrics.aReceberTotal)}</p>
+              <p><strong>Recebimentos vinculados:</strong> {toMoney(data.buckets.pagamento.recebido)}</p>
+              <p><strong>Aguardando pagamento:</strong> {data.buckets.pagamento.total}</p>
             </div>
           )}
         </div>
@@ -82,7 +113,7 @@ const CidadeDetailPage = () => {
 const CityMetric = ({ label, value }: { label: string; value: string }) => (
   <div>
     <p className="text-xs uppercase tracking-wider text-white/70">{label}</p>
-    <p className="text-4xl font-bold">{value}</p>
+    <p className="text-3xl font-bold">{value}</p>
   </div>
 );
 

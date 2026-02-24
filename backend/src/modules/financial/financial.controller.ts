@@ -1,4 +1,4 @@
-import { Body, Controller, Get, Post } from '@nestjs/common';
+import { Body, Controller, Get, Post, Query } from '@nestjs/common';
 import { ApiBearerAuth, ApiOperation, ApiTags } from '@nestjs/swagger';
 import { FinancialService } from './financial.service';
 import { CreateDespesaDto, CreateRecebimentoDto, ImportRecebimentosDto, ReconcileDto } from './dto/financial.dto';
@@ -16,8 +16,8 @@ export class FinancialController {
   }
 
   @Get('recebimentos')
-  listRecebimentos() {
-    return this.service.listRecebimentos();
+  listRecebimentos(@Query('periciaId') periciaId?: string) {
+    return this.service.listRecebimentos(periciaId);
   }
 
   @Post('despesas')

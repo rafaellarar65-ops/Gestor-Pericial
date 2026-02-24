@@ -6,6 +6,13 @@ import { CategorizeDocumentDto, LinkPericiaDocumentDto, SignedUrlDto, UploadDocu
 
 @Injectable()
 export class DocumentsService {
+  list(periciaId?: string) {
+    return this.prisma.caseDocument.findMany({
+      where: periciaId ? { periciaId } : undefined,
+      orderBy: { createdAt: 'desc' },
+    });
+  }
+
   constructor(
     private readonly prisma: PrismaService,
     private readonly context: RequestContextService,

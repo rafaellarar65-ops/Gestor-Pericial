@@ -1,56 +1,23 @@
 import { useMemo, useState } from 'react';
 import { Link } from 'react-router-dom';
 import { ChevronRight, Search } from 'lucide-react';
-import { LoadingState } from '@/components/ui/state';
-import { useDomainData } from '@/hooks/use-domain-data';
-
-type CityRow = {
-  id: string;
-  nome: string;
-  uf: string;
-  total: number;
-  agendar: number;
-  agendada: number;
-  enviarLaudo: number;
-  aguardandoPag: number;
-  esclarecimentos: number;
-  finalizada: number;
-};
+import { ErrorState, LoadingState } from '@/components/ui/state';
+import { useCityOverviewListQuery } from '@/hooks/use-pericias';
 
 const CidadesPage = () => {
-  const { data = [], isLoading } = useDomainData('cidades', '/config/cidades');
   const [search, setSearch] = useState('');
+  const { data, isLoading, isError } = useCityOverviewListQuery();
 
-  const rows = useMemo<CityRow[]>(() => {
-    const source = data.length > 0 ? data : [{ id: 'alfenas', nome: 'Alfenas', uf: 'MG' }];
-
-    return source
-      .map((item, index) => {
-        const seed = (index + 3) * 7;
-        const agendar = seed % 4;
-        const agendada = seed % 23;
-        const enviarLaudo = seed % 6;
-        const aguardandoPag = (seed * 2) % 90;
-        const esclarecimentos = seed % 3;
-        const finalizada = (seed * 3) % 30;
-
-        return {
-          id: String(item.id ?? item.nome ?? index),
-          nome: String(item.nome ?? item.cidade ?? `Cidade ${index + 1}`),
-          uf: String(item.uf ?? 'MG'),
-          agendar,
-          agendada,
-          enviarLaudo,
-          aguardandoPag,
-          esclarecimentos,
-          finalizada,
-          total: agendar + agendada + enviarLaudo + aguardandoPag + esclarecimentos + finalizada,
-        };
-      })
-      .filter((item) => item.nome.toLowerCase().includes(search.toLowerCase()));
-  }, [data, search]);
+  const rows = useMemo(
+    () =>
+      (data?.items ?? []).filter((item) =>
+        item.cidade.nome.toLowerCase().includes(search.toLowerCase()),
+      ),
+    [data?.items, search],
+  );
 
   if (isLoading) return <LoadingState />;
+  if (isError) return <ErrorState message="Erro ao carregar cidades" />;
 
   return (
     <div className="space-y-4">
@@ -68,25 +35,25 @@ const CidadesPage = () => {
 
       <div className="space-y-3">
         {rows.map((city) => (
-          <div className="rounded-xl border bg-white p-3" key={city.id}>
+          <div className="rounded-xl border bg-white p-3" key={city.cidade.id}>
             <div className="mb-3 flex items-center justify-between">
               <div className="flex items-center gap-2">
-                <h3 className="text-2xl font-bold text-slate-800">{city.nome}</h3>
-                <span className="rounded bg-slate-100 px-2 py-0.5 text-xs">{city.uf}</span>
+                <h3 className="text-2xl font-bold text-slate-800">{city.cidade.nome}</h3>
+                <span className="rounded bg-slate-100 px-2 py-0.5 text-xs">{city.cidade.uf ?? '--'}</span>
               </div>
-              <Link className="inline-flex items-center gap-1 text-sm font-semibold text-indigo-600" to={`/cidades/${city.id}`}>
+              <Link className="inline-flex items-center gap-1 text-sm font-semibold text-indigo-600" to={`/cidades/${city.cidade.id}`}>
                 Abrir central <ChevronRight size={15} />
               </Link>
             </div>
 
             <div className="grid grid-cols-2 gap-2 md:grid-cols-7">
-              <Kpi label="Total" value={city.total} />
-              <Kpi label="Agendar" value={city.agendar} />
-              <Kpi label="Agendada" value={city.agendada} />
-              <Kpi label="Enviar Laudo" value={city.enviarLaudo} />
-              <Kpi label="Aguardando Pag" value={city.aguardandoPag} />
-              <Kpi label="Esclarecimentos" value={city.esclarecimentos} />
-              <Kpi label="Finalizada" value={city.finalizada} />
+              <Kpi label="Total" value={city.metrics.totalPericias} />
+              <Kpi label="Avaliar" value={city.buckets.avaliar.total} />
+              <Kpi label="Agendar" value={city.buckets.agendar.total} />
+              <Kpi label="Laudos" value={city.buckets.laudos.total} />
+              <Kpi label="Aguardando Pag" value={city.buckets.pagamento.total} />
+              <Kpi label="Esclarecimentos" value={city.buckets.esclarecimentos.total} />
+              <Kpi label="Finalizada" value={city.buckets.finalizada.total} />
             </div>
           </div>
         ))}
