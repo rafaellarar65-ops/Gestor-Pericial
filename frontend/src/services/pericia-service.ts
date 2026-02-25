@@ -34,6 +34,17 @@ export const periciaService = {
     };
   },
 
+
+  create: async (payload: {
+    processoCNJ: string;
+    cidadeId?: string;
+    statusId?: string;
+    dataNomeacao?: string;
+  }): Promise<PericiaDetail> => {
+    const { data } = await apiClient.post<PericiaDetail>('/pericias', payload);
+    return data;
+  },
+
   detail: async (id: string): Promise<PericiaDetail> => {
     const { data } = await apiClient.get<PericiaDetail>(`/pericias/${id}`);
     return data;
