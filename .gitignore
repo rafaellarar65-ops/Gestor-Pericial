@@ -142,3 +142,8 @@ vite.config.ts.timestamp-*
 backend/prisma/*.js
 backend/prisma/*.js.map
 backend/prisma/*.d.ts
+
+# Service account keys and secrets
+**/serviceAccountKey.json
+**/serviceAccountKey*.json
+**/*-credentials.json

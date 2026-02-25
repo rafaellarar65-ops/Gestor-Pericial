@@ -3,5 +3,7 @@ builder = "DOCKERFILE"
 dockerfilePath = "Dockerfile.backend"
 
 [deploy]
-# Keep /docs exclusively for API documentation; use /health for readiness checks.
 healthcheckPath = "/health"
+startCommand = "./docker-entrypoint.sh"
+restartPolicyType = "ON_FAILURE"
+restartPolicyMaxRetries = 3

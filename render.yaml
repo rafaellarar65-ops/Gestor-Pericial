@@ -4,9 +4,8 @@ services:
     runtime: node
     rootDir: backend
     buildCommand: npm install --include=dev && npx prisma generate && npm run build
-   preDeployCommand: npm run prisma:migrate:deploy
-startCommand: node dist/main.js
-healthCheckPath: /health
+    preDeployCommand: npx prisma migrate deploy --schema prisma/schema.prisma
+    startCommand: node dist/main.js
     healthCheckPath: /health
     envVars:
       - key: NODE_ENV
@@ -26,17 +25,11 @@ healthCheckPath: /health
       - key: JWT_REFRESH_EXPIRES_IN
         value: 7d
       - key: FRONTEND_URL
-        value: https://gestor-pericial.vercel.app,https://gestor-pericial-git-main-rafaellarar65-ops-projects.vercel.app,https://gestor-pericial-bqgedbte1-rafaellarar65-ops-projects.vercel.app
-      # Opcionais — preencha no painel do Render conforme necessário
-      # - key: REDIS_URL
-      # - key: GEMINI_API_KEY
-      # - key: SUPABASE_URL
-      # - key: SUPABASE_KEY
-      # - key: SUPABASE_BUCKET
-      # - key: SMTP_HOST
-      # - key: SMTP_PORT
-      # - key: SMTP_USER
-      # - key: SMTP_PASS
+        sync: false
+      - key: ADMIN_EMAIL
+        sync: false
+      - key: ADMIN_PASSWORD
+        sync: false
 
 databases:
   - name: gestor-pericial-db
