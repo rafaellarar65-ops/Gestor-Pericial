@@ -1,6 +1,6 @@
 import { useMemo, useState } from 'react';
 import { Link, useParams } from 'react-router-dom';
-import { CalendarDays, Landmark, MapPin, Pencil, Plus, Save } from 'lucide-react';
+import { AlertCircle, CalendarDays, CheckCircle2, CircleDollarSign, Landmark, MapPin, Pencil, Plus, Save, Send, UserX } from 'lucide-react';
 import {
   usePericiaCnjQuery,
   usePericiaDetailQuery,
@@ -25,6 +25,8 @@ const PericiaDetailPage = () => {
   const { id = '' } = useParams();
   const [activeTab, setActiveTab] = useState<TabType>('Visão 360°');
   const [showDatesModal, setShowDatesModal] = useState(false);
+  const [showLaudoModal, setShowLaudoModal] = useState(false);
+  const [dataProtocoloLaudo, setDataProtocoloLaudo] = useState(new Date().toISOString().slice(0, 10));
 
   const detailQuery = usePericiaDetailQuery(id);
   const timelineQuery = usePericiaTimelineQuery(id);
@@ -63,6 +65,11 @@ const PericiaDetailPage = () => {
   if (detailQuery.isError) return <ErrorState message="Erro ao carregar perícia" />;
   if (!detail) return <EmptyState title="Perícia não encontrada" />;
 
+
+  const statusText = `${detail.status?.nome ?? ''} ${detail.status?.codigo ?? ''}`.toLowerCase();
+  const isTele = statusText.includes('tele');
+  const isLaudoFlow = statusText.includes('laudo');
+
   return (
     <div className="space-y-4">
       <section className="rounded-xl border bg-white p-4 shadow-sm">
@@ -80,6 +87,49 @@ const PericiaDetailPage = () => {
               <span className="rounded-full bg-blue-100 px-2 py-1 text-xs font-semibold text-blue-700">
                 {detail.status?.nome ?? detail.status?.codigo ?? 'Sem status'}
               </span>
+            </div>
+
+            <div className="mt-4 flex flex-wrap gap-2">
+              {isTele ? (
+                <>
+                  <button className="inline-flex items-center gap-2 rounded-md bg-emerald-600 px-4 py-2 text-sm font-semibold text-white" type="button">
+                    <CheckCircle2 size={14} /> Realizada
+                  </button>
+                  <button className="inline-flex items-center gap-2 rounded-md bg-red-500 px-4 py-2 text-sm font-semibold text-white" type="button">
+                    <UserX size={14} /> Ausência
+                  </button>
+                </>
+              ) : isLaudoFlow ? (
+                <>
+                  <button className="inline-flex items-center gap-2 rounded-md bg-amber-500 px-4 py-2 text-sm font-semibold text-white" type="button">
+                    <AlertCircle size={14} /> Esclarecimentos
+                  </button>
+                  <button className="inline-flex items-center gap-2 rounded-md bg-emerald-600 px-4 py-2 text-sm font-semibold text-white" type="button">
+                    <CircleDollarSign size={14} /> Receber
+                  </button>
+                  <button
+                    className="inline-flex items-center gap-2 rounded-md bg-teal-700 px-4 py-2 text-sm font-semibold text-white"
+                    onClick={() => {
+                      setDataProtocoloLaudo(toDateInput(detail.dataEnvioLaudo) || new Date().toISOString().slice(0, 10));
+                      setShowLaudoModal(true);
+                    }}
+                    type="button"
+                  >
+                    <Send size={14} /> Laudo Enviado
+                  </button>
+                </>
+              ) : (
+                <button
+                  className="inline-flex items-center gap-2 rounded-md bg-teal-700 px-4 py-2 text-sm font-semibold text-white"
+                  onClick={() => {
+                    setDataProtocoloLaudo(toDateInput(detail.dataEnvioLaudo) || new Date().toISOString().slice(0, 10));
+                    setShowLaudoModal(true);
+                  }}
+                  type="button"
+                >
+                  <Send size={14} /> Laudo Enviado
+                </button>
+              )}
             </div>
           </div>
 
@@ -274,6 +324,46 @@ const PericiaDetailPage = () => {
                   type="button"
                 >
                   <Save size={14} />Salvar
+                </button>
+              </div>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {showLaudoModal && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/40 p-4">
+          <div className="w-full max-w-md rounded-xl bg-white shadow-xl">
+            <div className="flex items-center justify-between rounded-t-xl bg-slate-900 px-4 py-3 text-white">
+              <p className="font-semibold">Registrar Envio do Laudo</p>
+              <button onClick={() => setShowLaudoModal(false)} type="button">×</button>
+            </div>
+            <div className="space-y-4 p-4">
+              <label className="block text-sm">
+                <span className="mb-1 block text-xs font-semibold uppercase text-muted-foreground">Data do Protocolo</span>
+                <div className="relative">
+                  <input
+                    className="w-full rounded-md border px-3 py-2"
+                    onChange={(e) => setDataProtocoloLaudo(e.target.value)}
+                    type="date"
+                    value={dataProtocoloLaudo}
+                  />
+                  <CalendarDays className="absolute right-3 top-2.5 text-slate-400" size={16} />
+                </div>
+              </label>
+
+              <div className="flex justify-end gap-2 pt-2">
+                <button className="rounded-md px-3 py-2 text-sm" onClick={() => setShowLaudoModal(false)} type="button">Cancelar</button>
+                <button
+                  className="rounded-md bg-blue-600 px-4 py-2 text-sm font-semibold text-white"
+                  disabled={updateDates.isPending}
+                  onClick={async () => {
+                    await updateDates.mutateAsync({ dataEnvioLaudo: dataProtocoloLaudo || undefined });
+                    setShowLaudoModal(false);
+                  }}
+                  type="button"
+                >
+                  Confirmar
                 </button>
               </div>
             </div>
