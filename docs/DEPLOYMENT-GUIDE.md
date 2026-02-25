@@ -29,20 +29,32 @@ Frontend (React/Vite)  -->  Backend (NestJS)  -->  PostgreSQL (Supabase)
    - **Region**: escolha a mais proxima (ex: `South America (Sao Paulo)`)
 4. Clique em **Create new project** e aguarde
 
-### 1.2 Obter a Connection String
+### 1.2 Obter as Connection Strings
 
-1. No painel do Supabase, va em **Settings** > **Database**
-2. Na secao **Connection string**, selecione **URI**
-3. Copie a string de conexao. Ela tera este formato:
+Voce vai precisar de **2 URLs de conexao** diferentes. No painel do Supabase, va em **Settings** > **Database**.
+
+#### URL 1: Pooler (para a aplicacao)
+1. Na secao **Connection string**, selecione **Transaction** (pooler)
+2. Copie a string. Formato:
    ```
    postgresql://postgres.[REF]:[SUA-SENHA]@aws-0-sa-east-1.pooler.supabase.com:6543/postgres
    ```
-4. **IMPORTANTE**: Existem 2 modos de conexao:
-   - **Session mode (porta 5432)**: use para migrations (`prisma migrate deploy`)
-   - **Transaction mode (porta 6543)**: use para a aplicacao em producao
+3. **Adicione no final**: `?pgbouncer=true&sslmode=require`
+4. Resultado final para `DATABASE_URL`:
+   ```
+   postgresql://postgres.[REF]:[SUA-SENHA]@aws-0-sa-east-1.pooler.supabase.com:6543/postgres?pgbouncer=true&sslmode=require
+   ```
 
-   Para o Railway, use a **porta 6543** (pooler/transaction) na `DATABASE_URL`.
-   Para migrations, voce pode usar a porta 5432 temporariamente.
+#### URL 2: Direta (para migrations)
+1. Na mesma pagina, selecione **Session** ou copie a **Direct connection**
+2. O host sera `db.[REF].supabase.co` na porta `5432`
+3. **Adicione no final**: `?sslmode=require`
+4. Resultado final para `DIRECT_DATABASE_URL`:
+   ```
+   postgresql://postgres.[REF]:[SUA-SENHA]@db.[REF].supabase.co:5432/postgres?sslmode=require
+   ```
+
+> **Por que 2 URLs?** O pooler (PgBouncer) e otimizado para muitas conexoes simultaneas, mas nao suporta migrations. A conexao direta suporta migrations mas tem limite de conexoes. O Prisma usa cada uma automaticamente no momento certo.
 
 ### 1.3 Obter as chaves do Supabase
 
@@ -81,12 +93,15 @@ Frontend (React/Vite)  -->  Backend (NestJS)  -->  PostgreSQL (Supabase)
 No painel do Railway, va em **Variables** e adicione:
 
 ```env
-# Obrigatorias
+# Obrigatorias — Banco de Dados
+DATABASE_URL=postgresql://postgres.[REF]:[SENHA]@aws-0-sa-east-1.pooler.supabase.com:6543/postgres?pgbouncer=true&sslmode=require
+DIRECT_DATABASE_URL=postgresql://postgres.[REF]:[SENHA]@db.[REF].supabase.co:5432/postgres?sslmode=require
+
+# Obrigatorias — Autenticacao
 NODE_ENV=production
 PORT=3000
-DATABASE_URL=postgresql://postgres.[REF]:[SENHA]@aws-0-sa-east-1.pooler.supabase.com:6543/postgres
-JWT_SECRET=<gere-com: openssl rand -base64 32>
-JWT_REFRESH_SECRET=<gere-com: openssl rand -base64 32>
+JWT_SECRET=<cole aqui o resultado de: openssl rand -base64 32>
+JWT_REFRESH_SECRET=<cole aqui o resultado de: openssl rand -base64 32>
 JWT_ACCESS_EXPIRES_IN=15m
 JWT_REFRESH_EXPIRES_IN=7d
 
@@ -99,17 +114,25 @@ TENANT_NAME=Seu Consultorio
 # CORS - URL do frontend (sera preenchida apos deploy do frontend)
 FRONTEND_URL=https://gestor-pericial.vercel.app
 
-# Opcionais
+# Opcionais — Supabase Storage
 SUPABASE_URL=https://[REF].supabase.co
 SUPABASE_KEY=eyJ...service-role-key...
 SUPABASE_BUCKET=documents
 GEMINI_API_KEY=sua-chave-gemini
 ```
 
+> **ATENCAO — Erros comuns:**
+> 1. **JWT_SECRET**: NAO cole o texto `<gere-com: openssl rand -base64 32>` literalmente. Execute o comando `openssl rand -base64 32` no seu terminal e cole o **resultado** (ex: `a8Kp2x...`).
+> 2. **DATABASE_URL**: DEVE terminar com `?pgbouncer=true&sslmode=require`. Sem isso, o Supabase rejeita a conexao.
+> 3. **DIRECT_DATABASE_URL**: O host e `db.[REF].supabase.co` (nao `pooler.supabase.com`). DEVE terminar com `?sslmode=require`.
+> 4. **REDIS_URL**: NAO adicione essa variavel a menos que tenha um Redis configurado (ex: Upstash). Sem Redis, o sistema funciona normalmente — apenas filas em background ficam desabilitadas.
+> 5. **VITE_API_URL**: Essa variavel vai na **Vercel** (frontend), NAO no Railway.
+
 **Para gerar os secrets JWT**, execute no terminal:
 ```bash
 openssl rand -base64 32
 ```
+Execute **duas vezes** — uma para `JWT_SECRET` e outra para `JWT_REFRESH_SECRET`.
 
 ### 2.4 Gerar o dominio publico
 
@@ -245,10 +268,11 @@ Apos o login, configure:
 **Causa**: O backend nao consegue conectar ao banco de dados.
 
 **Solucao**:
-1. Verifique a `DATABASE_URL` no Railway
-2. Confirme que a senha do Supabase esta correta
-3. Verifique se o projeto Supabase esta ativo (nao pausado)
-4. No Supabase, va em **Settings** > **Database** > **Connection Pooling** e confirme que esta habilitado
+1. Verifique se `DATABASE_URL` termina com `?pgbouncer=true&sslmode=require`
+2. Verifique se `DIRECT_DATABASE_URL` esta configurada com o host `db.[REF].supabase.co` e termina com `?sslmode=require`
+3. Confirme que a senha do Supabase esta correta (sem caracteres especiais nao-codificados)
+4. Verifique se o projeto Supabase esta ativo (nao pausado)
+5. No Supabase, va em **Settings** > **Database** > **Connection Pooling** e confirme que esta habilitado
 
 ### Erro: CORS / "Network Error" no frontend
 
@@ -266,14 +290,17 @@ Apos o login, configure:
 1. Faca logout e login novamente
 2. Se mudou o `JWT_SECRET`, todos os tokens antigos serao invalidados
 
-### Erro: Migrations falham no deploy
+### Erro: Migrations falham no deploy (P1001 / Can't reach database)
 
-**Causa**: Problema de conexao ou schema inconsistente.
+**Causa**: O Prisma tenta rodar migrations pela URL do pooler (PgBouncer), que nao suporta DDL. Ou falta SSL.
 
 **Solucao**:
-1. Use a porta 5432 (direct connection) do Supabase para migrations
-2. Voce pode criar uma variavel separada `DIRECT_DATABASE_URL` com a porta 5432
-3. Execute manualmente:
+1. Adicione `DIRECT_DATABASE_URL` no Railway com a conexao direta do Supabase:
+   ```
+   postgresql://postgres.[REF]:[SENHA]@db.[REF].supabase.co:5432/postgres?sslmode=require
+   ```
+2. Confirme que o schema do Prisma tem `directUrl = env("DIRECT_DATABASE_URL")`
+3. Para testar manualmente:
    ```bash
    DATABASE_URL="postgresql://..." npx prisma migrate deploy --schema prisma/schema.prisma
    ```
