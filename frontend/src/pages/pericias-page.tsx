@@ -1,12 +1,8 @@
 import { useMemo, useState } from 'react';
-import { Link, useSearchParams } from 'react-router-dom';
-import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
-import { Bot, Filter, Plus, RotateCw, Upload, X } from 'lucide-react';
+import { Link, useNavigate, useSearchParams } from 'react-router-dom';
+import { Bot, Filter, Plus, RotateCw, Upload } from 'lucide-react';
 import { EmptyState, ErrorState, LoadingState } from '@/components/ui/state';
 import { usePericiasQuery } from '@/hooks/use-pericias';
-import { configService } from '@/services/config-service';
-import { periciaService } from '@/services/pericia-service';
-import type { ConfigItem } from '@/types/api';
 
 type StatusFilter = 'todos' | 'avaliar' | 'agendada' | 'laudo enviado' | 'finalizada';
 
@@ -45,51 +41,18 @@ const authorLabel = (item: Record<string, unknown>) =>
   String(item.autorNome ?? item.periciadoNome ?? 'Sem autor');
 
 export const PericiasPage = () => {
-  const queryClient = useQueryClient();
+  const navigate = useNavigate();
   const [searchParams, setSearchParams] = useSearchParams();
   const [page] = useState(1);
-  const [showCreateModal, setShowCreateModal] = useState(false);
 
   const initialSearch = searchParams.get('q') ?? '';
   const [search, setSearch] = useState(initialSearch);
   const [statusFilter, setStatusFilter] = useState<StatusFilter>(statusFromQuery(searchParams.get('status')));
   const [cityFilter, setCityFilter] = useState(searchParams.get('cidade') ?? 'todas');
 
-  const [newPericia, setNewPericia] = useState({
-    processoCNJ: '',
-    cidadeId: '',
-    statusId: '',
-    dataNomeacao: '',
-  });
-
   const { data, isLoading, isError } = usePericiasQuery(page, {
     limit: 100,
     search: search.trim().length >= 3 ? search : undefined,
-  });
-
-  const cidadesConfig = useQuery({
-    queryKey: ['config', 'cidades'],
-    queryFn: () => configService.list('cidades'),
-  });
-
-  const statusConfig = useQuery({
-    queryKey: ['config', 'status'],
-    queryFn: () => configService.list('status'),
-  });
-
-  const createPericiaMutation = useMutation({
-    mutationFn: () =>
-      periciaService.create({
-        processoCNJ: newPericia.processoCNJ,
-        cidadeId: newPericia.cidadeId || undefined,
-        statusId: newPericia.statusId || undefined,
-        dataNomeacao: newPericia.dataNomeacao || undefined,
-      }),
-    onSuccess: async () => {
-      await queryClient.invalidateQueries({ queryKey: ['pericias'] });
-      setShowCreateModal(false);
-      setNewPericia({ processoCNJ: '', cidadeId: '', statusId: '', dataNomeacao: '' });
-    },
   });
 
   const rows = useMemo(() => {
@@ -164,7 +127,7 @@ export const PericiasPage = () => {
           </button>
           <button
             className="inline-flex items-center gap-2 rounded-md bg-blue-600 px-3 py-2 text-sm font-semibold text-white"
-            onClick={() => setShowCreateModal(true)}
+            onClick={() => navigate('/pericias/nova')}
             type="button"
           >
             <Plus size={14} /> Nova
@@ -280,81 +243,6 @@ export const PericiasPage = () => {
           );
         })}
       </section>
-
-      {showCreateModal && (
-        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/40 p-4">
-          <div className="w-full max-w-lg rounded-xl bg-white shadow-xl">
-            <div className="flex items-center justify-between rounded-t-xl bg-slate-900 px-4 py-3 text-white">
-              <p className="font-semibold">Nova Perícia</p>
-              <button onClick={() => setShowCreateModal(false)} type="button">
-                <X size={16} />
-              </button>
-            </div>
-
-            <div className="grid gap-3 p-4 md:grid-cols-2">
-              <label className="text-sm">
-                <span className="mb-1 block text-xs font-semibold uppercase text-slate-500">CNJ *</span>
-                <input
-                  className="w-full rounded-md border px-3 py-2"
-                  onChange={(e) => setNewPericia((prev) => ({ ...prev, processoCNJ: e.target.value }))}
-                  placeholder="0000000-00.0000.0.00.0000"
-                  value={newPericia.processoCNJ}
-                />
-              </label>
-
-              <label className="text-sm">
-                <span className="mb-1 block text-xs font-semibold uppercase text-slate-500">Cidade</span>
-                <select
-                  className="w-full rounded-md border px-3 py-2"
-                  onChange={(e) => setNewPericia((prev) => ({ ...prev, cidadeId: e.target.value }))}
-                  value={newPericia.cidadeId}
-                >
-                  <option value="">Selecionar</option>
-                  {(cidadesConfig.data ?? []).map((item: ConfigItem) => (
-                    <option key={item.id} value={item.id}>{item.nome}</option>
-                  ))}
-                </select>
-              </label>
-
-              <label className="text-sm">
-                <span className="mb-1 block text-xs font-semibold uppercase text-slate-500">Status inicial</span>
-                <select
-                  className="w-full rounded-md border px-3 py-2"
-                  onChange={(e) => setNewPericia((prev) => ({ ...prev, statusId: e.target.value }))}
-                  value={newPericia.statusId}
-                >
-                  <option value="">Selecionar</option>
-                  {(statusConfig.data ?? []).map((item: ConfigItem) => (
-                    <option key={item.id} value={item.id}>{item.nome}</option>
-                  ))}
-                </select>
-              </label>
-
-              <label className="text-sm">
-                <span className="mb-1 block text-xs font-semibold uppercase text-slate-500">Data de nomeação</span>
-                <input
-                  className="w-full rounded-md border px-3 py-2"
-                  onChange={(e) => setNewPericia((prev) => ({ ...prev, dataNomeacao: e.target.value }))}
-                  type="date"
-                  value={newPericia.dataNomeacao}
-                />
-              </label>
-            </div>
-
-            <div className="flex justify-end gap-2 px-4 pb-4">
-              <button className="rounded-md px-3 py-2 text-sm" onClick={() => setShowCreateModal(false)} type="button">Cancelar</button>
-              <button
-                className="rounded-md bg-blue-600 px-4 py-2 text-sm font-semibold text-white disabled:opacity-60"
-                disabled={createPericiaMutation.isPending || !newPericia.processoCNJ.trim()}
-                onClick={() => createPericiaMutation.mutate()}
-                type="button"
-              >
-                {createPericiaMutation.isPending ? 'Salvando...' : 'Criar Perícia'}
-              </button>
-            </div>
-          </div>
-        </div>
-      )}
     </div>
   );
 };

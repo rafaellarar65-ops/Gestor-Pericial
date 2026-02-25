@@ -1,6 +1,6 @@
 import { useMemo, useState } from 'react';
 import { Link, useParams } from 'react-router-dom';
-import { CalendarDays, Landmark, MapPin, Pencil, Plus, Save, Send } from 'lucide-react';
+import { AlertCircle, CalendarDays, CheckCircle2, CircleDollarSign, Landmark, MapPin, Pencil, Plus, Save, Send, UserX } from 'lucide-react';
 import {
   usePericiaCnjQuery,
   usePericiaDetailQuery,
@@ -65,6 +65,11 @@ const PericiaDetailPage = () => {
   if (detailQuery.isError) return <ErrorState message="Erro ao carregar perícia" />;
   if (!detail) return <EmptyState title="Perícia não encontrada" />;
 
+
+  const statusText = `${detail.status?.nome ?? ''} ${detail.status?.codigo ?? ''}`.toLowerCase();
+  const isTele = statusText.includes('tele');
+  const isLaudoFlow = statusText.includes('laudo');
+
   return (
     <div className="space-y-4">
       <section className="rounded-xl border bg-white p-4 shadow-sm">
@@ -85,16 +90,46 @@ const PericiaDetailPage = () => {
             </div>
 
             <div className="mt-4 flex flex-wrap gap-2">
-              <button
-                className="inline-flex items-center gap-2 rounded-md bg-emerald-600 px-4 py-2 text-sm font-semibold text-white"
-                onClick={() => {
-                  setDataProtocoloLaudo(toDateInput(detail.dataEnvioLaudo) || new Date().toISOString().slice(0, 10));
-                  setShowLaudoModal(true);
-                }}
-                type="button"
-              >
-                <Send size={14} /> Laudo Enviado
-              </button>
+              {isTele ? (
+                <>
+                  <button className="inline-flex items-center gap-2 rounded-md bg-emerald-600 px-4 py-2 text-sm font-semibold text-white" type="button">
+                    <CheckCircle2 size={14} /> Realizada
+                  </button>
+                  <button className="inline-flex items-center gap-2 rounded-md bg-red-500 px-4 py-2 text-sm font-semibold text-white" type="button">
+                    <UserX size={14} /> Ausência
+                  </button>
+                </>
+              ) : isLaudoFlow ? (
+                <>
+                  <button className="inline-flex items-center gap-2 rounded-md bg-amber-500 px-4 py-2 text-sm font-semibold text-white" type="button">
+                    <AlertCircle size={14} /> Esclarecimentos
+                  </button>
+                  <button className="inline-flex items-center gap-2 rounded-md bg-emerald-600 px-4 py-2 text-sm font-semibold text-white" type="button">
+                    <CircleDollarSign size={14} /> Receber
+                  </button>
+                  <button
+                    className="inline-flex items-center gap-2 rounded-md bg-teal-700 px-4 py-2 text-sm font-semibold text-white"
+                    onClick={() => {
+                      setDataProtocoloLaudo(toDateInput(detail.dataEnvioLaudo) || new Date().toISOString().slice(0, 10));
+                      setShowLaudoModal(true);
+                    }}
+                    type="button"
+                  >
+                    <Send size={14} /> Laudo Enviado
+                  </button>
+                </>
+              ) : (
+                <button
+                  className="inline-flex items-center gap-2 rounded-md bg-teal-700 px-4 py-2 text-sm font-semibold text-white"
+                  onClick={() => {
+                    setDataProtocoloLaudo(toDateInput(detail.dataEnvioLaudo) || new Date().toISOString().slice(0, 10));
+                    setShowLaudoModal(true);
+                  }}
+                  type="button"
+                >
+                  <Send size={14} /> Laudo Enviado
+                </button>
+              )}
             </div>
           </div>
 

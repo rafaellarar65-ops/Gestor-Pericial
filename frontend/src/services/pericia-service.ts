@@ -38,7 +38,16 @@ export const periciaService = {
   create: async (payload: {
     processoCNJ: string;
     cidadeId?: string;
+    varaId?: string;
+    tipoPericiaId?: string;
+    modalidadeId?: string;
     statusId?: string;
+    juizNome?: string;
+    autorNome?: string;
+    reuNome?: string;
+    observacoes?: string;
+    honorariosPrevistosJG?: number;
+    honorariosPrevistosPartes?: number;
     dataNomeacao?: string;
   }): Promise<PericiaDetail> => {
     const { data } = await apiClient.post<PericiaDetail>('/pericias', payload);
