@@ -123,6 +123,7 @@ jobs:
         working-directory: backend
         env:
           DATABASE_URL: ${{ secrets.DATABASE_URL }}
+          DIRECT_DATABASE_URL: ${{ secrets.DIRECT_DATABASE_URL }}
         run: npx prisma migrate deploy --schema prisma/schema.prisma
 
       - name: Health check

@@ -387,9 +387,9 @@ O plano gratuito do Supabase tem limitacoes:
 ## Parte 9 - Checklist de Deploy
 
 - [ ] Criar projeto no Supabase
-- [ ] Anotar: DATABASE_URL, SUPABASE_URL, chaves
+- [ ] Anotar: DATABASE_URL, DIRECT_DATABASE_URL, SUPABASE_URL, chaves
 - [ ] Criar projeto no Railway, conectar ao GitHub
-- [ ] Configurar todas as variaveis de ambiente no Railway
+- [ ] Configurar todas as variaveis de ambiente no Railway (incluindo `DIRECT_DATABASE_URL`)
 - [ ] Aguardar primeiro deploy do backend
 - [ ] Testar `/health` do backend
 - [ ] Criar projeto na Vercel, conectar ao GitHub
@@ -398,6 +398,24 @@ O plano gratuito do Supabase tem limitacoes:
 - [ ] Atualizar `FRONTEND_URL` no Railway com URL da Vercel
 - [ ] Testar login no frontend
 - [ ] Configurar dominio customizado (opcional)
+- [ ] Configurar GitHub Secrets para CI/CD (ver abaixo)
+
+### 9.1 GitHub Actions Secrets (obrigatorios para CI/CD)
+
+No repositorio GitHub, va em **Settings** > **Secrets and variables** > **Actions** e adicione:
+
+| Secret | Descricao |
+|--------|-----------|
+| `DATABASE_URL` | URL do pooler Supabase (porta 6543, com `?pgbouncer=true&sslmode=require`) |
+| `DIRECT_DATABASE_URL` | URL direta do Supabase (porta 5432, com `?sslmode=require`) |
+| `RAILWAY_TOKEN` | Token de API do Railway |
+| `RAILWAY_SERVICE` | ID do servico no Railway |
+| `BACKEND_HEALTHCHECK_URL` | URL do health check (ex: `https://[dominio]/health`) |
+| `VERCEL_TOKEN` | Token de API da Vercel |
+| `VERCEL_ORG_ID` | ID da organizacao na Vercel |
+| `VERCEL_PROJECT_ID` | ID do projeto na Vercel |
+
+> **IMPORTANTE**: Sem `DIRECT_DATABASE_URL` nos secrets, as migrations do GitHub Actions vao usar a URL do pooler e podem falhar com erro P1001.
 
 ---
 
