@@ -4,8 +4,8 @@ import { periciaService } from '@/services/pericia-service';
 export const useDashboardQuery = () =>
   useQuery({ queryKey: ['dashboard'], queryFn: () => periciaService.dashboard() });
 
-export const usePericiasQuery = (page: number) =>
-  useQuery({ queryKey: ['pericias', page], queryFn: () => periciaService.list(page) });
+export const usePericiasQuery = (page: number, filters?: { limit?: number; search?: string }) =>
+  useQuery({ queryKey: ['pericias', page, filters], queryFn: () => periciaService.list(page, filters) });
 
 export const usePericiaDetailQuery = (id: string) =>
   useQuery({ queryKey: ['pericia-detail', id], queryFn: () => periciaService.detail(id), enabled: Boolean(id) });

@@ -17,9 +17,13 @@ export const periciaService = {
     return data;
   },
 
-  list: async (page: number): Promise<ApiListResponse<Pericia>> => {
+  list: async (page: number, filters?: { limit?: number; search?: string }): Promise<ApiListResponse<Pericia>> => {
     const { data } = await apiClient.get<{ items: Pericia[]; pagination: { total: number; page: number; limit: number } }>('/pericias', {
-      params: { page, limit: 10 },
+      params: {
+        page,
+        limit: filters?.limit ?? 25,
+        ...(filters?.search ? { search: filters.search } : {}),
+      },
     });
 
     return {
@@ -28,6 +32,26 @@ export const periciaService = {
       page: data.pagination.page,
       pageSize: data.pagination.limit,
     };
+  },
+
+
+  create: async (payload: {
+    processoCNJ: string;
+    cidadeId?: string;
+    varaId?: string;
+    tipoPericiaId?: string;
+    modalidadeId?: string;
+    statusId?: string;
+    juizNome?: string;
+    autorNome?: string;
+    reuNome?: string;
+    observacoes?: string;
+    honorariosPrevistosJG?: number;
+    honorariosPrevistosPartes?: number;
+    dataNomeacao?: string;
+  }): Promise<PericiaDetail> => {
+    const { data } = await apiClient.post<PericiaDetail>('/pericias', payload);
+    return data;
   },
 
   detail: async (id: string): Promise<PericiaDetail> => {
