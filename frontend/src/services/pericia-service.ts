@@ -17,9 +17,13 @@ export const periciaService = {
     return data;
   },
 
-  list: async (page: number): Promise<ApiListResponse<Pericia>> => {
+  list: async (page: number, filters?: { limit?: number; search?: string }): Promise<ApiListResponse<Pericia>> => {
     const { data } = await apiClient.get<{ items: Pericia[]; pagination: { total: number; page: number; limit: number } }>('/pericias', {
-      params: { page, limit: 10 },
+      params: {
+        page,
+        limit: filters?.limit ?? 25,
+        ...(filters?.search ? { search: filters.search } : {}),
+      },
     });
 
     return {
