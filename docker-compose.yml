@@ -6,13 +6,13 @@ services:
       target: deps
     container_name: pericias-frontend
     working_dir: /app
-    command: npm run dev -- --host 0.0.0.0 --port 3000
+    command: npm run dev -- --host 0.0.0.0 --port 5173
     ports:
-      - '3000:3000'
+      - '5173:5173'
     env_file:
       - .env
     environment:
-      VITE_API_URL: ${VITE_API_URL:-http://localhost:3000}
+      VITE_API_URL: ${VITE_API_URL:-http://localhost:3001}
     volumes:
       - ./frontend:/app
       - /app/node_modules
@@ -29,7 +29,7 @@ services:
     working_dir: /app
     command: npm run start:dev
     ports:
-      - '3000:3000'
+      - '3001:3000'
     env_file:
       - .env
     environment:
