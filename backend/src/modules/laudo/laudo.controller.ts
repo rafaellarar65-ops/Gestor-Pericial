@@ -1,4 +1,4 @@
-import { Body, Controller, Post } from '@nestjs/common';
+import { Body, Controller, Get, Post } from '@nestjs/common';
 import { ApiBearerAuth, ApiOperation, ApiTags } from '@nestjs/swagger';
 import {
   CoherenceCheckDto,
@@ -17,6 +17,11 @@ import { LaudoService } from './laudo.service';
 export class LaudoController {
   constructor(private readonly service: LaudoService) {}
 
+
+  @Get('pre-laudos')
+  listPreLaudos() {
+    return this.service.listPreLaudos();
+  }
   @Post('pre-laudo')
   createPreLaudo(@Body() dto: CreatePreLaudoDto) {
     return this.service.createPreLaudo(dto);
