@@ -19,6 +19,10 @@ export class LaudoService {
     private readonly context: RequestContextService,
   ) {}
 
+  listPreLaudos() {
+    return this.prisma.preLaudo.findMany({ orderBy: { createdAt: 'desc' } });
+  }
+
   createPreLaudo(dto: CreatePreLaudoDto) {
     const tenantId = this.context.get('tenantId') ?? '';
     return this.prisma.preLaudo.create({
