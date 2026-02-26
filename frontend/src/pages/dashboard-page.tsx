@@ -1,5 +1,5 @@
 import { Link } from 'react-router-dom';
-import { ArrowUpRight, Scale, CalendarClock, Calendar, FileText, MessageSquareWarning, DollarSign } from 'lucide-react';
+import { ArrowUpRight, Scale, CalendarClock, Calendar, FileText, MessageSquareWarning, DollarSign, Video, MessageCircle } from 'lucide-react';
 import { LoadingState } from '@/components/ui/state';
 import { useDashboardQuery } from '@/hooks/use-pericias';
 
@@ -63,6 +63,26 @@ const ACTION_CARDS: ActionCard[] = [
   },
 ];
 
+
+const NEW_MODULE_CARDS: ActionCard[] = [
+  {
+    title: 'TELEPERÍCIA EM TEMPO REAL',
+    subtitle: 'WebRTC, sala virtual, chat e upload por QR Code',
+    badge: 'NOVA CENTRAL',
+    href: '/telepericias',
+    color: 'bg-indigo-600',
+    Icon: Video,
+  },
+  {
+    title: 'COMUNICAÇÃO INTEGRADA',
+    subtitle: 'WhatsApp API, e-mail Uolhost e cobranças por vara',
+    badge: 'OMNICHANNEL',
+    href: '/comunicacao',
+    color: 'bg-cyan-700',
+    Icon: MessageCircle,
+  },
+];
+
 const DashboardPage = () => {
   const { data, isLoading } = useDashboardQuery();
 
@@ -119,39 +139,67 @@ const DashboardPage = () => {
       {isLoading ? (
         <LoadingState />
       ) : (
-        <div className="grid grid-cols-1 gap-4 md:grid-cols-3">
-          {ACTION_CARDS.map((card, index) => {
-            const Icon = card.Icon;
-            const value = data?.kpis?.[index]?.value ?? '—';
-            return (
-              <div
-                className={`relative overflow-hidden rounded-xl ${card.color} p-5 text-white shadow-md`}
-                key={card.title}
-              >
-                <Icon className="absolute right-3 top-3 opacity-10" size={72} />
-                <div className="relative z-10">
-                  <div className="mb-2 flex items-center gap-2">
-                    <Icon size={18} />
-                    <p className="text-sm font-bold tracking-wide">{card.title}</p>
+        <>
+          <div className="grid grid-cols-1 gap-4 md:grid-cols-3">
+            {ACTION_CARDS.map((card, index) => {
+              const Icon = card.Icon;
+              const value = data?.kpis?.[index]?.value ?? '—';
+              return (
+                <div
+                  className={`relative overflow-hidden rounded-xl ${card.color} p-5 text-white shadow-md`}
+                  key={card.title}
+                >
+                  <Icon className="absolute right-3 top-3 opacity-10" size={72} />
+                  <div className="relative z-10">
+                    <div className="mb-2 flex items-center gap-2">
+                      <Icon size={18} />
+                      <p className="text-sm font-bold tracking-wide">{card.title}</p>
+                    </div>
+                    <p className="mb-3 text-xs text-white/70">{card.subtitle}</p>
+                    <div className="flex items-end justify-between">
+                      <p className="text-4xl font-bold">{value}</p>
+                      <span className="rounded bg-black/20 px-2 py-0.5 text-[10px] font-semibold uppercase">
+                        {card.badge}
+                      </span>
+                    </div>
+                    <Link
+                      className="mt-4 flex items-center gap-1 text-xs font-semibold uppercase tracking-wider text-white/80 hover:text-white"
+                      to={card.href}
+                    >
+                      ACESSAR CENTRAL <ArrowUpRight size={12} />
+                    </Link>
                   </div>
-                  <p className="mb-3 text-xs text-white/70">{card.subtitle}</p>
-                  <div className="flex items-end justify-between">
-                    <p className="text-4xl font-bold">{value}</p>
-                    <span className="rounded bg-black/20 px-2 py-0.5 text-[10px] font-semibold uppercase">
-                      {card.badge}
-                    </span>
-                  </div>
-                  <Link
-                    className="mt-4 flex items-center gap-1 text-xs font-semibold uppercase tracking-wider text-white/80 hover:text-white"
-                    to={card.href}
-                  >
-                    ACESSAR CENTRAL <ArrowUpRight size={12} />
-                  </Link>
                 </div>
+              );
+            })}
+          </div>
+
+          <section className="rounded-xl border border-slate-200 bg-white p-4 shadow-sm">
+            <div className="mb-3 flex items-center justify-between">
+              <div>
+                <h2 className="text-base font-semibold text-slate-800">Novas funcionalidades integradas</h2>
+                <p className="text-xs text-slate-500">Acesso rápido aos módulos de Teleperícia e Comunicação.</p>
               </div>
-            );
-          })}
-        </div>
+            </div>
+            <div className="grid grid-cols-1 gap-3 md:grid-cols-2">
+              {NEW_MODULE_CARDS.map((card) => {
+                const Icon = card.Icon;
+                return (
+                  <div className={`rounded-lg ${card.color} p-4 text-white`} key={card.title}>
+                    <div className="mb-2 flex items-center gap-2">
+                      <Icon size={18} />
+                      <p className="text-sm font-semibold">{card.title}</p>
+                    </div>
+                    <p className="text-xs text-white/80">{card.subtitle}</p>
+                    <Link className="mt-3 inline-flex items-center gap-1 text-xs font-semibold" to={card.href}>
+                      Acessar módulo <ArrowUpRight size={12} />
+                    </Link>
+                  </div>
+                );
+              })}
+            </div>
+          </section>
+        </>
       )}
     </div>
   );
