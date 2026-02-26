@@ -77,6 +77,9 @@ async function bootstrap() {
   resolveDatabaseUrl();
   const app = await NestFactory.create(AppModule);
 
+  // Set global prefix for API routes (required for Kubernetes ingress routing)
+  app.setGlobalPrefix('api');
+
   const configuredOrigins = process.env.FRONTEND_URL
     ? process.env.FRONTEND_URL.split(',').map((u) => u.trim())
     : null;
