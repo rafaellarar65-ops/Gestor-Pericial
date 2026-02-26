@@ -1,7 +1,7 @@
 import { ApiProperty, ApiPropertyOptional } from '@nestjs/swagger';
 import { PericiaPaymentStatus } from '@prisma/client';
 import { Type } from 'class-transformer';
-import { IsArray, IsBoolean, IsDateString, IsEnum, IsInt, IsNotEmpty, IsOptional, IsString, IsUUID, Max, Min, ValidateNested } from 'class-validator';
+import { IsArray, IsBoolean, IsDateString, IsEnum, IsInt, IsNotEmpty, IsNumber, IsOptional, IsString, IsUUID, Max, Min, ValidateNested } from 'class-validator';
 
 export class CreatePericiasDto {
   @ApiProperty()
@@ -58,6 +58,35 @@ export class CreatePericiasDto {
   @IsOptional()
   @IsDateString()
   dataNomeacao?: string;
+
+
+  @ApiPropertyOptional()
+  @IsOptional()
+  @IsString()
+  juizNome?: string;
+
+  @ApiPropertyOptional()
+  @IsOptional()
+  @IsString()
+  autorNome?: string;
+
+  @ApiPropertyOptional()
+  @IsOptional()
+  @IsString()
+  reuNome?: string;
+
+  @ApiPropertyOptional()
+  @IsOptional()
+  @Type(() => Number)
+  @IsNumber()
+  honorariosPrevistosJG?: number;
+
+  @ApiPropertyOptional()
+  @IsOptional()
+  @Type(() => Number)
+  @IsNumber()
+  honorariosPrevistosPartes?: number;
+
 }
 
 export class UpdatePericiasDto {
@@ -85,6 +114,35 @@ export class UpdatePericiasDto {
   @IsOptional()
   @IsDateString()
   dataNomeacao?: string;
+
+
+  @ApiPropertyOptional()
+  @IsOptional()
+  @IsString()
+  juizNome?: string;
+
+  @ApiPropertyOptional()
+  @IsOptional()
+  @IsString()
+  autorNome?: string;
+
+  @ApiPropertyOptional()
+  @IsOptional()
+  @IsString()
+  reuNome?: string;
+
+  @ApiPropertyOptional()
+  @IsOptional()
+  @Type(() => Number)
+  @IsNumber()
+  honorariosPrevistosJG?: number;
+
+  @ApiPropertyOptional()
+  @IsOptional()
+  @Type(() => Number)
+  @IsNumber()
+  honorariosPrevistosPartes?: number;
+
 
   @ApiPropertyOptional()
   @IsOptional()
