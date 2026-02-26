@@ -14,7 +14,7 @@ export default defineConfig(({ mode }) => {
     },
     define: {
       __APP_VERSION__: JSON.stringify(process.env.npm_package_version ?? '0.0.0'),
-      __API_URL__: JSON.stringify(env.VITE_API_URL ?? 'http://localhost:3000'),
+      __API_URL__: JSON.stringify(env.VITE_API_URL ?? 'https://gestor-pericial-production.up.railway.app'),
     },
     build: {
       target: 'es2020',

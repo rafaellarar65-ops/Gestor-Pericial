@@ -11,11 +11,12 @@ const normalizeRole = (value?: string): UserRole => (value?.toUpperCase() === 'A
 
 export const authService = {
   login: async (payload: LoginRequest): Promise<LoginResponse> => {
-    const { data } = await apiClient.post<BackendLoginResponse>('/auth/login', {
-      tenantId: payload.tenantId,
-      email: payload.email,
-      password: payload.password,
-    });
+    const body: Record<string, string> = { email: payload.email, password: payload.password };
+    // Only send tenantId if explicitly provided (not the default placeholder)
+    if (payload.tenantId && payload.tenantId !== '11111111-1111-1111-1111-111111111111') {
+      body.tenantId = payload.tenantId;
+    }
+    const { data } = await apiClient.post<BackendLoginResponse>('/auth/login', body);
 
     return {
       user: {
