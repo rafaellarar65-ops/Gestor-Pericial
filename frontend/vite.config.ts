@@ -24,6 +24,7 @@ export default defineConfig(({ mode }) => {
           target: 'http://localhost:8001',
           changeOrigin: true,
           secure: false,
+          credentials: 'include',
         },
       },
       hmr: {
