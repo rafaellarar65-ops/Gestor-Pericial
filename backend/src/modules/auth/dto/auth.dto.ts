@@ -30,10 +30,11 @@ export class RegisterDto {
 }
 
 export class LoginDto {
-  @ApiProperty({ example: '4fef6af9-58a3-4022-8f2c-85bb70e68f31' })
+  @ApiPropertyOptional({ example: '4fef6af9-58a3-4022-8f2c-85bb70e68f31' })
+  @IsOptional()
   @IsString()
   @Matches(UUID_REGEX, { message: 'tenantId must be a UUID' })
-  tenantId!: string;
+  tenantId?: string;
 
   @ApiProperty({ example: 'medico@pericias.com' })
   @IsEmail()

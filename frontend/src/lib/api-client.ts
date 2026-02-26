@@ -3,6 +3,7 @@ import { useAuthStore } from '@/stores/auth-store';
 import type { ApiError, AuthTokens } from '@/types/api';
 
 const API_URL = import.meta.env.VITE_API_URL ?? (typeof __API_URL__ === 'string' ? __API_URL__ : 'http://localhost:3000');
+const DEFAULT_TENANT_ID = import.meta.env.VITE_TENANT_ID ?? '11111111-1111-1111-1111-111111111111';
 
 export const apiClient = axios.create({
   baseURL: API_URL,
@@ -21,10 +22,15 @@ const applyTokens = (tokens: AuthTokens | null): void => {
 };
 
 apiClient.interceptors.request.use((config) => {
-  const { tokens } = useAuthStore.getState();
+  const { tokens, user } = useAuthStore.getState();
   if (tokens?.accessToken) {
     config.headers.Authorization = `Bearer ${tokens.accessToken}`;
   }
+
+  if (!config.headers['x-tenant-id']) {
+    config.headers['x-tenant-id'] = user?.tenantId ?? DEFAULT_TENANT_ID;
+  }
+
   return config;
 });
 
