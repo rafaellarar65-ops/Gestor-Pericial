@@ -1,11 +1,12 @@
 import { Injectable, OnModuleInit } from '@nestjs/common';
 import { PrismaClient } from '@prisma/client';
 import { RequestContextService } from '../common/request-context.service';
+import { getPrismaClientOptions } from './database-url';
 
 @Injectable()
 export class PrismaService extends PrismaClient implements OnModuleInit {
   constructor(private readonly context: RequestContextService) {
-    super();
+    super(getPrismaClientOptions());
 
     this.$use(async (params: any, next: (params: any) => Promise<any>) => {
       const tenantId = this.context.get('tenantId');

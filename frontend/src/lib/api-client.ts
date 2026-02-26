@@ -2,7 +2,27 @@ import axios, { AxiosError } from 'axios';
 import { useAuthStore } from '@/stores/auth-store';
 import type { ApiError, AuthTokens } from '@/types/api';
 
-const API_URL = import.meta.env.VITE_API_URL ?? (typeof __API_URL__ === 'string' ? __API_URL__ : 'http://localhost:3000');
+const resolveApiUrl = (): string => {
+  const fromEnv = import.meta.env.VITE_API_URL ?? import.meta.env.VITE_BACKEND_URL;
+  if (fromEnv) return fromEnv;
+
+  if (typeof __API_URL__ === 'string' && __API_URL__.trim()) {
+    return __API_URL__;
+  }
+
+  if (typeof window !== 'undefined') {
+    const { origin, hostname } = window.location;
+    if (hostname === 'localhost' || hostname === '127.0.0.1') {
+      return 'http://localhost:3000';
+    }
+
+    return `${origin}/api`;
+  }
+
+  return 'http://localhost:3000';
+};
+
+const API_URL = resolveApiUrl();
 const DEFAULT_TENANT_ID = import.meta.env.VITE_TENANT_ID ?? '11111111-1111-1111-1111-111111111111';
 
 export const apiClient = axios.create({
