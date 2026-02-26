@@ -2,5 +2,11 @@
   "buildCommand": "cd frontend && npm install && npm run build",
   "outputDirectory": "frontend/dist",
   "installCommand": "echo 'skip root install'",
-  "rewrites": [{ "source": "/((?!api/).*)", "destination": "/index.html" }]
+  "rewrites": [
+    {
+      "source": "/api/(.*)",
+      "destination": "https://per-cias-manager-pro-342026314875.us-west1.run.app/$1"
+    },
+    { "source": "/((?!api/).*)", "destination": "/index.html" }
+  ]
 }

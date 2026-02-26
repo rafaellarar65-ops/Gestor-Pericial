@@ -5,11 +5,12 @@ import { HttpExceptionFilter } from './common/filters/http-exception.filter';
 import { AppModule } from './app.module';
 import { PrismaClient, UserRole } from '@prisma/client';
 import * as bcrypt from 'bcryptjs';
+import { getPrismaClientOptions, resolveDatabaseUrl } from './prisma/database-url';
 
 const BOOTSTRAP_TENANT_ID = '11111111-1111-1111-1111-111111111111';
 
 async function logDatabaseConnectionStatus(): Promise<void> {
-  const prisma = new PrismaClient();
+  const prisma = new PrismaClient(getPrismaClientOptions());
 
   try {
     await prisma.$queryRaw`SELECT 1`;
@@ -27,7 +28,7 @@ async function seedAdminIfNeeded(): Promise<void> {
 
   if (!email || !password) return;
 
-  const prisma = new PrismaClient();
+  const prisma = new PrismaClient(getPrismaClientOptions());
   try {
     const tenantName = process.env.TENANT_NAME || 'Gestor Pericial';
     const fullName = process.env.ADMIN_NAME || 'Administrador';
@@ -74,6 +75,7 @@ async function seedAdminIfNeeded(): Promise<void> {
 }
 
 async function bootstrap() {
+  resolveDatabaseUrl();
   const app = await NestFactory.create(AppModule);
 
   const allowedOrigins = process.env.FRONTEND_URL
