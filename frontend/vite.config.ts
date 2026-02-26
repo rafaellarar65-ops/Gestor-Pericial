@@ -19,6 +19,13 @@ export default defineConfig(({ mode }) => {
         'app-publisher-57.cluster-10.preview.emergentcf.cloud',
         'localhost'
       ],
+      proxy: {
+        '/api': {
+          target: 'http://localhost:8001',
+          changeOrigin: true,
+          secure: false,
+        },
+      },
       hmr: {
         clientPort: 3000,
         host: 'localhost',
