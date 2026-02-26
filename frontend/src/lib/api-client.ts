@@ -33,6 +33,7 @@ const DEFAULT_TENANT_ID = import.meta.env.VITE_TENANT_ID ?? '11111111-1111-1111-
 export const apiClient = axios.create({
   baseURL: API_URL,
   headers: { 'Content-Type': 'application/json' },
+  withCredentials: true,
 });
 
 let refreshPromise: Promise<string> | null = null;
