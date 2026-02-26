@@ -92,8 +92,13 @@ export class PericiasService {
     return this.prisma.pericia.update({
       where: { id },
       data: {
+        ...(dto.juizNome !== undefined ? { juizNome: dto.juizNome } : {}),
+        ...(dto.autorNome !== undefined ? { autorNome: dto.autorNome } : {}),
+        ...(dto.reuNome !== undefined ? { reuNome: dto.reuNome } : {}),
         ...(dto.periciadoNome !== undefined ? { periciadoNome: dto.periciadoNome } : {}),
         ...(dto.observacoes !== undefined ? { observacoes: dto.observacoes } : {}),
+        ...(dto.honorariosPrevistosJG !== undefined ? { honorariosPrevistosJG: dto.honorariosPrevistosJG } : {}),
+        ...(dto.honorariosPrevistosPartes !== undefined ? { honorariosPrevistosPartes: dto.honorariosPrevistosPartes } : {}),
         ...(dto.statusId !== undefined ? { statusId: dto.statusId } : {}),
         ...(dto.isUrgent !== undefined ? { isUrgent: dto.isUrgent } : {}),
         ...(dto.dataNomeacao !== undefined ? { dataNomeacao: new Date(dto.dataNomeacao) } : {}),
