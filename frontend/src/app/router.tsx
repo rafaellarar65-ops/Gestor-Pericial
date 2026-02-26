@@ -1,10 +1,62 @@
 import { lazy, Suspense, type ComponentType, type LazyExoticComponent } from 'react';
 import { createBrowserRouter } from 'react-router-dom';
 import { ProtectedRoute } from '@/app/protected-route';
+import { AppRouteError } from '@/components/ui/app-error';
 import { LoadingState } from '@/components/ui/state';
 import { AppShell } from '@/layouts/app-shell';
 
+
+const lazyWithRetry = (importer: () => Promise<{ default: ComponentType }>) =>
+  lazy(async () => {
+    try {
+      return await importer();
+    } catch (error) {
+      const message = error instanceof Error ? error.message : '';
+      const shouldRetry =
+        message.includes('Failed to fetch dynamically imported module') ||
+        message.includes('Importing a module script failed');
+
+      if (shouldRetry && typeof window !== 'undefined') {
+        const key = 'gp-lazy-retry';
+        const hasRetried = window.sessionStorage.getItem(key) === '1';
+        if (!hasRetried) {
+          window.sessionStorage.setItem(key, '1');
+          window.location.reload();
+          return new Promise(() => undefined);
+        }
+      }
+
+      throw error;
+    }
+  });
+
 const pages = {
+  login: lazyWithRetry(() => import('@/pages/login-page')),
+  dashboard: lazyWithRetry(() => import('@/pages/dashboard-page')),
+  nomeacoes: lazyWithRetry(() => import('@/pages/nomeacoes-page')),
+  agenda: lazyWithRetry(() => import('@/pages/agenda-page')),
+  periciasHoje: lazyWithRetry(() => import('@/pages/pericias-hoje-page')),
+  telepericias: lazyWithRetry(() => import('@/pages/telepericias-page')),
+  agendar: lazyWithRetry(() => import('@/pages/agendar-lote-page')),
+  pericias: lazyWithRetry(() => import('@/pages/pericias-page')),
+  periciaDetail: lazyWithRetry(() => import('@/pages/pericia-detail-page')),
+  periciaCreate: lazyWithRetry(() => import('@/pages/pericia-create-page')),
+  laudosPendentes: lazyWithRetry(() => import('@/pages/laudos-pendentes-page')),
+  laudoV2: lazyWithRetry(() => import('@/pages/laudo-v2-page')),
+  manobras: lazyWithRetry(() => import('@/pages/manobras-page')),
+  baseConhecimento: lazyWithRetry(() => import('@/pages/base-conhecimento-page')),
+  financeiro: lazyWithRetry(() => import('@/pages/financeiro-page')),
+  cobranca: lazyWithRetry(() => import('@/pages/cobranca-page')),
+  relatorios: lazyWithRetry(() => import('@/pages/relatorios-financeiros-page')),
+  despesas: lazyWithRetry(() => import('@/pages/despesas-page')),
+  cidades: lazyWithRetry(() => import('@/pages/cidades-page')),
+  cidadeDetail: lazyWithRetry(() => import('@/pages/cidade-detail-page')),
+  advogados: lazyWithRetry(() => import('@/pages/advogados-page')),
+  comunicacao: lazyWithRetry(() => import('@/pages/comunicacao-page')),
+  inbox: lazyWithRetry(() => import('@/pages/inbox-email-page')),
+  configuracoes: lazyWithRetry(() => import('@/pages/configuracoes-page')),
+  documentacao: lazyWithRetry(() => import('@/pages/documentacao-page')),
+  notFound: lazyWithRetry(() => import('@/pages/not-found-page')),
   login: lazy(() => import('@/pages/login-page')),
   dashboard: lazy(() => import('@/pages/dashboard-page')),
   nomeacoes: lazy(() => import('@/pages/nomeacoes-page')),
@@ -40,12 +92,14 @@ const withSuspense = (Element: LazyExoticComponent<ComponentType>) => (
 );
 
 export const router = createBrowserRouter([
-  { path: '/login', handle: { crumb: 'Login' }, element: withSuspense(pages.login) },
+  { path: '/login', handle: { crumb: 'Login' }, element: withSuspense(pages.login), errorElement: <AppRouteError /> },
   {
     element: <ProtectedRoute />,
+    errorElement: <AppRouteError />,
     children: [
       {
         element: <AppShell />,
+        errorElement: <AppRouteError />,
         children: [
           { path: '/', handle: { crumb: 'Dashboard' }, element: withSuspense(pages.dashboard) },
           { path: '/nomeacoes', handle: { crumb: 'Nomeações' }, element: withSuspense(pages.nomeacoes) },
@@ -75,5 +129,5 @@ export const router = createBrowserRouter([
       },
     ],
   },
-  { path: '*', handle: { crumb: '404' }, element: withSuspense(pages.notFound) },
+  { path: '*', handle: { crumb: '404' }, element: withSuspense(pages.notFound), errorElement: <AppRouteError /> },
 ]);
