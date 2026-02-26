@@ -51,10 +51,16 @@ export class AuthService {
   }
 
   async login(dto: LoginDto) {
+    const loginWhere: Prisma.UserWhereInput = {
+      email: dto.email,
+      isActive: true,
+      ...(dto.tenantId ? { tenantId: dto.tenantId } : {}),
+    };
+
     let user: Prisma.UserGetPayload<{ include: { profile: true } }> | null;
     try {
       user = await this.prisma.user.findFirst({
-        where: { email: dto.email, tenantId: dto.tenantId, isActive: true },
+        where: loginWhere,
         include: { profile: true },
       });
     } catch {
