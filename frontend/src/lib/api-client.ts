@@ -6,7 +6,12 @@ const resolveApiUrl = (): string => {
   const fromEnv = import.meta.env.VITE_API_URL ?? import.meta.env.VITE_BACKEND_URL;
   if (fromEnv) return fromEnv;
 
-  if (typeof __API_URL__ === 'string' && __API_URL__.trim()) {
+  if (
+    typeof __API_URL__ === 'string' &&
+    __API_URL__.trim() &&
+    !__API_URL__.includes('localhost') &&
+    !__API_URL__.includes('127.0.0.1')
+  ) {
     return __API_URL__;
   }
 

@@ -2,7 +2,7 @@
   "rewrites": [
     {
       "source": "/api/(.*)",
-      "destination": "https://per-cias-manager-pro-342026314875.us-west1.run.app/$1"
+      "destination": "https://gestor-pericial-production.up.railway.app/$1"
     },
     { "source": "/((?!api/).*)", "destination": "/index.html" }
   ]
