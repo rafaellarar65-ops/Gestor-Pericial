@@ -480,8 +480,14 @@ model PreLaudo {
   aiAnalysis       Json?
   laudoV2          Json?
   laudoRealtime    Json?
-  templateName     String?
-  version          Int      @default(1)
+  templateName         String?
+  templateDocxPath     String?
+  lastGeneratedPdfPath String?
+  initialProcessJson   Json?
+  initialManeuvers     String[]
+  exameFisicoTexto     String?
+  discussaoTecnicaTexto String?
+  version              Int      @default(1)
   lockedByUserId   String?  @db.Uuid
   lockedAt         DateTime?
   createdAt        DateTime @default(now())
