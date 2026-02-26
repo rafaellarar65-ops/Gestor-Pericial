@@ -11,9 +11,15 @@ export default defineConfig(({ mode }) => {
       host: '0.0.0.0',
       port: 3000,
       strictPort: true,
-      allowedHosts: ['all'],
+      allowedHosts: [
+        'all',
+        '.preview.emergentcf.cloud',
+        'app-publisher-57.cluster-10.preview.emergentcf.cloud',
+        'localhost'
+      ],
       hmr: {
         clientPort: 3000,
+        host: 'localhost',
       },
     },
     resolve: {
