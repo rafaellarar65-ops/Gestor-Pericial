@@ -23,8 +23,8 @@ export const sidebarSections: SidebarSection[] = [
     section: 'OPERACIONAL',
     items: [
       { label: 'Nomeações', href: '/nomeacoes' },
-      { label: 'Tarefas', href: '/agendar' },
-      { label: 'Fila de Agendamento', href: '/agendar' },
+      { label: 'Tarefas', href: '/tarefas' },
+      { label: 'Fila de Agendamento', href: '/fila-agendamento' },
       { label: 'Teleperícias', href: '/telepericias' },
       { label: 'Esclarecimentos', href: '/comunicacao' },
       { label: 'Agenda', href: '/agenda' },
