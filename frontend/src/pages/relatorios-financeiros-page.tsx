@@ -80,15 +80,18 @@ const Page = () => {
   if (isError) return <ErrorState message="Erro ao carregar recebimentos." />;
 
   return (
-    <div className="space-y-4">
-      <header className="flex flex-wrap items-start justify-between gap-3">
-        <div>
-          <h1 className="text-2xl font-semibold">Relatórios Financeiros</h1>
-          <p className="text-sm text-muted-foreground">Acompanhamento de recebimentos com foco em fechamento financeiro.</p>
-        </div>
-        <div className="flex gap-2">
-          <Button variant="outline">Importar arquivo</Button>
-          <Button>Exportar relatório</Button>
+    <DomainPageTemplate
+      description="Painel de análise e relatórios financeiros com visão consolidada dos recebimentos."
+      isError={isError}
+      isLoading={isLoading}
+      items={data}
+      renderItem={(item, index) => (
+        <div className="rounded border p-2" key={index}>
+          {Object.entries(item).map(([key, value]) => (
+            <p className="text-sm" key={key}>
+              <strong>{key}:</strong> {String(value ?? '-')}
+            </p>
+          ))}
         </div>
       </header>
 
@@ -145,7 +148,8 @@ const Page = () => {
           </div>
         </Card>
       )}
-    </div>
+      title="Relatórios Financeiros"
+    />
   );
 };
 

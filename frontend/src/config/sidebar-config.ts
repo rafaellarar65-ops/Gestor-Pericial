@@ -42,8 +42,9 @@ export const sidebarSections: SidebarSection[] = [
     section: 'FINANCEIRO',
     items: [
       { label: 'Central de Cobrança', href: '/cobranca' },
-      { label: 'Importações', href: '/relatorios-financeiros' },
+      { label: 'Importações', href: '/importacoes' },
       { label: 'Análise Financeira', href: '/financeiro' },
+      { label: 'Relatórios Financeiros', href: '/relatorios-financeiros' },
     ],
   },
 ];
