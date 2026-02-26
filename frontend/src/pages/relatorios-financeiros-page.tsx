@@ -80,20 +80,11 @@ const Page = () => {
   if (isError) return <ErrorState message="Erro ao carregar recebimentos." />;
 
   return (
-    <DomainPageTemplate
-      description="Painel de análise e relatórios financeiros com visão consolidada dos recebimentos."
-      isError={isError}
-      isLoading={isLoading}
-      items={data}
-      renderItem={(item, index) => (
-        <div className="rounded border p-2" key={index}>
-          {Object.entries(item).map(([key, value]) => (
-            <p className="text-sm" key={key}>
-              <strong>{key}:</strong> {String(value ?? '-')}
-            </p>
-          ))}
-        </div>
-      </header>
+    <div className="space-y-4">
+      <h1 className="text-2xl font-semibold">Relatórios Financeiros</h1>
+      <p className="text-sm text-muted-foreground">
+        Painel de análise e relatórios financeiros com visão consolidada dos recebimentos.
+      </p>
 
       <Card className="grid gap-3 md:grid-cols-3">
         <Input onChange={(event) => setBusca(event.target.value)} placeholder="Buscar por perícia ou fonte" value={busca} />
@@ -148,8 +139,7 @@ const Page = () => {
           </div>
         </Card>
       )}
-      title="Relatórios Financeiros"
-    />
+    </div>
   );
 };
 
