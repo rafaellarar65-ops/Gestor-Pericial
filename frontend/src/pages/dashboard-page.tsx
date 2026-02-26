@@ -25,7 +25,7 @@ const ACTION_CARDS: ActionCard[] = [
     title: 'AGENDAR DATA',
     subtitle: 'Pendências de agendamento por cidade',
     badge: 'FILA DE ESPERA',
-    href: '/agendar',
+    href: '/fila-agendamento',
     color: 'bg-yellow-500',
     Icon: CalendarClock,
   },
