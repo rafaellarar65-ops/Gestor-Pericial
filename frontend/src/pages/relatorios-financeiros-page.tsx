@@ -6,7 +6,7 @@ const Page = () => {
 
   return (
     <DomainPageTemplate
-      description="Página implementada na fase 4 com estados padrão e integração API."
+      description="Painel de análise e relatórios financeiros com visão consolidada dos recebimentos."
       isError={isError}
       isLoading={isLoading}
       items={data}
@@ -19,7 +19,7 @@ const Page = () => {
           ))}
         </div>
       )}
-      title="relatorios-financeiros"
+      title="Relatórios Financeiros"
     />
   );
 };
