@@ -3,7 +3,16 @@ import { TeleSlotStatus } from '@prisma/client';
 import { randomUUID } from 'crypto';
 import { RequestContextService } from '../../common/request-context.service';
 import { PrismaService } from '../../prisma/prisma.service';
-import { BookTeleSlotDto, CreateTeleSlotDto, UploadSessionDto, WhatsappContactDto } from './dto/telepericia.dto';
+import {
+  BookTeleSlotDto,
+  CreateTeleSlotDto,
+  CreateVirtualRoomDto,
+  SecureUploadQrDto,
+  SendRoomMessageDto,
+  StartRealtimeSessionDto,
+  UploadSessionDto,
+  WhatsappContactDto,
+} from './dto/telepericia.dto';
 
 @Injectable()
 export class TelepericiaService {
@@ -47,6 +56,67 @@ export class TelepericiaService {
     const expiresAt = new Date(Date.now() + dto.expiresInMinutes * 60 * 1000).toISOString();
 
     return { slotId: slot.id, qrCodeToken: randomUUID(), publicUrl: `https://telepericia.fake.local/session/${slot.id}`, expiresAt };
+  }
+
+  async startRealtimeSession(dto: StartRealtimeSessionDto) {
+    const slot = await this.ensureSlot(dto.slotId);
+    const roomName = dto.roomName ?? `telepericia-${slot.id}`;
+    const sessionId = randomUUID();
+
+    return {
+      slotId: slot.id,
+      provider: 'webrtc-signaling',
+      roomName,
+      sessionId,
+      wsUrl: `wss://telepericia.fake.local/webrtc/${roomName}`,
+      iceServers: [{ urls: 'stun:stun.l.google.com:19302' }],
+      token: randomUUID(),
+    };
+  }
+
+  async createVirtualRoom(dto: CreateVirtualRoomDto) {
+    const slot = await this.ensureSlot(dto.slotId);
+    const title = dto.title ?? `Sala de Perícia ${slot.startAt.toISOString()}`;
+
+    return {
+      slotId: slot.id,
+      title,
+      chatEnabled: true,
+      participants: ['perito', 'periciado'],
+      roomId: randomUUID(),
+    };
+  }
+
+  async sendRoomMessage(dto: SendRoomMessageDto) {
+    const slot = await this.ensureSlot(dto.slotId);
+    return {
+      slotId: slot.id,
+      sender: dto.sender,
+      message: dto.message,
+      sentAt: new Date().toISOString(),
+      messageId: randomUUID(),
+    };
+  }
+
+  async secureUploadQr(dto: SecureUploadQrDto) {
+    const slot = await this.ensureSlot(dto.slotId);
+    const expiresAt = new Date(Date.now() + 20 * 60 * 1000).toISOString();
+    const uploadToken = randomUUID();
+    const uploadUrl = `https://telepericia.fake.local/mobile-upload/${uploadToken}`;
+
+    return {
+      slotId: slot.id,
+      periciaId: dto.periciaId,
+      uploadToken,
+      qrCodePayload: uploadUrl,
+      uploadUrl,
+      accepted: ['image/jpeg', 'image/png', 'application/pdf'],
+      expiresAt,
+      whatsappNotification:
+        dto.notifyPhone && dto.notifyPhone.trim().length > 0
+          ? { enqueued: true, to: dto.notifyPhone, link: `https://wa.me/${dto.notifyPhone.replace(/\D/g, '')}?text=${encodeURIComponent(uploadUrl)}` }
+          : { enqueued: false },
+    };
   }
 
   private async ensureSlot(id: string) {
