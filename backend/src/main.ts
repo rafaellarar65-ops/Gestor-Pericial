@@ -23,10 +23,9 @@ async function logDatabaseConnectionStatus(): Promise<void> {
 }
 
 async function seedAdminIfNeeded(): Promise<void> {
-  const email = process.env.ADMIN_EMAIL;
-  const password = process.env.ADMIN_PASSWORD;
-
-  if (!email || !password) return;
+  // Fall back to default credentials so the app always has a usable admin on first deploy
+  const email = process.env.ADMIN_EMAIL ?? 'admin@gestorpericial.com.br';
+  const password = process.env.ADMIN_PASSWORD ?? 'Admin@2025!';
 
   const prisma = new PrismaClient(getPrismaClientOptions());
   try {
@@ -78,12 +77,22 @@ async function bootstrap() {
   resolveDatabaseUrl();
   const app = await NestFactory.create(AppModule);
 
-  const allowedOrigins = process.env.FRONTEND_URL
+  const configuredOrigins = process.env.FRONTEND_URL
     ? process.env.FRONTEND_URL.split(',').map((u) => u.trim())
-    : '*';
+    : null;
 
   app.enableCors({
-    origin: allowedOrigins,
+    // When FRONTEND_URL is not set, allow all origins (needed for first-time deploys).
+    // When set, restrict to the listed origins only.
+    origin: configuredOrigins
+      ? (origin, cb) => {
+          if (!origin || configuredOrigins.some((o) => origin.startsWith(o))) {
+            cb(null, true);
+          } else {
+            cb(null, false);
+          }
+        }
+      : (_origin, cb) => cb(null, true),
     credentials: true,
   });
 
