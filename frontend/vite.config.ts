@@ -11,6 +11,8 @@ export default defineConfig(({ mode }) => {
       host: '0.0.0.0',
       port: 3000,
       strictPort: true,
+      // @ts-ignore - Disable host check for Emergent preview
+      disableHostCheck: true,
       allowedHosts: [
         'all',
         '.preview.emergentcf.cloud',
