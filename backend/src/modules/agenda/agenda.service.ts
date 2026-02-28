@@ -24,21 +24,32 @@ export class AgendaService {
   }
 
   listEvents() {
-    return this.prisma.agendaEvent.findMany({ orderBy: { startAt: 'asc' } });
+    const tenantId = this.context.get('tenantId') as string;
+    return this.prisma.agendaEvent.findMany({ where: { tenantId }, orderBy: { startAt: 'asc' } });
   }
 
   async updateEvent(id: string, dto: UpdateAgendaEventDto) {
-    const found = await this.prisma.agendaEvent.findFirst({ where: { id } });
+    const tenantId = this.context.get('tenantId') as string;
+    const found = await this.prisma.agendaEvent.findFirst({ where: { id, tenantId } });
     if (!found) throw new NotFoundException('Evento não encontrado.');
 
-    return this.prisma.agendaEvent.update({
-      where: { id },
-      data: {
-        ...dto,
-        startAt: dto.startAt ? new Date(dto.startAt) : undefined,
-        endAt: dto.endAt ? new Date(dto.endAt) : undefined,
-      },
-    });
+    const updateData = {
+      ...dto,
+      startAt: dto.startAt ? new Date(dto.startAt) : undefined,
+      endAt: dto.endAt ? new Date(dto.endAt) : undefined,
+    };
+
+    const [, updatedEvent] = await this.prisma.$transaction([
+      this.prisma.agendaEvent.updateMany({
+        where: { id, tenantId },
+        data: updateData,
+      }),
+      this.prisma.agendaEvent.findFirst({ where: { id, tenantId } }),
+    ]);
+
+    if (!updatedEvent) throw new NotFoundException('Evento não encontrado.');
+
+    return updatedEvent;
   }
 
   createTask(dto: CreateAgendaTaskDto) {
@@ -54,7 +65,8 @@ export class AgendaService {
   }
 
   listTasks() {
-    return this.prisma.agendaTask.findMany({ orderBy: { dueAt: 'asc' } });
+    const tenantId = this.context.get('tenantId') as string;
+    return this.prisma.agendaTask.findMany({ where: { tenantId }, orderBy: { dueAt: 'asc' } });
   }
 
   async batchScheduling(dto: BatchScheduleDto) {
