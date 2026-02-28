@@ -20,25 +20,25 @@ const DEFAULT_STATUS_GROUPS: StatusGroup[] = [
     label: 'A AVALIAR (NOVAS)',
     color: 'bg-blue-600',
     textColor: 'text-white',
-    statuses: ['NOVA_NOMEACAO', 'AVALIAR'],
+    statuses: ['AVALIAR'],
   },
   {
     label: 'AGUARDANDO ACEITE HONORÁRIOS',
     color: 'bg-yellow-500',
     textColor: 'text-white',
-    statuses: ['AGUARDANDO_ACEITE', 'ACEITE_HONORARIOS'],
+    statuses: ['AGUARDANDO_ACEITE_HONORARIOS'],
   },
   {
     label: 'A MAJORAR HONORÁRIOS',
     color: 'bg-orange-500',
     textColor: 'text-white',
-    statuses: ['A_MAJORAR', 'MAJORAR_HONORARIOS'],
+    statuses: ['MAJORAR'],
   },
   {
     label: 'COM OBSERVAÇÃO EXTRA',
     color: 'bg-pink-600',
     textColor: 'text-white',
-    statuses: ['OBSERVACAO_EXTRA', 'COM_OBSERVACAO'],
+    statuses: ['ESCLARECIMENTOS'],
   },
 ];
 

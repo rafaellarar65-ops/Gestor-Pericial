@@ -1,0 +1,57 @@
+export const PERICIA_STATUS_CODES = [
+  'AVALIAR',
+  'MAJORAR',
+  'AGUARDANDO_ACEITE_HONORARIOS',
+  'AGENDAR_DATA',
+  'DATA_AGENDADA',
+  'AUSENTE',
+  'AUSENCIA_INFORMADA',
+  'ENVIAR_LAUDO',
+  'LAUDO_ENVIADO',
+  'ESCLARECIMENTOS',
+  'AGUARDANDO_PAG',
+  'RECEBIDO_PARCIALMENTE',
+  'FINALIZADA',
+  'RECUSAR',
+  'CANCELADA',
+  'TELEPERICIA',
+  'FAZER_INDIRETA',
+] as const;
+
+export type PericiaStatusCode = (typeof PERICIA_STATUS_CODES)[number];
+
+const ALLOWED_TRANSITIONS: Record<PericiaStatusCode, PericiaStatusCode[]> = {
+  AVALIAR: ['AGENDAR_DATA', 'AGUARDANDO_ACEITE_HONORARIOS', 'FAZER_INDIRETA', 'RECUSAR'],
+  MAJORAR: ['AGUARDANDO_ACEITE_HONORARIOS', 'RECUSAR'],
+  AGUARDANDO_ACEITE_HONORARIOS: ['AGENDAR_DATA', 'MAJORAR', 'RECUSAR', 'CANCELADA'],
+  AGENDAR_DATA: ['DATA_AGENDADA', 'TELEPERICIA'],
+  DATA_AGENDADA: ['ENVIAR_LAUDO', 'AUSENTE'],
+  AUSENTE: ['AUSENCIA_INFORMADA'],
+  AUSENCIA_INFORMADA: ['AGENDAR_DATA', 'CANCELADA'],
+  ENVIAR_LAUDO: ['LAUDO_ENVIADO'],
+  LAUDO_ENVIADO: ['ESCLARECIMENTOS', 'AGUARDANDO_PAG'],
+  ESCLARECIMENTOS: ['LAUDO_ENVIADO'],
+  AGUARDANDO_PAG: ['RECEBIDO_PARCIALMENTE', 'FINALIZADA'],
+  RECEBIDO_PARCIALMENTE: ['FINALIZADA'],
+  FINALIZADA: [],
+  RECUSAR: [],
+  CANCELADA: [],
+  TELEPERICIA: ['DATA_AGENDADA'],
+  FAZER_INDIRETA: ['ENVIAR_LAUDO'],
+};
+
+export const isPericiaStatusCode = (value: string): value is PericiaStatusCode =>
+  (PERICIA_STATUS_CODES as readonly string[]).includes(value);
+
+export const isTransitionAllowed = (from: PericiaStatusCode | null, to: PericiaStatusCode): boolean => {
+  if (!from || from === to) return true;
+  return ALLOWED_TRANSITIONS[from].includes(to);
+};
+
+export const derivePericiaFlagsFromStatus = (statusCode: PericiaStatusCode) => ({
+  agendada: ['DATA_AGENDADA', 'AUSENTE', 'AUSENCIA_INFORMADA', 'ENVIAR_LAUDO', 'LAUDO_ENVIADO', 'ESCLARECIMENTOS', 'AGUARDANDO_PAG', 'RECEBIDO_PARCIALMENTE', 'FINALIZADA'].includes(
+    statusCode,
+  ),
+  laudoEnviado: ['LAUDO_ENVIADO', 'ESCLARECIMENTOS', 'AGUARDANDO_PAG', 'RECEBIDO_PARCIALMENTE', 'FINALIZADA'].includes(statusCode),
+  finalizada: ['FINALIZADA'].includes(statusCode),
+});

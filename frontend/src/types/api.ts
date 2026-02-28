@@ -37,11 +37,23 @@ export type DashboardResponse = {
 };
 
 export type PericiaStatus =
-  | 'NOVA_NOMEACAO'
-  | 'AGENDADA'
-  | 'EM_ANDAMENTO'
+  | 'AVALIAR'
+  | 'MAJORAR'
+  | 'AGUARDANDO_ACEITE_HONORARIOS'
+  | 'AGENDAR_DATA'
+  | 'DATA_AGENDADA'
+  | 'AUSENTE'
+  | 'AUSENCIA_INFORMADA'
+  | 'ENVIAR_LAUDO'
   | 'LAUDO_ENVIADO'
-  | 'FINALIZADA';
+  | 'ESCLARECIMENTOS'
+  | 'AGUARDANDO_PAG'
+  | 'RECEBIDO_PARCIALMENTE'
+  | 'FINALIZADA'
+  | 'RECUSAR'
+  | 'CANCELADA'
+  | 'TELEPERICIA'
+  | 'FAZER_INDIRETA';
 
 export type Pericia = {
   id: string;
