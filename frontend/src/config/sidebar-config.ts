@@ -47,6 +47,10 @@ export const sidebarSections: SidebarSection[] = [
       { label: 'Relatórios Financeiros', href: '/relatorios-financeiros' },
     ],
   },
+  {
+    section: 'SISTEMA',
+    items: [{ label: 'Configurações', href: '/configuracoes' }],
+  },
 ];
 
 // Flat list kept for command palette
