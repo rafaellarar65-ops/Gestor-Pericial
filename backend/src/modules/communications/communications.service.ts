@@ -1,5 +1,5 @@
 import { Injectable } from '@nestjs/common';
-import { PericiaPaymentStatus, Prisma } from '@prisma/client';
+import { AgendaTaskStatus, PericiaPaymentStatus, Prisma } from '@prisma/client';
 import { RequestContextService } from '../../common/request-context.service';
 import { PrismaService } from '../../prisma/prisma.service';
 import {
@@ -7,16 +7,27 @@ import {
   CreateEmailTemplateDto,
   CreateLawyerDto,
   GenerateHubEmailDto,
+  InterpretWhatsappInboundDto,
   SendEmailDto,
   SendWhatsappMessageDto,
+  UpdateWhatsappConsentDto,
   UpsertUolhostEmailConfigDto,
 } from './dto/communications.dto';
+import { WhatsappRulesEngine, type WhatsappConsentStatus } from './whatsapp.rules-engine';
+
+interface WhatsappTenantConfig {
+  freeformEnabled?: boolean;
+  consentExceptionContactIds?: string[];
+  linkedInboxContactIds?: string[];
+  contactConsents?: Record<string, WhatsappConsentStatus>;
+}
 
 @Injectable()
 export class CommunicationsService {
   constructor(
     private readonly prisma: PrismaService,
     private readonly context: RequestContextService,
+    private readonly whatsappRulesEngine: WhatsappRulesEngine,
   ) {}
 
   sendEmail(dto: SendEmailDto) {
@@ -119,6 +130,30 @@ export class CommunicationsService {
 
   async sendWhatsappMessage(dto: SendWhatsappMessageDto) {
     const tenantId = this.context.get('tenantId') ?? '';
+    const tenantConfig = await this.getWhatsappTenantConfig(tenantId);
+    const contactConsents = tenantConfig.contactConsents ?? {};
+
+    const consentStatus = dto.consentStatus ?? (dto.contactId ? contactConsents[dto.contactId] : undefined) ?? 'unknown';
+    const evaluation = this.whatsappRulesEngine.evaluateAutomation({
+      consentStatus,
+      isAutomation: dto.isAutomation ?? true,
+      messageType: dto.messageType ?? 'freeform',
+      lastInboundAt: dto.lastInboundAt ? new Date(dto.lastInboundAt) : undefined,
+      freeformEnabled: tenantConfig.freeformEnabled ?? false,
+      consentExceptionContactIds: tenantConfig.consentExceptionContactIds ?? [],
+      contactId: dto.contactId,
+    });
+
+    if (!evaluation.allowed) {
+      return {
+        queued: false,
+        blocked: true,
+        reason: evaluation.reason,
+        serviceWindowOpen: evaluation.serviceWindowOpen,
+        serviceWindowHours: evaluation.serviceWindowHours,
+      };
+    }
+
     const log = await this.prisma.activityLog.create({
       data: {
         tenantId,
@@ -131,11 +166,21 @@ export class CommunicationsService {
           provider: 'whatsapp-cloud-api',
           status: 'queued',
           sentAt: new Date().toISOString(),
+          messageType: dto.messageType ?? 'freeform',
+          consentStatus,
+          serviceWindowOpen: evaluation.serviceWindowOpen,
+          serviceWindowHours: evaluation.serviceWindowHours,
         },
       },
     });
 
-    return { queued: true, provider: 'whatsapp-cloud-api', messageId: log.id };
+    return {
+      queued: true,
+      provider: 'whatsapp-cloud-api',
+      messageId: log.id,
+      serviceWindowOpen: evaluation.serviceWindowOpen,
+      serviceWindowHours: evaluation.serviceWindowHours,
+    };
   }
 
   async listWhatsappMessages(periciaId?: string) {
@@ -147,6 +192,106 @@ export class CommunicationsService {
       orderBy: { createdAt: 'desc' },
       take: 50,
     });
+  }
+
+  async interpretWhatsappInbound(dto: InterpretWhatsappInboundDto) {
+    const tenantId = this.context.get('tenantId') ?? '';
+    const tenantConfig = await this.getWhatsappTenantConfig(tenantId);
+    const linkedContactSet = new Set(tenantConfig.linkedInboxContactIds ?? []);
+
+    const interpretation = this.whatsappRulesEngine.interpretInbound({
+      body: dto.body,
+      hasLinkedInboxItem: dto.hasLinkedInboxItem ?? linkedContactSet.has(dto.contactId),
+    });
+
+    if (interpretation.type === 'confirm_pericia' && dto.periciaId) {
+      await this.prisma.pericia
+        .update({
+          where: { id: dto.periciaId },
+          data: {
+            metadata: {
+              confirmedByWhatsapp: true,
+              confirmedAt: new Date().toISOString(),
+            },
+          },
+        })
+        .catch(() => undefined);
+    }
+
+    if (interpretation.type === 'request_reschedule') {
+      await this.prisma.agendaTask.create({
+        data: {
+          tenantId,
+          periciaId: dto.periciaId,
+          title: 'Reagendamento solicitado via WhatsApp',
+          description: `Contato ${dto.contactId} respondeu "2" no WhatsApp e solicitou reagendamento.`,
+          status: AgendaTaskStatus.TODO,
+          metadata: {
+            source: 'whatsapp',
+            inboundBody: interpretation.normalizedBody,
+            routing: 'central_scheduling',
+          },
+        },
+      });
+    }
+
+    if (interpretation.type === 'triage_inbox_unlinked' || interpretation.type === 'triage_inbox_linked') {
+      await this.prisma.activityLog.create({
+        data: {
+          tenantId,
+          entityType: 'WHATSAPP_INBOUND',
+          entityId: dto.periciaId ?? dto.contactId,
+          action: interpretation.type === 'triage_inbox_unlinked' ? 'whatsapp_unlinked_inbound' : 'whatsapp_linked_inbound',
+          payloadJson: {
+            contactId: dto.contactId,
+            body: interpretation.normalizedBody,
+            routing: interpretation.type,
+          },
+        },
+      });
+    }
+
+    return {
+      interpreted: true,
+      ...interpretation,
+    };
+  }
+
+  async updateContactConsent(contactId: string, dto: UpdateWhatsappConsentDto) {
+    const tenantId = this.context.get('tenantId') ?? '';
+    const setting = await this.prisma.integrationSettings.findFirst({
+      where: { tenantId, provider: 'WHATSAPP' },
+    });
+
+    const currentConfig = (setting?.config as WhatsappTenantConfig | null) ?? {};
+    const updatedConfig: WhatsappTenantConfig = {
+      ...currentConfig,
+      contactConsents: {
+        ...(currentConfig.contactConsents ?? {}),
+        [contactId]: dto.consentStatus,
+      },
+    };
+
+    if (setting) {
+      await this.prisma.integrationSettings.update({
+        where: { id: setting.id },
+        data: { config: updatedConfig as Prisma.InputJsonValue },
+      });
+    } else {
+      await this.prisma.integrationSettings.create({
+        data: {
+          tenantId,
+          provider: 'WHATSAPP',
+          config: updatedConfig as Prisma.InputJsonValue,
+        },
+      });
+    }
+
+    return {
+      contactId,
+      consentStatus: dto.consentStatus,
+      updated: true,
+    };
   }
 
   async automaticVaraCharge(dto: AutomaticVaraChargeDto) {
@@ -177,5 +322,13 @@ export class CommunicationsService {
         email: { queued: pendentes.length > 0 },
       },
     };
+  }
+
+  private async getWhatsappTenantConfig(tenantId: string): Promise<WhatsappTenantConfig> {
+    const setting = await this.prisma.integrationSettings.findFirst({
+      where: { tenantId, provider: 'WHATSAPP' },
+    });
+
+    return (setting?.config as WhatsappTenantConfig | null) ?? {};
   }
 }
