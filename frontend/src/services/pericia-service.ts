@@ -11,6 +11,7 @@ import type {
   Recebimento,
   NomeacoesResponse,
   FilaAgendamentoCityResponse,
+  TelepericiaQueueResponse,
 } from '@/types/api';
 
 export const periciaService = {
@@ -30,7 +31,17 @@ export const periciaService = {
     return data;
   },
 
-  list: async (page: number, filters?: { limit?: number; search?: string }): Promise<ApiListResponse<Pericia>> => {
+  list: async (page: number, filters?: {
+    limit?: number;
+    search?: string;
+    statusId?: string;
+    cidadeId?: string;
+    dateFrom?: string;
+    dateTo?: string;
+    varaId?: string;
+    valorMin?: number;
+    valorMax?: number;
+  }): Promise<ApiListResponse<Pericia>> => {
     const { data } = await apiClient.get<{ items: Pericia[]; pagination: { total: number; page: number; limit: number } }>('/pericias', {
       params: {
         page,

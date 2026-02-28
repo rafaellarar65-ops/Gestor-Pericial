@@ -144,6 +144,8 @@ export type EmailTemplate = {
   bodyHtml?: string;
   bodyText?: string;
   variables?: string[];
+  placeholdersUsed?: string[];
+  variablesMapping?: Record<string, string>;
   active?: boolean;
 };
 
@@ -436,4 +438,55 @@ export type AnalyticsCalendarOverviewResponse = {
   kpis: AnalyticsCalendarKpi[];
   timeline: AnalyticsCalendarTimelineEvent[];
   heatmap: AnalyticsCalendarHeatmapDay[];
+};
+
+
+export type MessageTemplateChannel = 'whatsapp_template' | 'whatsapp_freeform' | 'clipboard' | 'wa_me_prefill';
+
+export type MessageTemplate = {
+  id: string;
+  channel: MessageTemplateChannel;
+  name: string;
+  body: string;
+  variables?: string[];
+  placeholdersUsed?: string[];
+  variablesMapping?: Record<string, string>;
+  active?: boolean;
+};
+
+export type TemplatePreview = {
+  text: string;
+  rendered?: string;
+};
+
+export type InboxItem = {
+  id: string;
+  channel?: string;
+  direction?: 'IN' | 'OUT' | string;
+  to?: string;
+  from?: string;
+  body?: string;
+  message?: string;
+  tags?: string[];
+  status?: string;
+  createdAt?: string;
+};
+
+export type DashboardSystemSettings = {
+  nomeacoesGroups: {
+    avaliar: string[];
+    aceiteHonorarios: string[];
+    majorarHonorarios: string[];
+    observacaoExtra: string[];
+  };
+  dashboard: {
+    avaliarStatusCodigos: string[];
+    avaliarStatusNomeTermos: string[];
+    enviarLaudoStatusCodigos: string[];
+    enviarLaudoStatusNomeTermos: string[];
+  };
+  filas: {
+    agendamentoBloqueiaTermosStatus: string[];
+    laudosUrgenciaTermosStatus: string[];
+  };
 };

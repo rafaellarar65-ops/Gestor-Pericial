@@ -2,6 +2,7 @@ import { useEffect, useMemo, useState } from 'react';
 import { useQuery } from '@tanstack/react-query';
 import { CalendarClock, List, MapPin, Plus, Trash2 } from 'lucide-react';
 import { toast } from 'sonner';
+import { Button } from '@/components/ui/button';
 import { Card } from '@/components/ui/card';
 import { Input } from '@/components/ui/input';
 import { EmptyState, ErrorState, LoadingState } from '@/components/ui/state';
@@ -9,23 +10,7 @@ import { periciaService } from '@/services/pericia-service';
 import type { StageListItem } from '@/types/api';
 
 type Tab = 'fila' | 'preparacao';
-
 const PREP_KEY = 'agendamento.preparacao';
-
-const toCityName = (cidade: Pericia['cidade']) =>
-  typeof cidade === 'string' ? cidade : (cidade as { nome?: string })?.nome ?? 'Sem cidade';
-
-const toStatusText = (status: Pericia['status']) =>
-  typeof status === 'string'
-    ? status
-    : (status as { codigo?: string; nome?: string })?.codigo ?? (status as { nome?: string })?.nome ?? '';
-
-const isPendingScheduling = (p: Pericia, blockedStatusTerms: string[]) => {
-  const s = toStatusText(p.status).toUpperCase();
-  if (p.dataAgendamento) return false;
-  if (blockedStatusTerms.some((term) => s.includes(term.toUpperCase()))) return false;
-  return true;
-};
 
 const FilaAgendamentoPage = () => {
   const [activeTab, setActiveTab] = useState<Tab>('fila');
@@ -119,7 +104,9 @@ const FilaAgendamentoPage = () => {
       </div>
 
       <div className="flex items-center gap-2">
-        <Button variant={activeTab === 'fila' ? 'default' : 'outline'} onClick={() => setActiveTab('fila')}><List className="mr-2" size={14} />Fila</Button>
+        <Button variant={activeTab === 'fila' ? 'default' : 'outline'} onClick={() => setActiveTab('fila')}>
+          <List className="mr-2" size={14} />Fila
+        </Button>
         <Button variant={activeTab === 'preparacao' ? 'default' : 'outline'} onClick={() => setActiveTab('preparacao')}>
           <Plus className="mr-2" size={14} />Preparação ({prepList.length})
         </Button>
@@ -183,48 +170,6 @@ const FilaAgendamentoPage = () => {
           )}
         </Card>
       )}
-
-      {step === 2 && (
-        <StepSchedule
-          params={params}
-          totalItems={prepList.length}
-          onParamsChange={(patch) => setParams((prev) => ({ ...prev, ...patch }))}
-          onBack={() => setStep(1)}
-          onNext={() => setStep(3)}
-        />
-      )}
-
-      {step === 3 && <StepReview draftLot={draftLot} conflicts={conflicts} onBack={() => setStep(2)} onNext={() => setStep(4)} />}
-
-      {step === 4 && (
-        <StepConfirm
-          draftLot={draftLot}
-          isSubmitting={confirmLotMutation.isPending}
-          onBack={() => setStep(3)}
-          onConfirm={() => {
-            if (isValid) confirmLotMutation.mutate();
-          }}
-        />
-      )}
-
-      <Card className="space-y-3 p-4">
-        <h2 className="text-xl font-semibold">Histórico de Lotes (backend)</h2>
-        {history.length === 0 ? (
-          <EmptyState title="Nenhum lote persistido no backend até o momento." />
-        ) : (
-          <div className="space-y-2">
-            {history.map((lot) => (
-              <article key={lot.id} className="rounded border p-3 text-sm">
-                <p className="font-medium">
-                  Lote #{lot.id.slice(0, 8)} • {new Date(lot.createdAt).toLocaleString('pt-BR')}
-                </p>
-                <p>Cidades: {lot.cityNames.join(', ') || '—'}</p>
-                <p>Itens: {lot.items.length}</p>
-              </article>
-            ))}
-          </div>
-        )}
-      </Card>
     </div>
   );
 };

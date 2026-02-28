@@ -1,9 +1,10 @@
 import { useMemo, useState } from 'react';
 import { Link } from 'react-router-dom';
-import { useInfiniteQuery } from '@tanstack/react-query';
+import { useInfiniteQuery, useQuery } from '@tanstack/react-query';
 import { Scale, ChevronDown, ChevronUp, ExternalLink, MapPin } from 'lucide-react';
 import { LoadingState } from '@/components/ui/state';
 import { apiClient } from '@/lib/api-client';
+import { configService } from '@/services/config-service';
 
 type PericiaItem = Record<string, unknown>;
 
@@ -90,12 +91,12 @@ const NomeacoesPage = () => {
   });
 
   const statusGroups = useMemo<StatusGroup[]>(() => {
-    if (!dashboardSettings) return DEFAULT_STATUS_GROUPS;
+    if (!dashboardSettings) return STATUS_GROUPS;
     return [
-      { ...DEFAULT_STATUS_GROUPS[0], statuses: dashboardSettings.nomeacoesGroups.avaliar },
-      { ...DEFAULT_STATUS_GROUPS[1], statuses: dashboardSettings.nomeacoesGroups.aceiteHonorarios },
-      { ...DEFAULT_STATUS_GROUPS[2], statuses: dashboardSettings.nomeacoesGroups.majorarHonorarios },
-      { ...DEFAULT_STATUS_GROUPS[3], statuses: dashboardSettings.nomeacoesGroups.observacaoExtra },
+      { ...STATUS_GROUPS[0], statuses: dashboardSettings.nomeacoesGroups.avaliar },
+      { ...STATUS_GROUPS[1], statuses: dashboardSettings.nomeacoesGroups.aceiteHonorarios },
+      { ...STATUS_GROUPS[2], statuses: dashboardSettings.nomeacoesGroups.majorarHonorarios },
+      { ...STATUS_GROUPS[3], statuses: dashboardSettings.nomeacoesGroups.observacaoExtra },
     ];
   }, [dashboardSettings]);
 
@@ -132,11 +133,11 @@ const NomeacoesPage = () => {
 
   const groups = useMemo(
     () =>
-      STATUS_GROUPS.map((sg) => {
+      statusGroups.map((sg) => {
         const groupItems = allItems.filter((item) => matchGroup(item, sg));
         const groupTotal = Object.entries(statusTotals).reduce((acc, [status, value]) => {
           if (sg.statuses.some((expected) => status.includes(expected))) {
-            return acc + value;
+            return acc + Number(value ?? 0);
           }
           return acc;
         }, 0);
@@ -221,7 +222,7 @@ const NomeacoesPage = () => {
                             <p className="font-mono text-xs text-gray-400">
                               {String(item.processoCNJ ?? item.id ?? `#${i + 1}`)}
                             </p>
-                            {item.id && (
+                            {Boolean(item.id) && (
                               <Link
                                 className="text-gray-400 hover:text-blue-600"
                                 to={`/pericias/${String(item.id)}`}
@@ -235,7 +236,7 @@ const NomeacoesPage = () => {
                             {String(item.autorNome ?? item.nome ?? '—')}
                           </p>
 
-                          {item.cidade && (
+                          {Boolean(item.cidade) && (
                             <div className="mt-2 flex items-center gap-1 text-xs text-gray-400">
                               <MapPin size={11} />
                               {String(item.cidade)}

@@ -201,7 +201,7 @@ const PagamentosNaoVinculadosPage = () => {
             <tbody>
               {filtered.map((item) => (
                 <tr key={item.id} className="border-b align-top">
-                  <td className="px-2 py-2">{(item.receivedAt ?? item.transactionDate ?? item.createdAt ? new Date(item.receivedAt ?? item.transactionDate ?? item.createdAt).toLocaleDateString('pt-BR') : '-')}</td>
+                  <td className="px-2 py-2">{(() => { const dt = item.receivedAt ?? item.transactionDate ?? item.createdAt; return dt ? new Date(dt).toLocaleDateString('pt-BR') : '-'; })()}</td>
                   <td className="px-2 py-2 font-medium">{formatCurrency(item.amount)}</td>
                   <td className="px-2 py-2">{item.cnj ?? '-'}</td>
                   <td className="px-2 py-2">{item.description ?? '-'}</td>

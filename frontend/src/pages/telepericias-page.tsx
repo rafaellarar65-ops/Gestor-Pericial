@@ -46,7 +46,7 @@ const Page = () => {
     onError: () => toast.error('Falha ao registrar tentativa.'),
   });
 
-  const rows = useMemo(() => data?.items ?? [], [data]);
+  const rows = useMemo<TelepericiaQueueItem[]>(() => data?.items ?? [], [data]);
 
   if (isLoading) return <LoadingState />;
   if (isError) return <ErrorState message="Erro ao carregar fila operacional de teleperícia." />;

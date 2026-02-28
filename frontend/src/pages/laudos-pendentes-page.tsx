@@ -58,7 +58,7 @@ const getDelayDays = (item: LaudoItem): number | null => {
   return Math.max(0, Math.floor(diffMs / (1000 * 60 * 60 * 24)));
 };
 
-const isItemUrgent = (item: LaudoItem, urgentTerms: string[]): boolean => {
+const isItemUrgent = (item: LaudoItem): boolean => {
   if (item.isUrgent === true || item.isUrgent === 1 || item.isUrgent === 'true') return true;
   const statusText = getStatusLabel(item);
   if (typeof statusText === 'string' && statusText.toUpperCase().includes('URGENTE')) return true;
@@ -77,9 +77,10 @@ const getStatusColor = (status?: string): string => {
 };
 
 const LaudoCard = ({ item, index, urgentTerms }: { item: LaudoItem; index: number; urgentTerms: string[] }) => {
-  const urgent = isItemUrgent(item, urgentTerms);
+  const urgent = isItemUrgent(item) || urgentTerms.some((term) => (getStatusLabel(item) ?? '').toUpperCase().includes(term));
   const itemId = item.id ?? index;
   const detailHref = `/pericias/${itemId}`;
+  const laudoInteligenteHref = `/laudo-inteligente/${itemId}`;
   const statusLabel = getStatusLabel(item);
   const delayDays = getDelayDays(item);
 
@@ -167,6 +168,8 @@ const LaudosPendentesPage = () => {
   const { data = [], isLoading, isError } = useDomainData('laudos-pendentes', '/laudos-pendentes');
   const [prioritizeUrgent, setPrioritizeUrgent] = useState(false);
 
+  const urgentTerms = ['URGENTE', 'PRIORIDADE'];
+
   const sorted = useMemo(() => {
     const items = (data as LaudoItem[]).filter(isEnviarLaudoStatus);
 
@@ -189,7 +192,7 @@ const LaudosPendentesPage = () => {
   }, [data, prioritizeUrgent]);
 
   const total = sorted.length;
-  const urgentCount = useMemo(() => sorted.filter((item) => isItemUrgent(item, urgentTerms)).length, [sorted, urgentTerms]);
+  const urgentCount = useMemo(() => sorted.filter((item) => isItemUrgent(item)).length, [sorted]);
 
   return (
     <div className="min-h-screen bg-gray-50">
