@@ -35,11 +35,39 @@ enum FontePagamento {
 
 enum AgendaEventType {
   PERICIA
+  PERICIA_AGENDADA
   PRAZO
   LAUDO
   DESLOCAMENTO
+  BLOQUEIO
+  BLOCO_LAUDO
   BLOCO_TRABALHO
   OUTRO
+}
+
+enum AgendaEventStatus {
+  AGENDADA
+  REALIZADA
+  FALTOU
+  REMARCADA
+  CANCELADA
+}
+
+enum AgendaEventSource {
+  MANUAL
+  CNJ
+  GOOGLE_CALENDAR
+  IMPORTACAO
+  IA
+  OUTRO
+}
+
+enum ExternalSyncStatus {
+  PENDING
+  SYNCED
+  ERROR
+  CONFLICT
+  DISABLED
 }
 
 enum AgendaTaskStatus {
@@ -213,6 +241,7 @@ model Cidade {
   varas       Vara[]
   pericias    Pericia[]
   locais      Local[]
+  agendaEvents AgendaEvent[]
   schedulingBatches SchedulingBatch[]
 
   @@unique([tenantId, nome, uf])
@@ -587,9 +616,22 @@ model AgendaEvent {
   id           String         @id @default(uuid()) @db.Uuid
   tenantId     String         @db.Uuid
   periciaId    String?        @db.Uuid
+  cnjId        String?
+  cityId       String?        @db.Uuid
+  city         String?
   title        String
   description  String?
   type         AgendaEventType
+  status       AgendaEventStatus @default(AGENDADA)
+  source       AgendaEventSource @default(MANUAL)
+  aiSuggested  Boolean        @default(false)
+  statusHistory Json?
+  syncStatus   ExternalSyncStatus @default(PENDING)
+  syncErrorMessage String?
+  externalProvider String?
+  externalEventId String?
+  externalEtag String?
+  externalLastModifiedAt DateTime?
   startAt      DateTime
   endAt        DateTime?
   allDay       Boolean        @default(false)
@@ -602,9 +644,13 @@ model AgendaEvent {
 
   tenant  Tenant  @relation(fields: [tenantId], references: [id], onDelete: Cascade)
   pericia Pericia? @relation(fields: [periciaId], references: [id], onDelete: SetNull)
+  cityRef Cidade? @relation(fields: [cityId], references: [id], onDelete: SetNull)
 
   @@index([tenantId, startAt])
   @@index([tenantId, periciaId, startAt])
+  @@index([tenantId, status, startAt])
+  @@index([tenantId, syncStatus])
+  @@index([tenantId, externalProvider, externalEventId])
 }
 
 model AgendaTask {
