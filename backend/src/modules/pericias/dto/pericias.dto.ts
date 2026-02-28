@@ -176,6 +176,24 @@ export class ListPericiasDto {
   @IsUUID()
   tipoPericiaId?: string;
 
+
+  @ApiPropertyOptional()
+  @IsOptional()
+  @IsUUID()
+  varaId?: string;
+
+  @ApiPropertyOptional()
+  @Type(() => Number)
+  @IsOptional()
+  @IsNumber()
+  valorMin?: number;
+
+  @ApiPropertyOptional()
+  @Type(() => Number)
+  @IsOptional()
+  @IsNumber()
+  valorMax?: number;
+
   @ApiPropertyOptional()
   @IsOptional()
   @IsDateString()

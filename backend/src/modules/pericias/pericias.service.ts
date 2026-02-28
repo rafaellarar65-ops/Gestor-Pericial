@@ -47,7 +47,16 @@ export class PericiasService {
     const where: Prisma.PericiaWhereInput = {
       ...(query.statusId ? { statusId: query.statusId } : {}),
       ...(query.cidadeId ? { cidadeId: query.cidadeId } : {}),
+      ...(query.varaId ? { varaId: query.varaId } : {}),
       ...(query.tipoPericiaId ? { tipoPericiaId: query.tipoPericiaId } : {}),
+      ...(query.valorMin !== undefined || query.valorMax !== undefined
+        ? {
+            honorariosPrevistosJG: {
+              ...(query.valorMin !== undefined ? { gte: query.valorMin } : {}),
+              ...(query.valorMax !== undefined ? { lte: query.valorMax } : {}),
+            },
+          }
+        : {}),
       ...(query.dateFrom || query.dateTo
         ? { dataNomeacao: { ...(query.dateFrom ? { gte: new Date(query.dateFrom) } : {}), ...(query.dateTo ? { lte: new Date(query.dateTo) } : {}) } }
         : {}),
