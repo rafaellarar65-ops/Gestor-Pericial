@@ -1,10 +1,16 @@
 import { Injectable, NotFoundException } from '@nestjs/common';
 import { PrismaService } from '../../prisma/prisma.service';
+import { RequestContextService } from '../../common/request-context.service';
 import { ConfigResource, CreateConfigDomainDto, UpdateConfigDomainDto } from './dto/config.dto';
 
 @Injectable()
 export class ConfigDomainService {
-  constructor(private readonly prisma: PrismaService) {}
+  private static readonly DASHBOARD_SETTINGS_PROVIDER = 'dashboard_queue_rules';
+
+  constructor(
+    private readonly prisma: PrismaService,
+    private readonly context: RequestContextService,
+  ) {}
 
   findAll(resource: ConfigResource) {
     return this.getDelegate(resource).findMany({ orderBy: { createdAt: 'desc' } });
@@ -58,6 +64,103 @@ export class ConfigDomainService {
     await this.findOne(resource, id);
     await this.getDelegate(resource).delete({ where: { id } });
     return { id, removed: true };
+  }
+
+  async getDashboardSettings() {
+    const tenantId = this.context.get('tenantId') ?? '';
+    const row = await this.prisma.integrationSettings.findUnique({
+      where: {
+        tenantId_provider: {
+          tenantId,
+          provider: ConfigDomainService.DASHBOARD_SETTINGS_PROVIDER,
+        },
+      },
+    });
+
+    return {
+      provider: ConfigDomainService.DASHBOARD_SETTINGS_PROVIDER,
+      config: this.mergeDashboardSettings(row?.config),
+    };
+  }
+
+  async updateDashboardSettings(payload: Record<string, unknown>) {
+    const tenantId = this.context.get('tenantId') ?? '';
+    const config = this.mergeDashboardSettings(payload);
+
+    const saved = await this.prisma.integrationSettings.upsert({
+      where: {
+        tenantId_provider: {
+          tenantId,
+          provider: ConfigDomainService.DASHBOARD_SETTINGS_PROVIDER,
+        },
+      },
+      create: {
+        tenantId,
+        provider: ConfigDomainService.DASHBOARD_SETTINGS_PROVIDER,
+        config,
+        active: true,
+      },
+      update: {
+        config,
+        active: true,
+      },
+    });
+
+    return { provider: saved.provider, config };
+  }
+
+  private mergeDashboardSettings(config: unknown) {
+    const safe = typeof config === 'object' && config !== null ? (config as Record<string, unknown>) : {};
+    const asStringArray = (value: unknown, fallback: string[]) =>
+      Array.isArray(value)
+        ? value.map((item) => String(item).trim()).filter(Boolean)
+        : fallback;
+
+    return {
+      nomeacoesGroups: {
+        avaliar: asStringArray(safe.nomeacoesGroups && (safe.nomeacoesGroups as Record<string, unknown>).avaliar, ['NOVA_NOMEACAO', 'AVALIAR']),
+        aceiteHonorarios: asStringArray(
+          safe.nomeacoesGroups && (safe.nomeacoesGroups as Record<string, unknown>).aceiteHonorarios,
+          ['AGUARDANDO_ACEITE', 'ACEITE_HONORARIOS'],
+        ),
+        majorarHonorarios: asStringArray(
+          safe.nomeacoesGroups && (safe.nomeacoesGroups as Record<string, unknown>).majorarHonorarios,
+          ['A_MAJORAR', 'MAJORAR_HONORARIOS'],
+        ),
+        observacaoExtra: asStringArray(
+          safe.nomeacoesGroups && (safe.nomeacoesGroups as Record<string, unknown>).observacaoExtra,
+          ['OBSERVACAO_EXTRA', 'COM_OBSERVACAO'],
+        ),
+      },
+      dashboard: {
+        avaliarStatusCodigos: asStringArray(
+          safe.dashboard && (safe.dashboard as Record<string, unknown>).avaliarStatusCodigos,
+          ['AVALIAR', 'ST_AVALIAR', 'NOMEADA', 'ACEITA', 'NOVA_NOMEACAO'],
+        ),
+        avaliarStatusNomeTermos: asStringArray(
+          safe.dashboard && (safe.dashboard as Record<string, unknown>).avaliarStatusNomeTermos,
+          ['avaliar'],
+        ),
+        enviarLaudoStatusCodigos: asStringArray(
+          safe.dashboard && (safe.dashboard as Record<string, unknown>).enviarLaudoStatusCodigos,
+          ['ENVIAR_LAUDO', 'EM_LAUDO'],
+        ),
+        enviarLaudoStatusNomeTermos: asStringArray(
+          safe.dashboard && (safe.dashboard as Record<string, unknown>).enviarLaudoStatusNomeTermos,
+          ['enviar laudo', 'em laudo'],
+        ),
+      },
+      filas: {
+        agendamentoBloqueiaTermosStatus: asStringArray(
+          safe.filas && (safe.filas as Record<string, unknown>).agendamentoBloqueiaTermosStatus,
+          ['FINALIZ', 'LAUDO', 'ESCLAR', 'ARQUIV'],
+        ),
+        laudosUrgenciaTermosStatus: asStringArray(
+          safe.filas && (safe.filas as Record<string, unknown>).laudosUrgenciaTermosStatus,
+          ['URGENTE'],
+        ),
+      },
+    };
   }
 
   private getDelegate(resource: ConfigResource): any {

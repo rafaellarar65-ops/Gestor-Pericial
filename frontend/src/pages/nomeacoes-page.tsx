@@ -1,7 +1,9 @@
-import { useState } from 'react';
+import { useMemo, useState } from 'react';
 import { Link } from 'react-router-dom';
 import { Scale, ChevronDown, ChevronUp, ExternalLink, MapPin } from 'lucide-react';
 import { LoadingState } from '@/components/ui/state';
+import { useQuery } from '@tanstack/react-query';
+import { configService } from '@/services/config-service';
 import { useDomainData } from '@/hooks/use-domain-data';
 
 type PericiaItem = Record<string, string | number | undefined>;
@@ -13,7 +15,7 @@ type StatusGroup = {
   statuses: string[];
 };
 
-const STATUS_GROUPS: StatusGroup[] = [
+const DEFAULT_STATUS_GROUPS: StatusGroup[] = [
   {
     label: 'A AVALIAR (NOVAS)',
     color: 'bg-blue-600',
@@ -48,6 +50,20 @@ function matchGroup(item: PericiaItem, group: StatusGroup): boolean {
 const NomeacoesPage = () => {
   const { data = [], isLoading } = useDomainData('nomeacoes', '/nomeacoes');
   const [openGroups, setOpenGroups] = useState<Set<string>>(new Set(['A AVALIAR (NOVAS)']));
+  const { data: dashboardSettings } = useQuery({
+    queryKey: ['system-dashboard-settings'],
+    queryFn: () => configService.getDashboardSettings(),
+  });
+
+  const statusGroups = useMemo<StatusGroup[]>(() => {
+    if (!dashboardSettings) return DEFAULT_STATUS_GROUPS;
+    return [
+      { ...DEFAULT_STATUS_GROUPS[0], statuses: dashboardSettings.nomeacoesGroups.avaliar },
+      { ...DEFAULT_STATUS_GROUPS[1], statuses: dashboardSettings.nomeacoesGroups.aceiteHonorarios },
+      { ...DEFAULT_STATUS_GROUPS[2], statuses: dashboardSettings.nomeacoesGroups.majorarHonorarios },
+      { ...DEFAULT_STATUS_GROUPS[3], statuses: dashboardSettings.nomeacoesGroups.observacaoExtra },
+    ];
+  }, [dashboardSettings]);
 
   const toggle = (label: string) => {
     setOpenGroups((prev) => {
@@ -58,13 +74,13 @@ const NomeacoesPage = () => {
   };
 
   // Distribute items into groups; unmatched go to first group
-  const groups = STATUS_GROUPS.map((sg) => ({
+  const groups = statusGroups.map((sg) => ({
     ...sg,
     items: data.filter((item) => matchGroup(item, sg)),
   }));
   // Items that didn't match any group go to "A AVALIAR"
   const unmatched = data.filter((item) =>
-    !STATUS_GROUPS.some((sg) => matchGroup(item, sg)),
+    !statusGroups.some((sg) => matchGroup(item, sg)),
   );
   groups[0].items = [...groups[0].items, ...unmatched];
 

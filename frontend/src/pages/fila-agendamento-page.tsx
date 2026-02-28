@@ -10,6 +10,7 @@ import { StepSchedule } from '@/pages/fila-agendamento/step-schedule';
 import { StepSelect } from '@/pages/fila-agendamento/step-select';
 import { agendaService } from '@/services/agenda-service';
 import { periciaService } from '@/services/pericia-service';
+import { configService } from '@/services/config-service';
 import type { Pericia } from '@/types/api';
 
 const toCityName = (cidade: Pericia['cidade']) =>
@@ -20,10 +21,10 @@ const toStatusText = (status: Pericia['status']) =>
     ? status
     : (status as { codigo?: string; nome?: string })?.codigo ?? (status as { nome?: string })?.nome ?? '';
 
-const isPendingScheduling = (p: Pericia) => {
+const isPendingScheduling = (p: Pericia, blockedStatusTerms: string[]) => {
   const s = toStatusText(p.status).toUpperCase();
   if (p.dataAgendamento) return false;
-  if (s.includes('FINALIZ') || s.includes('LAUDO') || s.includes('ESCLAR') || s.includes('ARQUIV')) return false;
+  if (blockedStatusTerms.some((term) => s.includes(term.toUpperCase()))) return false;
   return true;
 };
 
@@ -53,10 +54,16 @@ const FilaAgendamentoPage = () => {
     queryFn: () => agendaService.listSchedulingBatches(),
   });
 
+  const { data: dashboardSettings } = useQuery({
+    queryKey: ['system-dashboard-settings'],
+    queryFn: () => configService.getDashboardSettings(),
+  });
+
   const pendingPericias = useMemo(() => {
     const items = (data?.items ?? []) as Pericia[];
-    return items.filter((p) => isPendingScheduling(p));
-  }, [data]);
+    const blockedTerms = dashboardSettings?.filas.agendamentoBloqueiaTermosStatus ?? ['FINALIZ', 'LAUDO', 'ESCLAR', 'ARQUIV'];
+    return items.filter((p) => isPendingScheduling(p, blockedTerms));
+  }, [data, dashboardSettings]);
 
   const cityGroups = useMemo(() => {
     const q = search.trim().toLowerCase();
