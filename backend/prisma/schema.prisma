@@ -1,5 +1,5 @@
 generator client {
-  provider = "prisma-client-js"
+  provider      = "prisma-client-js"
   binaryTargets = ["native", "linux-musl-openssl-3.0.x"]
 }
 
@@ -113,63 +113,72 @@ model Tenant {
   createdBy String?  @db.Uuid
   updatedBy String?  @db.Uuid
 
-  users               User[]
-  userProfiles        UserProfile[]
-  pericias            Pericia[]
-  cidades             Cidade[]
-  varas               Vara[]
-  tribunais           Tribunal[]
-  tiposPericia        TipoPericia[]
-  modalidades         Modalidade[]
-  statuses            Status[]
-  locais              Local[]
-  lawyers             Lawyer[]
-  caseDocuments       CaseDocument[]
-  lawyerOnPericias    LawyerOnPericia[]
-  preLaudos           PreLaudo[]
-  examPlans           ExamPlan[]
-  examsPerformed      ExamPerformed[]
-  physicalManeuvers   PhysicalManeuver[]
-  knowledgeItems      KnowledgeItem[]
-  agendaEvents        AgendaEvent[]
-  agendaTasks         AgendaTask[]
-  recebimentos        Recebimento[]
-  importBatches       ImportBatch[]
-  unmatchedPayments   UnmatchedPayment[]
-  despesas            Despesa[]
-  bankTransactions    BankTransaction[]
-  cashLedgerItems     CashLedgerItem[]
-  paymentProfiles     PaymentProfile[]
-  payers              Payer[]
-  smartRules          SmartRule[]
-  automationRules     AutomationRule[]
-  logStatuses         LogStatus[]
-  activityLogs        ActivityLog[]
-  dailyUsage          DailyUsage[]
-  emailConfigs        EmailConfig[]
-  emailTemplates      EmailTemplate[]
-  integrationSettings IntegrationSettings[]
-  notificationConfigs NotificationConfig[]
-  teleSlots           TeleSlot[]
-  schedulingBatches   SchedulingBatch[]
-  cnjSyncs            CnjSync[]
+  users                    User[]
+  userProfiles             UserProfile[]
+  pericias                 Pericia[]
+  cidades                  Cidade[]
+  varas                    Vara[]
+  tribunais                Tribunal[]
+  tiposPericia             TipoPericia[]
+  modalidades              Modalidade[]
+  statuses                 Status[]
+  locais                   Local[]
+  lawyers                  Lawyer[]
+  caseDocuments            CaseDocument[]
+  lawyerOnPericias         LawyerOnPericia[]
+  preLaudos                PreLaudo[]
+  examPlans                ExamPlan[]
+  examsPerformed           ExamPerformed[]
+  physicalManeuvers        PhysicalManeuver[]
+  knowledgeItems           KnowledgeItem[]
+  agendaEvents             AgendaEvent[]
+  agendaTasks              AgendaTask[]
+  recebimentos             Recebimento[]
+  importBatches            ImportBatch[]
+  unmatchedPayments        UnmatchedPayment[]
+  despesas                 Despesa[]
+  bankTransactions         BankTransaction[]
+  cashLedgerItems          CashLedgerItem[]
+  paymentProfiles          PaymentProfile[]
+  payers                   Payer[]
+  smartRules               SmartRule[]
+  automationRules          AutomationRule[]
+  logStatuses              LogStatus[]
+  activityLogs             ActivityLog[]
+  dailyUsage               DailyUsage[]
+  emailConfigs             EmailConfig[]
+  emailTemplates           EmailTemplate[]
+  integrationSettings      IntegrationSettings[]
+  notificationConfigs      NotificationConfig[]
+  teleSlots                TeleSlot[]
+  telepericiaSlots         TelepericiaSlot[]
+  telepericiaSlotItems     TelepericiaSlotItem[]
+  schedulingBatches        SchedulingBatch[]
+  cnjSyncs                 CnjSync[]
+  whatsappAccounts         WhatsappAccount[]
+  whatsappContacts         WhatsappContact[]
+  whatsappTemplates        WhatsappTemplate[]
+  whatsappMessages         WhatsappMessage[]
+  whatsappJobs             WhatsappJob[]
+  whatsappUnlinkedInbounds WhatsappUnlinkedInbound[]
+  messageTemplates         MessageTemplate[]
 }
 
 model User {
-  id             String      @id @default(uuid()) @db.Uuid
-  tenantId       String      @db.Uuid
-  email          String      @unique
-  passwordHash   String?
-  role           UserRole
-  isActive       Boolean     @default(true)
-  lastLoginAt    DateTime?
-  createdAt      DateTime    @default(now())
-  updatedAt      DateTime    @updatedAt
-  createdBy      String?     @db.Uuid
-  updatedBy      String?     @db.Uuid
-  tenant          Tenant      @relation(fields: [tenantId], references: [id], onDelete: Cascade)
+  id              String       @id @default(uuid()) @db.Uuid
+  tenantId        String       @db.Uuid
+  email           String       @unique
+  passwordHash    String?
+  role            UserRole
+  isActive        Boolean      @default(true)
+  lastLoginAt     DateTime?
+  createdAt       DateTime     @default(now())
+  updatedAt       DateTime     @updatedAt
+  createdBy       String?      @db.Uuid
+  updatedBy       String?      @db.Uuid
+  tenant          Tenant       @relation(fields: [tenantId], references: [id], onDelete: Cascade)
   profile         UserProfile?
-  lockedPreLaudos PreLaudo[]  @relation("PreLaudoLockedBy")
+  lockedPreLaudos PreLaudo[]   @relation("PreLaudoLockedBy")
 
   @@index([tenantId, role])
 }
@@ -209,10 +218,10 @@ model Cidade {
   createdBy String?  @db.Uuid
   updatedBy String?  @db.Uuid
 
-  tenant      Tenant    @relation(fields: [tenantId], references: [id], onDelete: Cascade)
-  varas       Vara[]
-  pericias    Pericia[]
-  locais      Local[]
+  tenant            Tenant            @relation(fields: [tenantId], references: [id], onDelete: Cascade)
+  varas             Vara[]
+  pericias          Pericia[]
+  locais            Local[]
   schedulingBatches SchedulingBatch[]
 
   @@unique([tenantId, nome, uf])
@@ -248,8 +257,8 @@ model Vara {
   createdBy  String?  @db.Uuid
   updatedBy  String?  @db.Uuid
 
-  tenant   Tenant   @relation(fields: [tenantId], references: [id], onDelete: Cascade)
-  cidade   Cidade   @relation(fields: [cidadeId], references: [id], onDelete: Restrict)
+  tenant   Tenant    @relation(fields: [tenantId], references: [id], onDelete: Cascade)
+  cidade   Cidade    @relation(fields: [cidadeId], references: [id], onDelete: Restrict)
   tribunal Tribunal? @relation(fields: [tribunalId], references: [id], onDelete: SetNull)
   pericias Pericia[]
 
@@ -257,18 +266,18 @@ model Vara {
 }
 
 model TipoPericia {
-  id          String   @id @default(uuid()) @db.Uuid
-  tenantId    String   @db.Uuid
-  codigo      String
-  nome        String
-  descricao   String?
-  ativo       Boolean  @default(true)
-  createdAt   DateTime @default(now())
-  updatedAt   DateTime @updatedAt
-  createdBy   String?  @db.Uuid
-  updatedBy   String?  @db.Uuid
+  id        String   @id @default(uuid()) @db.Uuid
+  tenantId  String   @db.Uuid
+  codigo    String
+  nome      String
+  descricao String?
+  ativo     Boolean  @default(true)
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+  createdBy String?  @db.Uuid
+  updatedBy String?  @db.Uuid
 
-  tenant  Tenant    @relation(fields: [tenantId], references: [id], onDelete: Cascade)
+  tenant   Tenant    @relation(fields: [tenantId], references: [id], onDelete: Cascade)
   pericias Pericia[]
 
   @@unique([tenantId, codigo])
@@ -285,7 +294,7 @@ model Modalidade {
   createdBy String?  @db.Uuid
   updatedBy String?  @db.Uuid
 
-  tenant  Tenant    @relation(fields: [tenantId], references: [id], onDelete: Cascade)
+  tenant   Tenant    @relation(fields: [tenantId], references: [id], onDelete: Cascade)
   pericias Pericia[]
 
   @@unique([tenantId, codigo])
@@ -312,21 +321,21 @@ model Status {
 }
 
 model Local {
-  id           String   @id @default(uuid()) @db.Uuid
-  tenantId     String   @db.Uuid
-  cidadeId     String?  @db.Uuid
-  nome         String
-  endereco     String?
-  latitude     Decimal? @db.Decimal(10, 7)
-  longitude    Decimal? @db.Decimal(10, 7)
-  observacoes  String?
-  createdAt    DateTime @default(now())
-  updatedAt    DateTime @updatedAt
-  createdBy    String?  @db.Uuid
-  updatedBy    String?  @db.Uuid
+  id          String   @id @default(uuid()) @db.Uuid
+  tenantId    String   @db.Uuid
+  cidadeId    String?  @db.Uuid
+  nome        String
+  endereco    String?
+  latitude    Decimal? @db.Decimal(10, 7)
+  longitude   Decimal? @db.Decimal(10, 7)
+  observacoes String?
+  createdAt   DateTime @default(now())
+  updatedAt   DateTime @updatedAt
+  createdBy   String?  @db.Uuid
+  updatedBy   String?  @db.Uuid
 
-  tenant   Tenant  @relation(fields: [tenantId], references: [id], onDelete: Cascade)
-  cidade   Cidade? @relation(fields: [cidadeId], references: [id], onDelete: SetNull)
+  tenant   Tenant    @relation(fields: [tenantId], references: [id], onDelete: Cascade)
+  cidade   Cidade?   @relation(fields: [cidadeId], references: [id], onDelete: SetNull)
   pericias Pericia[]
 
   @@index([tenantId, cidadeId])
@@ -337,70 +346,76 @@ model Local {
 // =========================
 
 model Pericia {
-  id                          String               @id @default(uuid()) @db.Uuid
-  tenantId                    String               @db.Uuid
-  processoCNJ                 String
-  processoCNJDigits           String?
-  cidadeId                    String?              @db.Uuid
-  varaId                      String?              @db.Uuid
-  tipoPericiaId               String?              @db.Uuid
-  modalidadeId                String?              @db.Uuid
-  statusId                    String?              @db.Uuid
-  localId                     String?              @db.Uuid
-  juizNome                    String?
-  autorNome                   String?
-  reuNome                     String?
-  periciadoNome               String?
-  periciadoCpf                String?
-  periciadoNascimento         DateTime?
-  observacoes                 String?
-  extraObservation            String?
-  esclarecimentos             Json?
-  checklist                   Json?
-  anexosResumo                Json?
-  isUrgent                    Boolean              @default(false)
-  agendada                    Boolean              @default(false)
-  laudoEnviado                Boolean              @default(false)
-  finalizada                  Boolean              @default(false)
-  pagamentoStatus             PericiaPaymentStatus @default(PENDENTE)
-  honorariosPrevistosJG       Decimal?             @db.Decimal(12, 2)
-  honorariosPrevistosPartes   Decimal?             @db.Decimal(12, 2)
-  valorRecebidoTotal          Decimal?             @db.Decimal(12, 2)
-  dataNomeacao                DateTime?
-  dataAgendamento             DateTime?
-  horaAgendamento             String?
-  dataRealizacao              DateTime?
-  dataEnvioLaudo              DateTime?
-  origemImportacao            String?
-  dataUltimaMovimentacaoCnj   DateTime?
-  metadata                    Json?
-  deletedAt                   DateTime?
-  createdAt                   DateTime             @default(now())
-  updatedAt                   DateTime             @updatedAt
-  createdBy                   String?              @db.Uuid
-  updatedBy                   String?              @db.Uuid
+  id                         String               @id @default(uuid()) @db.Uuid
+  tenantId                   String               @db.Uuid
+  processoCNJ                String
+  processoCNJDigits          String?
+  cidadeId                   String?              @db.Uuid
+  varaId                     String?              @db.Uuid
+  tipoPericiaId              String?              @db.Uuid
+  modalidadeId               String?              @db.Uuid
+  statusId                   String?              @db.Uuid
+  localId                    String?              @db.Uuid
+  juizNome                   String?
+  autorNome                  String?
+  reuNome                    String?
+  periciadoNome              String?
+  periciadoCpf               String?
+  periciadoNascimento        DateTime?
+  observacoes                String?
+  extraObservation           String?
+  esclarecimentos            Json?
+  checklist                  Json?
+  anexosResumo               Json?
+  isUrgent                   Boolean              @default(false)
+  urgentCheckedAt            DateTime?
+  telepericiaStatusChangedAt DateTime?
+  agendada                   Boolean              @default(false)
+  laudoEnviado               Boolean              @default(false)
+  finalizada                 Boolean              @default(false)
+  pagamentoStatus            PericiaPaymentStatus @default(PENDENTE)
+  honorariosPrevistosJG      Decimal?             @db.Decimal(12, 2)
+  honorariosPrevistosPartes  Decimal?             @db.Decimal(12, 2)
+  valorRecebidoTotal         Decimal?             @db.Decimal(12, 2)
+  dataNomeacao               DateTime?
+  dataAgendamento            DateTime?
+  horaAgendamento            String?
+  dataRealizacao             DateTime?
+  dataEnvioLaudo             DateTime?
+  origemImportacao           String?
+  dataUltimaMovimentacaoCnj  DateTime?
+  metadata                   Json?
+  deletedAt                  DateTime?
+  createdAt                  DateTime             @default(now())
+  updatedAt                  DateTime             @updatedAt
+  createdBy                  String?              @db.Uuid
+  updatedBy                  String?              @db.Uuid
 
-  tenant           Tenant            @relation(fields: [tenantId], references: [id], onDelete: Cascade)
-  cidade           Cidade?           @relation(fields: [cidadeId], references: [id], onDelete: SetNull)
-  vara             Vara?             @relation(fields: [varaId], references: [id], onDelete: SetNull)
-  tipoPericia      TipoPericia?      @relation(fields: [tipoPericiaId], references: [id], onDelete: SetNull)
-  modalidade       Modalidade?       @relation(fields: [modalidadeId], references: [id], onDelete: SetNull)
-  status           Status?           @relation(fields: [statusId], references: [id], onDelete: SetNull)
-  local            Local?            @relation(fields: [localId], references: [id], onDelete: SetNull)
+  tenant      Tenant       @relation(fields: [tenantId], references: [id], onDelete: Cascade)
+  cidade      Cidade?      @relation(fields: [cidadeId], references: [id], onDelete: SetNull)
+  vara        Vara?        @relation(fields: [varaId], references: [id], onDelete: SetNull)
+  tipoPericia TipoPericia? @relation(fields: [tipoPericiaId], references: [id], onDelete: SetNull)
+  modalidade  Modalidade?  @relation(fields: [modalidadeId], references: [id], onDelete: SetNull)
+  status      Status?      @relation(fields: [statusId], references: [id], onDelete: SetNull)
+  local       Local?       @relation(fields: [localId], references: [id], onDelete: SetNull)
 
-  lawyers          LawyerOnPericia[]
-  caseDocuments    CaseDocument[]
-  preLaudo         PreLaudo?
-  examPlans        ExamPlan[]
-  examsPerformed   ExamPerformed[]
-  agendaEvents     AgendaEvent[]
-  agendaTasks      AgendaTask[]
-  recebimentos     Recebimento[]
-  despesas         Despesa[]
-  logStatuses      LogStatus[]
-  bankTransactions BankTransaction[]
-  teleSlots        TeleSlot[]
-  cnjSyncs         CnjSync[]
+  lawyers                  LawyerOnPericia[]
+  caseDocuments            CaseDocument[]
+  preLaudo                 PreLaudo?
+  examPlans                ExamPlan[]
+  examsPerformed           ExamPerformed[]
+  agendaEvents             AgendaEvent[]
+  agendaTasks              AgendaTask[]
+  recebimentos             Recebimento[]
+  despesas                 Despesa[]
+  logStatuses              LogStatus[]
+  bankTransactions         BankTransaction[]
+  teleSlots                TeleSlot[]
+  telepericiaSlotItems     TelepericiaSlotItem[]
+  cnjSyncs                 CnjSync[]
+  whatsappMessages         WhatsappMessage[]
+  whatsappJobs             WhatsappJob[]
+  whatsappUnlinkedInbounds WhatsappUnlinkedInbound[]
 
   @@unique([tenantId, processoCNJ])
   @@index([tenantId, processoCNJ])
@@ -408,63 +423,269 @@ model Pericia {
   @@index([tenantId, statusId])
   @@index([tenantId, dataNomeacao])
   @@index([tenantId, dataAgendamento])
+  @@index([tenantId, isUrgent, urgentCheckedAt, telepericiaStatusChangedAt, dataAgendamento, createdAt])
+}
+
+model WhatsappAccount {
+  id                    String   @id @default(uuid()) @db.Uuid
+  tenantId              String   @db.Uuid
+  wabaId                String
+  phoneNumberId         String
+  accessTokenEnc        String
+  webhookVerifyTokenEnc String
+  status                String
+  createdAt             DateTime @default(now())
+  updatedAt             DateTime @updatedAt
+  createdBy             String?  @db.Uuid
+  updatedBy             String?  @db.Uuid
+
+  tenant Tenant @relation(fields: [tenantId], references: [id], onDelete: Cascade)
+
+  @@unique([tenantId, wabaId, phoneNumberId])
+  @@index([tenantId, status])
+}
+
+model WhatsappContact {
+  id            String    @id @default(uuid()) @db.Uuid
+  tenantId      String    @db.Uuid
+  phoneE164     String
+  consentStatus String?
+  consentSource String?
+  consentAt     DateTime?
+  lastInboundAt DateTime?
+  phoneInvalid  Boolean   @default(false)
+  flags         Json?
+  createdAt     DateTime  @default(now())
+  updatedAt     DateTime  @updatedAt
+  createdBy     String?   @db.Uuid
+  updatedBy     String?   @db.Uuid
+
+  tenant           Tenant                    @relation(fields: [tenantId], references: [id], onDelete: Cascade)
+  messages         WhatsappMessage[]
+  unlinkedInbounds WhatsappUnlinkedInbound[]
+
+  @@unique([tenantId, phoneE164])
+  @@index([tenantId, consentStatus])
+}
+
+model WhatsappTemplate {
+  id               String   @id @default(uuid()) @db.Uuid
+  tenantId         String   @db.Uuid
+  name             String
+  language         String
+  category         String?
+  metaTemplateName String?
+  variablesSchema  Json?
+  status           String
+  createdAt        DateTime @default(now())
+  updatedAt        DateTime @updatedAt
+  createdBy        String?  @db.Uuid
+  updatedBy        String?  @db.Uuid
+
+  tenant   Tenant            @relation(fields: [tenantId], references: [id], onDelete: Cascade)
+  messages WhatsappMessage[]
+
+  @@unique([tenantId, name, language])
+  @@index([tenantId, status])
+}
+
+model WhatsappMessage {
+  id                String    @id @default(uuid()) @db.Uuid
+  tenantId          String    @db.Uuid
+  contactId         String?   @db.Uuid
+  periciaId         String?   @db.Uuid
+  appointmentId     String?
+  direction         String
+  messageType       String
+  templateId        String?   @db.Uuid
+  payloadJson       Json?
+  providerMessageId String?
+  status            String
+  erro              String?
+  sentAt            DateTime?
+  deliveredAt       DateTime?
+  readAt            DateTime?
+  failedAt          DateTime?
+  createdAt         DateTime  @default(now())
+  updatedAt         DateTime  @updatedAt
+  createdBy         String?   @db.Uuid
+  updatedBy         String?   @db.Uuid
+
+  tenant   Tenant            @relation(fields: [tenantId], references: [id], onDelete: Cascade)
+  contact  WhatsappContact?  @relation(fields: [contactId], references: [id], onDelete: SetNull)
+  pericia  Pericia?          @relation(fields: [periciaId], references: [id], onDelete: SetNull)
+  template WhatsappTemplate? @relation(fields: [templateId], references: [id], onDelete: SetNull)
+
+  @@index([tenantId, contactId, createdAt])
+  @@index([providerMessageId])
+}
+
+model WhatsappJob {
+  id             String    @id @default(uuid()) @db.Uuid
+  tenantId       String    @db.Uuid
+  periciaId      String?   @db.Uuid
+  appointmentId  String?
+  jobType        String
+  scheduledFor   DateTime?
+  status         String
+  attempts       Int       @default(0)
+  lastError      String?
+  idempotencyKey String    @map("idempotency_key")
+  payloadJson    Json?
+  createdAt      DateTime  @default(now())
+  updatedAt      DateTime  @updatedAt
+  createdBy      String?   @db.Uuid
+  updatedBy      String?   @db.Uuid
+
+  tenant  Tenant   @relation(fields: [tenantId], references: [id], onDelete: Cascade)
+  pericia Pericia? @relation(fields: [periciaId], references: [id], onDelete: SetNull)
+
+  @@unique([idempotencyKey])
+  @@index([tenantId, status, scheduledFor])
+  @@map("whatsapp_jobs")
+}
+
+model WhatsappUnlinkedInbound {
+  id                String   @id @default(uuid()) @db.Uuid
+  tenantId          String   @db.Uuid
+  contactId         String?  @db.Uuid
+  periciaId         String?  @db.Uuid
+  fromPhone         String
+  text              String?
+  providerMessageId String?
+  receivedAt        DateTime
+  status            String
+  createdAt         DateTime @default(now())
+  updatedAt         DateTime @updatedAt
+  createdBy         String?  @db.Uuid
+  updatedBy         String?  @db.Uuid
+
+  tenant  Tenant           @relation(fields: [tenantId], references: [id], onDelete: Cascade)
+  contact WhatsappContact? @relation(fields: [contactId], references: [id], onDelete: SetNull)
+  pericia Pericia?         @relation(fields: [periciaId], references: [id], onDelete: SetNull)
+
+  @@index([tenantId, fromPhone, receivedAt])
+  @@index([providerMessageId])
+}
+
+model MessageTemplate {
+  id           String              @id @default(uuid()) @db.Uuid
+  tenantId     String              @db.Uuid
+  name         String
+  title        String?
+  channel      NotificationChannel
+  body         String
+  placeholders Json?
+  metaMappings Json?
+  active       Boolean             @default(true)
+  createdAt    DateTime            @default(now())
+  updatedAt    DateTime            @updatedAt
+  createdBy    String?             @db.Uuid
+  updatedBy    String?             @db.Uuid
+
+  tenant Tenant @relation(fields: [tenantId], references: [id], onDelete: Cascade)
+
+  @@unique([tenantId, name, channel])
+  @@index([tenantId, channel, active])
+}
+
+model TelepericiaSlot {
+  id        String   @id @default(uuid()) @db.Uuid
+  tenantId  String   @db.Uuid
+  startsAt  DateTime
+  endsAt    DateTime
+  capacity  Int
+  status    String   @default("AVAILABLE")
+  metadata  Json?
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+  createdBy String?  @db.Uuid
+  updatedBy String?  @db.Uuid
+
+  tenant Tenant                @relation(fields: [tenantId], references: [id], onDelete: Cascade)
+  items  TelepericiaSlotItem[]
+
+  @@index([tenantId, startsAt, status])
+}
+
+model TelepericiaSlotItem {
+  id            String    @id @default(uuid()) @db.Uuid
+  tenantId      String    @db.Uuid
+  slotId        String    @db.Uuid
+  periciaId     String?   @db.Uuid
+  appointmentId String?
+  orderIndex    Int
+  startsAt      DateTime?
+  endsAt        DateTime?
+  createdAt     DateTime  @default(now())
+  updatedAt     DateTime  @updatedAt
+  createdBy     String?   @db.Uuid
+  updatedBy     String?   @db.Uuid
+
+  tenant  Tenant          @relation(fields: [tenantId], references: [id], onDelete: Cascade)
+  slot    TelepericiaSlot @relation(fields: [slotId], references: [id], onDelete: Cascade)
+  pericia Pericia?        @relation(fields: [periciaId], references: [id], onDelete: SetNull)
+
+  @@unique([slotId, periciaId])
+  @@unique([slotId, appointmentId])
+  @@index([tenantId, slotId, orderIndex])
 }
 
 model Lawyer {
-  id           String   @id @default(uuid()) @db.Uuid
-  tenantId     String   @db.Uuid
-  nome         String
-  oab          String?
-  ufOab        String?  @db.Char(2)
-  email        String?
-  telefone     String?
-  observacoes  String?
-  createdAt    DateTime @default(now())
-  updatedAt    DateTime @updatedAt
-  createdBy    String?  @db.Uuid
-  updatedBy    String?  @db.Uuid
+  id          String   @id @default(uuid()) @db.Uuid
+  tenantId    String   @db.Uuid
+  nome        String
+  oab         String?
+  ufOab       String?  @db.Char(2)
+  email       String?
+  telefone    String?
+  observacoes String?
+  createdAt   DateTime @default(now())
+  updatedAt   DateTime @updatedAt
+  createdBy   String?  @db.Uuid
+  updatedBy   String?  @db.Uuid
 
-  tenant   Tenant           @relation(fields: [tenantId], references: [id], onDelete: Cascade)
+  tenant   Tenant            @relation(fields: [tenantId], references: [id], onDelete: Cascade)
   pericias LawyerOnPericia[]
 
   @@index([tenantId, nome])
 }
 
 model LawyerOnPericia {
-  id           String   @id @default(uuid()) @db.Uuid
-  tenantId     String   @db.Uuid
-  periciaId    String   @db.Uuid
-  lawyerId     String   @db.Uuid
-  roleInCase   String?
-  createdAt    DateTime @default(now())
-  updatedAt    DateTime @updatedAt
-  createdBy    String?  @db.Uuid
-  updatedBy    String?  @db.Uuid
+  id         String   @id @default(uuid()) @db.Uuid
+  tenantId   String   @db.Uuid
+  periciaId  String   @db.Uuid
+  lawyerId   String   @db.Uuid
+  roleInCase String?
+  createdAt  DateTime @default(now())
+  updatedAt  DateTime @updatedAt
+  createdBy  String?  @db.Uuid
+  updatedBy  String?  @db.Uuid
 
-  tenant   Tenant  @relation(fields: [tenantId], references: [id], onDelete: Cascade)
-  pericia  Pericia @relation(fields: [periciaId], references: [id], onDelete: Cascade)
-  lawyer   Lawyer  @relation(fields: [lawyerId], references: [id], onDelete: Cascade)
+  tenant  Tenant  @relation(fields: [tenantId], references: [id], onDelete: Cascade)
+  pericia Pericia @relation(fields: [periciaId], references: [id], onDelete: Cascade)
+  lawyer  Lawyer  @relation(fields: [lawyerId], references: [id], onDelete: Cascade)
 
   @@unique([tenantId, periciaId, lawyerId])
   @@index([tenantId, lawyerId])
 }
 
 model CaseDocument {
-  id             String   @id @default(uuid()) @db.Uuid
-  tenantId       String   @db.Uuid
-  periciaId      String   @db.Uuid
-  nome           String
-  tipo           String?
-  categoria      String?
-  storagePath    String?
-  mimeType       String?
-  fileSize       Int?
-  hashSha256     String?
-  metadata       Json?
-  createdAt      DateTime @default(now())
-  updatedAt      DateTime @updatedAt
-  createdBy      String?  @db.Uuid
-  updatedBy      String?  @db.Uuid
+  id          String   @id @default(uuid()) @db.Uuid
+  tenantId    String   @db.Uuid
+  periciaId   String   @db.Uuid
+  nome        String
+  tipo        String?
+  categoria   String?
+  storagePath String?
+  mimeType    String?
+  fileSize    Int?
+  hashSha256  String?
+  metadata    Json?
+  createdAt   DateTime @default(now())
+  updatedAt   DateTime @updatedAt
+  createdBy   String?  @db.Uuid
+  updatedBy   String?  @db.Uuid
 
   tenant  Tenant  @relation(fields: [tenantId], references: [id], onDelete: Cascade)
   pericia Pericia @relation(fields: [periciaId], references: [id], onDelete: Cascade)
@@ -473,27 +694,27 @@ model CaseDocument {
 }
 
 model PreLaudo {
-  id               String   @id @default(uuid()) @db.Uuid
-  tenantId         String   @db.Uuid
-  periciaId        String   @unique @db.Uuid
-  sections         Json?
-  aiAnalysis       Json?
-  laudoV2          Json?
-  laudoRealtime    Json?
-  templateName         String?
-  templateDocxPath     String?
-  lastGeneratedPdfPath String?
-  initialProcessJson   Json?
-  initialManeuvers     String[]
-  exameFisicoTexto     String?
+  id                    String    @id @default(uuid()) @db.Uuid
+  tenantId              String    @db.Uuid
+  periciaId             String    @unique @db.Uuid
+  sections              Json?
+  aiAnalysis            Json?
+  laudoV2               Json?
+  laudoRealtime         Json?
+  templateName          String?
+  templateDocxPath      String?
+  lastGeneratedPdfPath  String?
+  initialProcessJson    Json?
+  initialManeuvers      String[]
+  exameFisicoTexto      String?
   discussaoTecnicaTexto String?
-  version              Int      @default(1)
-  lockedByUserId   String?  @db.Uuid
-  lockedAt         DateTime?
-  createdAt        DateTime @default(now())
-  updatedAt        DateTime @updatedAt
-  createdBy        String?  @db.Uuid
-  updatedBy        String?  @db.Uuid
+  version               Int       @default(1)
+  lockedByUserId        String?   @db.Uuid
+  lockedAt              DateTime?
+  createdAt             DateTime  @default(now())
+  updatedAt             DateTime  @updatedAt
+  createdBy             String?   @db.Uuid
+  updatedBy             String?   @db.Uuid
 
   tenant       Tenant  @relation(fields: [tenantId], references: [id], onDelete: Cascade)
   pericia      Pericia @relation(fields: [periciaId], references: [id], onDelete: Cascade)
@@ -503,39 +724,39 @@ model PreLaudo {
 }
 
 model ExamPlan {
-  id           String   @id @default(uuid()) @db.Uuid
-  tenantId     String   @db.Uuid
-  periciaId    String   @db.Uuid
-  title        String
-  description  String?
-  orderIndex   Int      @default(0)
-  payload      Json?
-  createdAt    DateTime @default(now())
-  updatedAt    DateTime @updatedAt
-  createdBy    String?  @db.Uuid
-  updatedBy    String?  @db.Uuid
+  id          String   @id @default(uuid()) @db.Uuid
+  tenantId    String   @db.Uuid
+  periciaId   String   @db.Uuid
+  title       String
+  description String?
+  orderIndex  Int      @default(0)
+  payload     Json?
+  createdAt   DateTime @default(now())
+  updatedAt   DateTime @updatedAt
+  createdBy   String?  @db.Uuid
+  updatedBy   String?  @db.Uuid
 
-  tenant         Tenant         @relation(fields: [tenantId], references: [id], onDelete: Cascade)
-  pericia        Pericia        @relation(fields: [periciaId], references: [id], onDelete: Cascade)
+  tenant         Tenant          @relation(fields: [tenantId], references: [id], onDelete: Cascade)
+  pericia        Pericia         @relation(fields: [periciaId], references: [id], onDelete: Cascade)
   examsPerformed ExamPerformed[]
 
   @@index([tenantId, periciaId])
 }
 
 model ExamPerformed {
-  id                String     @id @default(uuid()) @db.Uuid
-  tenantId          String     @db.Uuid
-  periciaId         String     @db.Uuid
-  examPlanId        String?    @db.Uuid
-  status            ExamStatus @default(NOT_STARTED)
-  findings          Json?
-  transcript        Json?
-  startedAt         DateTime?
-  finishedAt        DateTime?
-  createdAt         DateTime   @default(now())
-  updatedAt         DateTime   @updatedAt
-  createdBy         String?    @db.Uuid
-  updatedBy         String?    @db.Uuid
+  id         String     @id @default(uuid()) @db.Uuid
+  tenantId   String     @db.Uuid
+  periciaId  String     @db.Uuid
+  examPlanId String?    @db.Uuid
+  status     ExamStatus @default(NOT_STARTED)
+  findings   Json?
+  transcript Json?
+  startedAt  DateTime?
+  finishedAt DateTime?
+  createdAt  DateTime   @default(now())
+  updatedAt  DateTime   @updatedAt
+  createdBy  String?    @db.Uuid
+  updatedBy  String?    @db.Uuid
 
   tenant   Tenant    @relation(fields: [tenantId], references: [id], onDelete: Cascade)
   pericia  Pericia   @relation(fields: [periciaId], references: [id], onDelete: Cascade)
@@ -545,19 +766,19 @@ model ExamPerformed {
 }
 
 model PhysicalManeuver {
-  id           String   @id @default(uuid()) @db.Uuid
-  tenantId     String   @db.Uuid
-  name         String
-  category     String?
-  summary      String?
-  procedure    Json?
-  evidence     Json?
-  tags         String[]
-  active       Boolean  @default(true)
-  createdAt    DateTime @default(now())
-  updatedAt    DateTime @updatedAt
-  createdBy    String?  @db.Uuid
-  updatedBy    String?  @db.Uuid
+  id        String   @id @default(uuid()) @db.Uuid
+  tenantId  String   @db.Uuid
+  name      String
+  category  String?
+  summary   String?
+  procedure Json?
+  evidence  Json?
+  tags      String[]
+  active    Boolean  @default(true)
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+  createdBy String?  @db.Uuid
+  updatedBy String?  @db.Uuid
 
   tenant Tenant @relation(fields: [tenantId], references: [id], onDelete: Cascade)
 
@@ -565,18 +786,18 @@ model PhysicalManeuver {
 }
 
 model KnowledgeItem {
-  id           String   @id @default(uuid()) @db.Uuid
-  tenantId     String   @db.Uuid
-  title        String
-  category     String?
-  content      Json?
-  source       String?
-  tags         String[]
-  active       Boolean  @default(true)
-  createdAt    DateTime @default(now())
-  updatedAt    DateTime @updatedAt
-  createdBy    String?  @db.Uuid
-  updatedBy    String?  @db.Uuid
+  id        String   @id @default(uuid()) @db.Uuid
+  tenantId  String   @db.Uuid
+  title     String
+  category  String?
+  content   Json?
+  source    String?
+  tags      String[]
+  active    Boolean  @default(true)
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+  createdBy String?  @db.Uuid
+  updatedBy String?  @db.Uuid
 
   tenant Tenant @relation(fields: [tenantId], references: [id], onDelete: Cascade)
 
@@ -584,23 +805,23 @@ model KnowledgeItem {
 }
 
 model AgendaEvent {
-  id           String         @id @default(uuid()) @db.Uuid
-  tenantId     String         @db.Uuid
-  periciaId    String?        @db.Uuid
-  title        String
-  description  String?
-  type         AgendaEventType
-  startAt      DateTime
-  endAt        DateTime?
-  allDay       Boolean        @default(false)
-  location     String?
-  metadata     Json?
-  createdAt    DateTime       @default(now())
-  updatedAt    DateTime       @updatedAt
-  createdBy    String?        @db.Uuid
-  updatedBy    String?        @db.Uuid
+  id          String          @id @default(uuid()) @db.Uuid
+  tenantId    String          @db.Uuid
+  periciaId   String?         @db.Uuid
+  title       String
+  description String?
+  type        AgendaEventType
+  startAt     DateTime
+  endAt       DateTime?
+  allDay      Boolean         @default(false)
+  location    String?
+  metadata    Json?
+  createdAt   DateTime        @default(now())
+  updatedAt   DateTime        @updatedAt
+  createdBy   String?         @db.Uuid
+  updatedBy   String?         @db.Uuid
 
-  tenant  Tenant  @relation(fields: [tenantId], references: [id], onDelete: Cascade)
+  tenant  Tenant   @relation(fields: [tenantId], references: [id], onDelete: Cascade)
   pericia Pericia? @relation(fields: [periciaId], references: [id], onDelete: SetNull)
 
   @@index([tenantId, startAt])
@@ -608,22 +829,22 @@ model AgendaEvent {
 }
 
 model AgendaTask {
-  id           String          @id @default(uuid()) @db.Uuid
-  tenantId     String          @db.Uuid
-  periciaId    String?         @db.Uuid
-  title        String
-  description  String?
-  dueAt        DateTime?
-  status       AgendaTaskStatus @default(TODO)
-  priority     Int             @default(3)
-  completedAt  DateTime?
-  metadata     Json?
-  createdAt    DateTime        @default(now())
-  updatedAt    DateTime        @updatedAt
-  createdBy    String?         @db.Uuid
-  updatedBy    String?         @db.Uuid
+  id          String           @id @default(uuid()) @db.Uuid
+  tenantId    String           @db.Uuid
+  periciaId   String?          @db.Uuid
+  title       String
+  description String?
+  dueAt       DateTime?
+  status      AgendaTaskStatus @default(TODO)
+  priority    Int              @default(3)
+  completedAt DateTime?
+  metadata    Json?
+  createdAt   DateTime         @default(now())
+  updatedAt   DateTime         @updatedAt
+  createdBy   String?          @db.Uuid
+  updatedBy   String?          @db.Uuid
 
-  tenant  Tenant  @relation(fields: [tenantId], references: [id], onDelete: Cascade)
+  tenant  Tenant   @relation(fields: [tenantId], references: [id], onDelete: Cascade)
   pericia Pericia? @relation(fields: [periciaId], references: [id], onDelete: SetNull)
 
   @@index([tenantId, dueAt, status])
@@ -634,52 +855,52 @@ model AgendaTask {
 // =========================
 
 model Recebimento {
-  id               String         @id @default(uuid()) @db.Uuid
-  tenantId         String         @db.Uuid
-  periciaId        String         @db.Uuid
-  importBatchId    String?        @db.Uuid
-  payerId          String?        @db.Uuid
-  fontePagamento   FontePagamento
-  dataRecebimento  DateTime
-  valorBruto       Decimal        @db.Decimal(12, 2)
-  valorLiquido     Decimal?       @db.Decimal(12, 2)
-  tarifa           Decimal?       @db.Decimal(12, 2)
-  desconto         Decimal?       @db.Decimal(12, 2)
-  descricao        String?
-  metadata         Json?
-  deletedAt        DateTime?
-  createdAt        DateTime       @default(now())
-  updatedAt        DateTime       @updatedAt
-  createdBy        String?        @db.Uuid
-  updatedBy        String?        @db.Uuid
+  id              String         @id @default(uuid()) @db.Uuid
+  tenantId        String         @db.Uuid
+  periciaId       String         @db.Uuid
+  importBatchId   String?        @db.Uuid
+  payerId         String?        @db.Uuid
+  fontePagamento  FontePagamento
+  dataRecebimento DateTime
+  valorBruto      Decimal        @db.Decimal(12, 2)
+  valorLiquido    Decimal?       @db.Decimal(12, 2)
+  tarifa          Decimal?       @db.Decimal(12, 2)
+  desconto        Decimal?       @db.Decimal(12, 2)
+  descricao       String?
+  metadata        Json?
+  deletedAt       DateTime?
+  createdAt       DateTime       @default(now())
+  updatedAt       DateTime       @updatedAt
+  createdBy       String?        @db.Uuid
+  updatedBy       String?        @db.Uuid
 
-  tenant      Tenant      @relation(fields: [tenantId], references: [id], onDelete: Cascade)
-  pericia     Pericia     @relation(fields: [periciaId], references: [id], onDelete: Cascade)
+  tenant      Tenant       @relation(fields: [tenantId], references: [id], onDelete: Cascade)
+  pericia     Pericia      @relation(fields: [periciaId], references: [id], onDelete: Cascade)
   importBatch ImportBatch? @relation(fields: [importBatchId], references: [id], onDelete: SetNull)
-  payer       Payer?      @relation(fields: [payerId], references: [id], onDelete: SetNull)
+  payer       Payer?       @relation(fields: [payerId], references: [id], onDelete: SetNull)
 
   @@index([tenantId, periciaId, dataRecebimento])
 }
 
 model ImportBatch {
-  id                String   @id @default(uuid()) @db.Uuid
-  tenantId          String   @db.Uuid
-  referenceMonth    Int?
-  referenceYear     Int?
-  sourceFileName    String?
-  sourceHash        String?
-  importedAt        DateTime @default(now())
-  totalRecords      Int      @default(0)
-  matchedRecords    Int      @default(0)
-  unmatchedRecords  Int      @default(0)
-  status            String?
-  metadata          Json?
-  createdAt         DateTime @default(now())
-  updatedAt         DateTime @updatedAt
-  createdBy         String?  @db.Uuid
-  updatedBy         String?  @db.Uuid
+  id               String   @id @default(uuid()) @db.Uuid
+  tenantId         String   @db.Uuid
+  referenceMonth   Int?
+  referenceYear    Int?
+  sourceFileName   String?
+  sourceHash       String?
+  importedAt       DateTime @default(now())
+  totalRecords     Int      @default(0)
+  matchedRecords   Int      @default(0)
+  unmatchedRecords Int      @default(0)
+  status           String?
+  metadata         Json?
+  createdAt        DateTime @default(now())
+  updatedAt        DateTime @updatedAt
+  createdBy        String?  @db.Uuid
+  updatedBy        String?  @db.Uuid
 
-  tenant            Tenant            @relation(fields: [tenantId], references: [id], onDelete: Cascade)
+  tenant            Tenant             @relation(fields: [tenantId], references: [id], onDelete: Cascade)
   recebimentos      Recebimento[]
   unmatchedPayments UnmatchedPayment[]
 
@@ -687,84 +908,84 @@ model ImportBatch {
 }
 
 model UnmatchedPayment {
-  id                String             @id @default(uuid()) @db.Uuid
-  tenantId          String             @db.Uuid
-  importBatchId     String?            @db.Uuid
-  rawData           Json
-  amount            Decimal?           @db.Decimal(12, 2)
-  transactionDate   DateTime?
-  payerName         String?
-  matchStatus       PaymentMatchStatus @default(UNMATCHED)
-  notes             String?
-  createdAt         DateTime           @default(now())
-  updatedAt         DateTime           @updatedAt
-  createdBy         String?            @db.Uuid
-  updatedBy         String?            @db.Uuid
+  id              String             @id @default(uuid()) @db.Uuid
+  tenantId        String             @db.Uuid
+  importBatchId   String?            @db.Uuid
+  rawData         Json
+  amount          Decimal?           @db.Decimal(12, 2)
+  transactionDate DateTime?
+  payerName       String?
+  matchStatus     PaymentMatchStatus @default(UNMATCHED)
+  notes           String?
+  createdAt       DateTime           @default(now())
+  updatedAt       DateTime           @updatedAt
+  createdBy       String?            @db.Uuid
+  updatedBy       String?            @db.Uuid
 
-  tenant      Tenant      @relation(fields: [tenantId], references: [id], onDelete: Cascade)
+  tenant      Tenant       @relation(fields: [tenantId], references: [id], onDelete: Cascade)
   importBatch ImportBatch? @relation(fields: [importBatchId], references: [id], onDelete: SetNull)
 
   @@index([tenantId, matchStatus, transactionDate])
 }
 
 model Despesa {
-  id               String    @id @default(uuid()) @db.Uuid
-  tenantId         String    @db.Uuid
-  periciaId        String?   @db.Uuid
-  categoria        String
-  descricao        String
-  valor            Decimal   @db.Decimal(12, 2)
-  dataCompetencia  DateTime
-  comprovantePath  String?
-  metadata         Json?
-  deletedAt        DateTime?
-  createdAt        DateTime  @default(now())
-  updatedAt        DateTime  @updatedAt
-  createdBy        String?   @db.Uuid
-  updatedBy        String?   @db.Uuid
+  id              String    @id @default(uuid()) @db.Uuid
+  tenantId        String    @db.Uuid
+  periciaId       String?   @db.Uuid
+  categoria       String
+  descricao       String
+  valor           Decimal   @db.Decimal(12, 2)
+  dataCompetencia DateTime
+  comprovantePath String?
+  metadata        Json?
+  deletedAt       DateTime?
+  createdAt       DateTime  @default(now())
+  updatedAt       DateTime  @updatedAt
+  createdBy       String?   @db.Uuid
+  updatedBy       String?   @db.Uuid
 
-  tenant  Tenant  @relation(fields: [tenantId], references: [id], onDelete: Cascade)
+  tenant  Tenant   @relation(fields: [tenantId], references: [id], onDelete: Cascade)
   pericia Pericia? @relation(fields: [periciaId], references: [id], onDelete: SetNull)
 
   @@index([tenantId, dataCompetencia])
 }
 
 model BankTransaction {
-  id               String             @id @default(uuid()) @db.Uuid
-  tenantId         String             @db.Uuid
-  periciaId        String?            @db.Uuid
-  externalId       String?
-  direction        FinancialDirection
-  transactionDate  DateTime
-  amount           Decimal            @db.Decimal(12, 2)
-  description      String?
-  document         String?
-  rawPayload       Json?
-  createdAt        DateTime           @default(now())
-  updatedAt        DateTime           @updatedAt
-  createdBy        String?            @db.Uuid
-  updatedBy        String?            @db.Uuid
+  id              String             @id @default(uuid()) @db.Uuid
+  tenantId        String             @db.Uuid
+  periciaId       String?            @db.Uuid
+  externalId      String?
+  direction       FinancialDirection
+  transactionDate DateTime
+  amount          Decimal            @db.Decimal(12, 2)
+  description     String?
+  document        String?
+  rawPayload      Json?
+  createdAt       DateTime           @default(now())
+  updatedAt       DateTime           @updatedAt
+  createdBy       String?            @db.Uuid
+  updatedBy       String?            @db.Uuid
 
-  tenant  Tenant  @relation(fields: [tenantId], references: [id], onDelete: Cascade)
+  tenant  Tenant   @relation(fields: [tenantId], references: [id], onDelete: Cascade)
   pericia Pericia? @relation(fields: [periciaId], references: [id], onDelete: SetNull)
 
   @@index([tenantId, transactionDate, direction])
 }
 
 model CashLedgerItem {
-  id             String             @id @default(uuid()) @db.Uuid
-  tenantId       String             @db.Uuid
-  direction      FinancialDirection
-  amount         Decimal            @db.Decimal(12, 2)
-  occurredAt     DateTime
-  referenceType  String?
-  referenceId    String?
-  note           String?
-  metadata       Json?
-  createdAt      DateTime           @default(now())
-  updatedAt      DateTime           @updatedAt
-  createdBy      String?            @db.Uuid
-  updatedBy      String?            @db.Uuid
+  id            String             @id @default(uuid()) @db.Uuid
+  tenantId      String             @db.Uuid
+  direction     FinancialDirection
+  amount        Decimal            @db.Decimal(12, 2)
+  occurredAt    DateTime
+  referenceType String?
+  referenceId   String?
+  note          String?
+  metadata      Json?
+  createdAt     DateTime           @default(now())
+  updatedAt     DateTime           @updatedAt
+  createdBy     String?            @db.Uuid
+  updatedBy     String?            @db.Uuid
 
   tenant Tenant @relation(fields: [tenantId], references: [id], onDelete: Cascade)
 
@@ -772,20 +993,20 @@ model CashLedgerItem {
 }
 
 model PaymentProfile {
-  id               String   @id @default(uuid()) @db.Uuid
-  tenantId         String   @db.Uuid
-  legalName        String
-  document         String?
-  pixKey           String?
-  bankName         String?
-  branch           String?
-  accountNumber    String?
-  accountType      String?
-  metadata         Json?
-  createdAt        DateTime @default(now())
-  updatedAt        DateTime @updatedAt
-  createdBy        String?  @db.Uuid
-  updatedBy        String?  @db.Uuid
+  id            String   @id @default(uuid()) @db.Uuid
+  tenantId      String   @db.Uuid
+  legalName     String
+  document      String?
+  pixKey        String?
+  bankName      String?
+  branch        String?
+  accountNumber String?
+  accountType   String?
+  metadata      Json?
+  createdAt     DateTime @default(now())
+  updatedAt     DateTime @updatedAt
+  createdBy     String?  @db.Uuid
+  updatedBy     String?  @db.Uuid
 
   tenant Tenant @relation(fields: [tenantId], references: [id], onDelete: Cascade)
 
@@ -793,20 +1014,20 @@ model PaymentProfile {
 }
 
 model Payer {
-  id             String   @id @default(uuid()) @db.Uuid
-  tenantId       String   @db.Uuid
-  nome           String
-  documento      String?
-  tipo           String?
-  email          String?
-  phone          String?
-  metadata       Json?
-  createdAt      DateTime @default(now())
-  updatedAt      DateTime @updatedAt
-  createdBy      String?  @db.Uuid
-  updatedBy      String?  @db.Uuid
+  id        String   @id @default(uuid()) @db.Uuid
+  tenantId  String   @db.Uuid
+  nome      String
+  documento String?
+  tipo      String?
+  email     String?
+  phone     String?
+  metadata  Json?
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+  createdBy String?  @db.Uuid
+  updatedBy String?  @db.Uuid
 
-  tenant       Tenant       @relation(fields: [tenantId], references: [id], onDelete: Cascade)
+  tenant       Tenant        @relation(fields: [tenantId], references: [id], onDelete: Cascade)
   recebimentos Recebimento[]
 
   @@index([tenantId, nome])
@@ -894,16 +1115,16 @@ model ActivityLog {
 }
 
 model DailyUsage {
-  id             String   @id @default(uuid()) @db.Uuid
-  tenantId       String   @db.Uuid
-  usageDate      DateTime
-  metricKey      String
-  metricValue    Int
-  context        Json?
-  createdAt      DateTime @default(now())
-  updatedAt      DateTime @updatedAt
-  createdBy      String?  @db.Uuid
-  updatedBy      String?  @db.Uuid
+  id          String   @id @default(uuid()) @db.Uuid
+  tenantId    String   @db.Uuid
+  usageDate   DateTime
+  metricKey   String
+  metricValue Int
+  context     Json?
+  createdAt   DateTime @default(now())
+  updatedAt   DateTime @updatedAt
+  createdBy   String?  @db.Uuid
+  updatedBy   String?  @db.Uuid
 
   tenant Tenant @relation(fields: [tenantId], references: [id], onDelete: Cascade)
 
@@ -930,18 +1151,18 @@ model EmailConfig {
 }
 
 model EmailTemplate {
-  id          String   @id @default(uuid()) @db.Uuid
-  tenantId    String   @db.Uuid
-  key         String
-  subject     String
-  bodyHtml    String
-  bodyText    String?
-  variables   Json?
-  active      Boolean  @default(true)
-  createdAt   DateTime @default(now())
-  updatedAt   DateTime @updatedAt
-  createdBy   String?  @db.Uuid
-  updatedBy   String?  @db.Uuid
+  id        String   @id @default(uuid()) @db.Uuid
+  tenantId  String   @db.Uuid
+  key       String
+  subject   String
+  bodyHtml  String
+  bodyText  String?
+  variables Json?
+  active    Boolean  @default(true)
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+  createdBy String?  @db.Uuid
+  updatedBy String?  @db.Uuid
 
   tenant Tenant @relation(fields: [tenantId], references: [id], onDelete: Cascade)
 
@@ -966,15 +1187,15 @@ model IntegrationSettings {
 }
 
 model NotificationConfig {
-  id          String              @id @default(uuid()) @db.Uuid
-  tenantId    String              @db.Uuid
-  channel     NotificationChannel
-  enabled     Boolean             @default(true)
-  config      Json?
-  createdAt   DateTime            @default(now())
-  updatedAt   DateTime            @updatedAt
-  createdBy   String?             @db.Uuid
-  updatedBy   String?             @db.Uuid
+  id        String              @id @default(uuid()) @db.Uuid
+  tenantId  String              @db.Uuid
+  channel   NotificationChannel
+  enabled   Boolean             @default(true)
+  config    Json?
+  createdAt DateTime            @default(now())
+  updatedAt DateTime            @updatedAt
+  createdBy String?             @db.Uuid
+  updatedBy String?             @db.Uuid
 
   tenant Tenant @relation(fields: [tenantId], references: [id], onDelete: Cascade)
 
@@ -982,38 +1203,38 @@ model NotificationConfig {
 }
 
 model TeleSlot {
-  id               String         @id @default(uuid()) @db.Uuid
-  tenantId         String         @db.Uuid
-  periciaId        String?        @db.Uuid
-  startAt          DateTime
-  endAt            DateTime
-  status           TeleSlotStatus @default(AVAILABLE)
-  meetingUrl       String?
-  accessCode       String?
-  platform         String?
-  metadata         Json?
-  createdAt        DateTime       @default(now())
-  updatedAt        DateTime       @updatedAt
-  createdBy        String?        @db.Uuid
-  updatedBy        String?        @db.Uuid
+  id         String         @id @default(uuid()) @db.Uuid
+  tenantId   String         @db.Uuid
+  periciaId  String?        @db.Uuid
+  startAt    DateTime
+  endAt      DateTime
+  status     TeleSlotStatus @default(AVAILABLE)
+  meetingUrl String?
+  accessCode String?
+  platform   String?
+  metadata   Json?
+  createdAt  DateTime       @default(now())
+  updatedAt  DateTime       @updatedAt
+  createdBy  String?        @db.Uuid
+  updatedBy  String?        @db.Uuid
 
-  tenant  Tenant  @relation(fields: [tenantId], references: [id], onDelete: Cascade)
+  tenant  Tenant   @relation(fields: [tenantId], references: [id], onDelete: Cascade)
   pericia Pericia? @relation(fields: [periciaId], references: [id], onDelete: SetNull)
 
   @@index([tenantId, startAt, status])
 }
 
 model SchedulingBatch {
-  id                 String   @id @default(uuid()) @db.Uuid
-  tenantId           String   @db.Uuid
-  cidadeId           String?  @db.Uuid
-  dateRef            DateTime
-  criteriaJson       Json?
-  resultJson         Json?
-  createdAt          DateTime @default(now())
-  updatedAt          DateTime @updatedAt
-  createdBy          String?  @db.Uuid
-  updatedBy          String?  @db.Uuid
+  id           String   @id @default(uuid()) @db.Uuid
+  tenantId     String   @db.Uuid
+  cidadeId     String?  @db.Uuid
+  dateRef      DateTime
+  criteriaJson Json?
+  resultJson   Json?
+  createdAt    DateTime @default(now())
+  updatedAt    DateTime @updatedAt
+  createdBy    String?  @db.Uuid
+  updatedBy    String?  @db.Uuid
 
   tenant Tenant  @relation(fields: [tenantId], references: [id], onDelete: Cascade)
   cidade Cidade? @relation(fields: [cidadeId], references: [id], onDelete: SetNull)
@@ -1022,21 +1243,21 @@ model SchedulingBatch {
 }
 
 model CnjSync {
-  id                 String        @id @default(uuid()) @db.Uuid
-  tenantId           String        @db.Uuid
-  periciaId          String?       @db.Uuid
-  status             CnjSyncStatus @default(PENDING)
-  lastSyncAt         DateTime?
-  nextSyncAt         DateTime?
-  retries            Int           @default(0)
-  message            String?
-  payload            Json?
-  createdAt          DateTime      @default(now())
-  updatedAt          DateTime      @updatedAt
-  createdBy          String?       @db.Uuid
-  updatedBy          String?       @db.Uuid
+  id         String        @id @default(uuid()) @db.Uuid
+  tenantId   String        @db.Uuid
+  periciaId  String?       @db.Uuid
+  status     CnjSyncStatus @default(PENDING)
+  lastSyncAt DateTime?
+  nextSyncAt DateTime?
+  retries    Int           @default(0)
+  message    String?
+  payload    Json?
+  createdAt  DateTime      @default(now())
+  updatedAt  DateTime      @updatedAt
+  createdBy  String?       @db.Uuid
+  updatedBy  String?       @db.Uuid
 
-  tenant  Tenant  @relation(fields: [tenantId], references: [id], onDelete: Cascade)
+  tenant  Tenant   @relation(fields: [tenantId], references: [id], onDelete: Cascade)
   pericia Pericia? @relation(fields: [periciaId], references: [id], onDelete: SetNull)
 
   @@index([tenantId, status, nextSyncAt])
