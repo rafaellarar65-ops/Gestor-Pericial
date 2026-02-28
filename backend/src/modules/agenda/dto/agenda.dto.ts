@@ -102,14 +102,15 @@ export class BatchScheduleItemDto {
   @IsUUID()
   periciaId?: string;
 
-  @ApiProperty()
+  @ApiPropertyOptional()
+  @IsOptional()
   @IsString()
-  @IsNotEmpty()
-  title!: string;
+  title?: string;
 
-  @ApiProperty({ enum: AgendaEventType })
+  @ApiPropertyOptional({ enum: AgendaEventType })
+  @IsOptional()
   @IsEnum(AgendaEventType)
-  type!: AgendaEventType;
+  type?: AgendaEventType;
 
   @ApiProperty()
   @IsDateString()
@@ -121,10 +122,58 @@ export class BatchScheduleItemDto {
   endAt?: string;
 }
 
+export class BatchScheduleMetadataDto {
+  @ApiPropertyOptional()
+  @IsOptional()
+  @IsArray()
+  cityNames?: string[];
+
+  @ApiPropertyOptional()
+  @IsOptional()
+  @IsString()
+  date?: string;
+
+  @ApiPropertyOptional()
+  @IsOptional()
+  @IsString()
+  startTime?: string;
+
+  @ApiPropertyOptional()
+  @IsOptional()
+  @IsInt()
+  durationMinutes?: number;
+
+  @ApiPropertyOptional()
+  @IsOptional()
+  @IsInt()
+  intervalMinutes?: number;
+
+  @ApiPropertyOptional()
+  @IsOptional()
+  @IsString()
+  location?: string;
+
+  @ApiPropertyOptional()
+  @IsOptional()
+  @IsString()
+  modalidade?: string;
+
+  @ApiPropertyOptional()
+  @IsOptional()
+  @IsString()
+  source?: string;
+}
+
 export class BatchScheduleDto {
   @ApiProperty({ type: [BatchScheduleItemDto] })
   @IsArray()
   @ValidateNested({ each: true })
   @Type(() => BatchScheduleItemDto)
   items!: BatchScheduleItemDto[];
+
+  @ApiPropertyOptional({ type: BatchScheduleMetadataDto })
+  @IsOptional()
+  @ValidateNested()
+  @Type(() => BatchScheduleMetadataDto)
+  metadata?: BatchScheduleMetadataDto;
 }
