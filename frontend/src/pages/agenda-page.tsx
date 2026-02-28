@@ -50,6 +50,11 @@ const mapAgendaRow = (item: Record<string, string | number | undefined>, index: 
   status: inferStatus(item),
 });
 
+const escapeCsvValue = (value: string) => {
+  const normalized = value.replaceAll('"', '""');
+  return /[";\n]/.test(normalized) ? `"${normalized}"` : normalized;
+};
+
 const Page = () => {
   const { data = [], isLoading, isError } = useDomainData('agenda', '/agenda/events');
   const [busca, setBusca] = useState('');
@@ -73,6 +78,24 @@ const Page = () => {
     [rows, busca, status, periodo],
   );
 
+  const handleExportAgenda = () => {
+    const headers = ['Título', 'Tipo', 'Início', 'Fim', 'Local', 'Status'];
+    const content = filteredRows.map((row) =>
+      [row.titulo, row.tipo, row.inicio, row.fim, row.local, row.status].map(escapeCsvValue).join(';'),
+    );
+
+    const csv = [headers.join(';'), ...content].join('\n');
+    const blob = new Blob([csv], { type: 'text/csv;charset=utf-8;' });
+    const downloadUrl = URL.createObjectURL(blob);
+    const anchor = document.createElement('a');
+
+    anchor.href = downloadUrl;
+    anchor.download = `agenda-${periodo || 'todos-periodos'}-${status}.csv`;
+    anchor.click();
+
+    URL.revokeObjectURL(downloadUrl);
+  };
+
   if (isLoading) return <LoadingState />;
   if (isError) return <ErrorState message="Erro ao carregar agenda." />;
 
@@ -84,7 +107,9 @@ const Page = () => {
           <p className="text-sm text-muted-foreground">Gerencie eventos, horários e compromissos operacionais.</p>
         </div>
         <div className="flex gap-2">
-          <Button variant="outline">Exportar agenda</Button>
+          <Button disabled={filteredRows.length === 0} onClick={handleExportAgenda} variant="outline">
+            Exportar agenda
+          </Button>
           <Button>Criar evento</Button>
         </div>
       </header>
