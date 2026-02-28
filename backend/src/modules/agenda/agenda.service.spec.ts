@@ -1,5 +1,5 @@
 import { NotFoundException } from '@nestjs/common';
-import { AgendaEventType } from '@prisma/client';
+import { AgendaEventStatus, AgendaEventType } from '@prisma/client';
 import { AgendaService } from './agenda.service';
 
 describe('AgendaService', () => {
@@ -17,7 +17,9 @@ describe('AgendaService', () => {
     $transaction: jest.fn(),
   } as any;
 
-  const context = { get: jest.fn().mockReturnValue('t-1') };
+  const context = {
+    get: jest.fn((key: string) => (key === 'tenantId' ? 't-1' : 'u-1')),
+  };
 
   let service: AgendaService;
 
@@ -41,5 +43,35 @@ describe('AgendaService', () => {
   it('throws NotFoundException when updating missing event (edge case)', async () => {
     prisma.agendaEvent.findFirst.mockResolvedValue(null);
     await expect(service.updateEvent('404', { title: 'x' })).rejects.toThrow(NotFoundException);
+  });
+
+  it('appends status history when status changes', async () => {
+    prisma.agendaEvent.findFirst.mockResolvedValue({
+      id: 'ev-1',
+      status: AgendaEventStatus.AGENDADA,
+      statusHistory: [],
+    });
+    prisma.agendaEvent.update.mockResolvedValue({ id: 'ev-1' });
+
+    await service.updateEvent('ev-1', {
+      status: AgendaEventStatus.CANCELADA,
+      statusChangeReason: 'Paciente não compareceu',
+    });
+
+    expect(prisma.agendaEvent.update).toHaveBeenCalledWith(
+      expect.objectContaining({
+        data: expect.objectContaining({
+          status: AgendaEventStatus.CANCELADA,
+          statusHistory: [
+            expect.objectContaining({
+              from: AgendaEventStatus.AGENDADA,
+              to: AgendaEventStatus.CANCELADA,
+              reason: 'Paciente não compareceu',
+              changedBy: 'u-1',
+            }),
+          ],
+        }),
+      }),
+    );
   });
 });

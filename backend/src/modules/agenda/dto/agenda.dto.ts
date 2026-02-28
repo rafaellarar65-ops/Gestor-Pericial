@@ -1,8 +1,15 @@
 import { ApiProperty, ApiPropertyOptional } from '@nestjs/swagger';
-import { AgendaEventType, AgendaTaskStatus } from '@prisma/client';
+import {
+  AgendaEventSource,
+  AgendaEventStatus,
+  AgendaEventType,
+  AgendaTaskStatus,
+  ExternalSyncStatus,
+} from '@prisma/client';
 import { Type } from 'class-transformer';
 import {
   IsArray,
+  IsBoolean,
   IsDateString,
   IsEnum,
   IsInt,
@@ -42,6 +49,66 @@ export class CreateAgendaEventDto {
   @ApiPropertyOptional()
   @IsOptional()
   @IsString()
+  cnjId?: string;
+
+  @ApiPropertyOptional()
+  @IsOptional()
+  @IsUUID()
+  cityId?: string;
+
+  @ApiPropertyOptional()
+  @IsOptional()
+  @IsString()
+  city?: string;
+
+  @ApiPropertyOptional({ enum: AgendaEventStatus })
+  @IsOptional()
+  @IsEnum(AgendaEventStatus)
+  status?: AgendaEventStatus;
+
+  @ApiPropertyOptional({ enum: AgendaEventSource })
+  @IsOptional()
+  @IsEnum(AgendaEventSource)
+  source?: AgendaEventSource;
+
+  @ApiPropertyOptional()
+  @IsOptional()
+  @IsBoolean()
+  aiSuggested?: boolean;
+
+  @ApiPropertyOptional({ enum: ExternalSyncStatus })
+  @IsOptional()
+  @IsEnum(ExternalSyncStatus)
+  syncStatus?: ExternalSyncStatus;
+
+  @ApiPropertyOptional()
+  @IsOptional()
+  @IsString()
+  syncErrorMessage?: string;
+
+  @ApiPropertyOptional()
+  @IsOptional()
+  @IsString()
+  externalProvider?: string;
+
+  @ApiPropertyOptional()
+  @IsOptional()
+  @IsString()
+  externalEventId?: string;
+
+  @ApiPropertyOptional()
+  @IsOptional()
+  @IsString()
+  externalEtag?: string;
+
+  @ApiPropertyOptional()
+  @IsOptional()
+  @IsDateString()
+  externalLastModifiedAt?: string;
+
+  @ApiPropertyOptional()
+  @IsOptional()
+  @IsString()
   description?: string;
 }
 
@@ -65,6 +132,71 @@ export class UpdateAgendaEventDto {
   @IsOptional()
   @IsDateString()
   endAt?: string;
+
+  @ApiPropertyOptional({ enum: AgendaEventStatus })
+  @IsOptional()
+  @IsEnum(AgendaEventStatus)
+  status?: AgendaEventStatus;
+
+  @ApiPropertyOptional({ description: 'Motivo da alteração de status' })
+  @IsOptional()
+  @IsString()
+  statusChangeReason?: string;
+
+  @ApiPropertyOptional()
+  @IsOptional()
+  @IsString()
+  cnjId?: string;
+
+  @ApiPropertyOptional()
+  @IsOptional()
+  @IsUUID()
+  cityId?: string;
+
+  @ApiPropertyOptional()
+  @IsOptional()
+  @IsString()
+  city?: string;
+
+  @ApiPropertyOptional({ enum: AgendaEventSource })
+  @IsOptional()
+  @IsEnum(AgendaEventSource)
+  source?: AgendaEventSource;
+
+  @ApiPropertyOptional()
+  @IsOptional()
+  @IsBoolean()
+  aiSuggested?: boolean;
+
+  @ApiPropertyOptional({ enum: ExternalSyncStatus })
+  @IsOptional()
+  @IsEnum(ExternalSyncStatus)
+  syncStatus?: ExternalSyncStatus;
+
+  @ApiPropertyOptional()
+  @IsOptional()
+  @IsString()
+  syncErrorMessage?: string;
+
+  @ApiPropertyOptional()
+  @IsOptional()
+  @IsString()
+  externalProvider?: string;
+
+  @ApiPropertyOptional()
+  @IsOptional()
+  @IsString()
+  externalEventId?: string;
+
+  @ApiPropertyOptional()
+  @IsOptional()
+  @IsString()
+  externalEtag?: string;
+
+  @ApiPropertyOptional()
+  @IsOptional()
+  @IsDateString()
+  externalLastModifiedAt?: string;
 }
 
 export class CreateAgendaTaskDto {
@@ -102,6 +234,21 @@ export class BatchScheduleItemDto {
   @IsUUID()
   periciaId?: string;
 
+  @ApiPropertyOptional()
+  @IsOptional()
+  @IsString()
+  cnjId?: string;
+
+  @ApiPropertyOptional()
+  @IsOptional()
+  @IsUUID()
+  cityId?: string;
+
+  @ApiPropertyOptional()
+  @IsOptional()
+  @IsString()
+  city?: string;
+
   @ApiProperty()
   @IsString()
   @IsNotEmpty()
@@ -110,6 +257,46 @@ export class BatchScheduleItemDto {
   @ApiProperty({ enum: AgendaEventType })
   @IsEnum(AgendaEventType)
   type!: AgendaEventType;
+
+  @ApiPropertyOptional({ enum: AgendaEventStatus })
+  @IsOptional()
+  @IsEnum(AgendaEventStatus)
+  status?: AgendaEventStatus;
+
+  @ApiPropertyOptional({ enum: AgendaEventSource })
+  @IsOptional()
+  @IsEnum(AgendaEventSource)
+  source?: AgendaEventSource;
+
+  @ApiPropertyOptional()
+  @IsOptional()
+  @IsBoolean()
+  aiSuggested?: boolean;
+
+  @ApiPropertyOptional({ enum: ExternalSyncStatus })
+  @IsOptional()
+  @IsEnum(ExternalSyncStatus)
+  syncStatus?: ExternalSyncStatus;
+
+  @ApiPropertyOptional()
+  @IsOptional()
+  @IsString()
+  externalProvider?: string;
+
+  @ApiPropertyOptional()
+  @IsOptional()
+  @IsString()
+  externalEventId?: string;
+
+  @ApiPropertyOptional()
+  @IsOptional()
+  @IsString()
+  externalEtag?: string;
+
+  @ApiPropertyOptional()
+  @IsOptional()
+  @IsDateString()
+  externalLastModifiedAt?: string;
 
   @ApiProperty()
   @IsDateString()
