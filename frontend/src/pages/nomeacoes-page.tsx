@@ -31,30 +31,30 @@ const STATUS_GROUPS: StatusGroup[] = [
     label: 'A AVALIAR (NOVAS)',
     color: 'bg-blue-600',
     textColor: 'text-white',
-    statuses: ['AVALIAR'],
+    statuses: ['AVALIAR', 'NOVA_NOMEACAO', 'NOMEACAO'],
   },
   {
     label: 'AGUARDANDO ACEITE HONORÁRIOS',
     color: 'bg-yellow-500',
     textColor: 'text-white',
-    statuses: ['AGUARDANDO_ACEITE', 'ACEITE_HONORARIOS'],
+    statuses: ['AGUARDANDO_ACEITE', 'ACEITE_HONORARIOS', 'ACEITE'],
   },
   {
     label: 'A MAJORAR HONORÁRIOS',
     color: 'bg-orange-500',
     textColor: 'text-white',
-    statuses: ['A_MAJORAR', 'MAJORAR_HONORARIOS'],
+    statuses: ['A_MAJORAR', 'MAJORAR_HONORARIOS', 'MAJORAR'],
   },
   {
     label: 'COM OBSERVAÇÃO EXTRA',
     color: 'bg-pink-600',
     textColor: 'text-white',
-    statuses: ['OBSERVACAO_EXTRA', 'COM_OBSERVACAO'],
+    statuses: ['OBSERVACAO_EXTRA', 'COM_OBSERVACAO', 'OBSERVACAO'],
   },
 ];
 
 function getStatusCode(item: PericiaItem): string {
-  const rawStatus = item['status'];
+  const rawStatus = item.status;
 
   if (typeof rawStatus === 'string' || typeof rawStatus === 'number') {
     return String(rawStatus).toUpperCase();
@@ -62,8 +62,8 @@ function getStatusCode(item: PericiaItem): string {
 
   if (rawStatus && typeof rawStatus === 'object') {
     const statusObject = rawStatus as Record<string, unknown>;
-    const statusCode = statusObject['codigo'];
-    const statusName = statusObject['nome'];
+    const statusCode = statusObject.codigo;
+    const statusName = statusObject.nome;
 
     if (typeof statusCode === 'string' || typeof statusCode === 'number') {
       return String(statusCode).toUpperCase();
@@ -85,14 +85,20 @@ function matchGroup(item: PericiaItem, group: StatusGroup): boolean {
 const NomeacoesPage = () => {
   const [openGroups, setOpenGroups] = useState<Set<string>>(new Set(['A AVALIAR (NOVAS)']));
 
-  const { data, isLoading, isFetchingNextPage, hasNextPage, fetchNextPage } = useInfiniteQuery({
+  const {
+    data,
+    isLoading,
+    isFetchingNextPage,
+    hasNextPage,
+    fetchNextPage,
+  } = useInfiniteQuery({
     queryKey: ['nomeacoes', PAGE_SIZE],
     initialPageParam: 1,
     queryFn: async ({ pageParam }) => {
-      const { data } = await apiClient.get<NomeacoesResponse>('/nomeacoes', {
+      const response = await apiClient.get<NomeacoesResponse>('/nomeacoes', {
         params: { page: pageParam, limit: PAGE_SIZE },
       });
-      return data;
+      return response.data;
     },
     getNextPageParam: (lastPage) => {
       const pagination = lastPage.pagination;
@@ -108,7 +114,6 @@ const NomeacoesPage = () => {
   );
 
   const total = data?.pages?.[0]?.pagination?.total ?? allItems.length;
-
   const statusTotals = data?.pages?.[0]?.statusTotals ?? {};
 
   const groups = useMemo(
@@ -152,8 +157,12 @@ const NomeacoesPage = () => {
           </div>
           <div>
             <p className="text-xl font-bold tracking-wide">CENTRAL DE NOMEAÇÕES</p>
-            <p className="text-sm text-white/70">Triagem inicial, aceites, majorações e pendências com observações.</p>
-            <p className="text-xs text-white/70">Exibindo {loadedCount} de {total} nomeações</p>
+            <p className="text-sm text-white/70">
+              Triagem inicial, aceites, majorações e pendências com observações.
+            </p>
+            <p className="text-xs text-white/70">
+              Exibindo {loadedCount} de {total} nomeações
+            </p>
           </div>
         </div>
       </div>
@@ -161,11 +170,13 @@ const NomeacoesPage = () => {
       <div className="space-y-3">
         {groups.map((group) => {
           const isOpen = openGroups.has(group.label);
+
           return (
             <div className="overflow-hidden rounded-xl border bg-white shadow-sm" key={group.label}>
               <button
                 className={`flex w-full items-center justify-between px-5 py-4 ${group.color} ${group.textColor}`}
                 onClick={() => toggle(group.label)}
+                type="button"
               >
                 <div className="flex items-center gap-3">
                   <Scale size={18} />
@@ -182,31 +193,44 @@ const NomeacoesPage = () => {
               {isOpen && (
                 <div className="p-4">
                   {group.items.length === 0 ? (
-                    <p className="py-4 text-center text-sm text-gray-400">Nenhum processo nesta categoria.</p>
+                    <p className="py-4 text-center text-sm text-gray-400">
+                      Nenhum processo nesta categoria.
+                    </p>
                   ) : (
                     <div className="grid grid-cols-1 gap-3 sm:grid-cols-2 lg:grid-cols-3">
                       {group.items.map((item, i) => (
                         <div
                           className="rounded-lg border border-gray-100 bg-gray-50 p-4 transition-colors hover:border-blue-200 hover:bg-blue-50"
-                          key={i}
+                          key={String(item.id ?? i)}
                         >
                           <div className="mb-2 flex items-start justify-between">
-                            <p className="font-mono text-xs text-gray-400">{String(item['processoCNJ'] ?? item['id'] ?? `#${i + 1}`)}</p>
-                            {item['id'] && (
-                              <Link className="text-gray-400 hover:text-blue-600" to={`/pericias/${item['id']}`}>
+                            <p className="font-mono text-xs text-gray-400">
+                              {String(item.processoCNJ ?? item.id ?? `#${i + 1}`)}
+                            </p>
+                            {item.id && (
+                              <Link
+                                className="text-gray-400 hover:text-blue-600"
+                                to={`/pericias/${String(item.id)}`}
+                              >
                                 <ExternalLink size={14} />
                               </Link>
                             )}
                           </div>
-                          <p className="font-semibold text-gray-800">{String(item['autorNome'] ?? item['nome'] ?? '—')}</p>
-                          {item['reuNome'] && <p className="mt-0.5 text-xs text-gray-500">vs {String(item['reuNome'])}</p>}
-                          {item['cidade'] && (
+
+                          <p className="font-semibold text-gray-800">
+                            {String(item.autorNome ?? item.nome ?? '—')}
+                          </p>
+
+                          {item.cidade && (
                             <div className="mt-2 flex items-center gap-1 text-xs text-gray-400">
                               <MapPin size={11} />
-                              {String(item['cidade'])}
+                              {String(item.cidade)}
                             </div>
                           )}
-                          <p className="mt-2 text-xs font-medium text-blue-600">Status: {getStatusCode(item) || '—'}</p>
+
+                          <p className="mt-2 text-xs font-medium text-blue-600">
+                            Status: {getStatusCode(item) || '—'}
+                          </p>
                         </div>
                       ))}
                     </div>

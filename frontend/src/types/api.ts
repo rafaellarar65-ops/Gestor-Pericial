@@ -242,6 +242,39 @@ export type CityOverview = {
 
 export type CityOverviewList = { items: CityOverview[] };
 
+
+export type StageListItem = {
+  id: string;
+  processoCNJ: string;
+  autorNome: string;
+  cidade: string;
+  status: string;
+  dataNomeacao?: string;
+};
+
+export type NomeacoesGroup = {
+  key: string;
+  label: string;
+  total: number;
+  items: StageListItem[];
+};
+
+export type NomeacoesResponse = {
+  total: number;
+  groups: NomeacoesGroup[];
+};
+
+export type FilaAgendamentoCity = {
+  cidade: string;
+  total: number;
+  items: StageListItem[];
+};
+
+export type FilaAgendamentoCityResponse = {
+  total: number;
+  cities: FilaAgendamentoCity[];
+};
+
 export type ApiError = {
   message: string | string[];
   statusCode?: number;
