@@ -23,23 +23,21 @@ export class WhatsappService {
       message: params.message,
     });
 
-    const waMessageId = providerResponse?.messages?.[0]?.id as string | undefined;
+    const providerMessageId = providerResponse?.messages?.[0]?.id as string | undefined;
 
     const row = await this.prisma.whatsappMessage.create({
       data: {
         tenantId: params.tenantId,
         ...(params.periciaId ? { periciaId: params.periciaId } : {}),
-        eventType: 'outbound',
         direction: 'outbound',
+        messageType: 'text',
         status: 'sent',
-        waMessageId,
-        toPhone: params.to,
-        messageBody: params.message,
-        providerResponse: providerResponse as Prisma.InputJsonValue,
+        providerMessageId,
+        payloadJson: providerResponse as Prisma.InputJsonValue,
       },
     });
 
-    return { queued: true, provider: 'whatsapp-cloud-api', messageId: row.id, waMessageId };
+    return { queued: true, provider: 'whatsapp-cloud-api', messageId: row.id, providerMessageId };
   }
 
   async processWebhook(body: any, rawBody: string, signature: string | undefined) {
@@ -70,15 +68,17 @@ export class WhatsappService {
       await this.prisma.whatsappMessage.create({
         data: {
           tenantId,
-          eventType: incoming?.type ?? 'message',
           direction: 'inbound',
+          messageType: incoming?.type ?? 'message',
           status: 'received',
-          waMessageId: incoming?.id,
-          fromPhone: incoming?.from,
-          toPhone: value?.metadata?.display_phone_number,
-          messageBody: incoming?.text?.body ?? incoming?.button?.text ?? incoming?.interactive?.body?.text,
-          payloadJson: incoming as Prisma.InputJsonValue,
-          providerResponse: body as Prisma.InputJsonValue,
+          providerMessageId: incoming?.id,
+          payloadJson: {
+            incoming,
+            meta: body,
+            fromPhone: incoming?.from,
+            toPhone: value?.metadata?.display_phone_number,
+            messageBody: incoming?.text?.body ?? incoming?.button?.text ?? incoming?.interactive?.body?.text,
+          } as Prisma.InputJsonValue,
         },
       });
     }
@@ -88,26 +88,21 @@ export class WhatsappService {
       await this.prisma.whatsappMessage.create({
         data: {
           tenantId,
-          eventType: 'status',
           direction: 'status',
+          messageType: 'status',
           status: mappedStatus,
-          waMessageId: statusEvent?.id,
-          fromPhone: value?.metadata?.display_phone_number,
-          toPhone: statusEvent?.recipient_id,
-          errorCode: statusEvent?.errors?.[0]?.code ? String(statusEvent.errors[0].code) : null,
-          errorMessage: statusEvent?.errors?.[0]?.title ?? null,
-          payloadJson: statusEvent as Prisma.InputJsonValue,
-          providerResponse: body as Prisma.InputJsonValue,
+          providerMessageId: statusEvent?.id,
+          erro: statusEvent?.errors?.[0]?.title ?? null,
+          payloadJson: { statusEvent, meta: body } as Prisma.InputJsonValue,
         },
       });
 
       if (statusEvent?.id) {
         await this.prisma.whatsappMessage.updateMany({
-          where: { tenantId, waMessageId: statusEvent.id, direction: 'outbound' },
+          where: { tenantId, providerMessageId: statusEvent.id, direction: 'outbound' },
           data: {
             status: mappedStatus,
-            errorCode: statusEvent?.errors?.[0]?.code ? String(statusEvent.errors[0].code) : null,
-            errorMessage: statusEvent?.errors?.[0]?.title ?? null,
+            erro: statusEvent?.errors?.[0]?.title ?? null,
           },
         });
       }

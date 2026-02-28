@@ -227,7 +227,6 @@ model Tenant {
   teleSlotItems       TelepericiaSlotItem[]
   schedulingBatches   SchedulingBatch[]
   cnjSyncs            CnjSync[]
-  whatsAppJobs        WhatsAppJob[]
 }
 
 model User {
@@ -484,7 +483,6 @@ model Pericia {
   cnjSyncs                  CnjSync[]
   whatsappMessages          WhatsappMessage[]
   whatsappJobs             WhatsappJob[]
-  whatsAppJobs             WhatsAppJob[]
   whatsappUnlinkedInbounds WhatsappUnlinkedInbound[]
 
   @@unique([tenantId, processoCNJ])
@@ -595,9 +593,9 @@ model WhatsappJob {
   tenantId       String    @db.Uuid
   periciaId      String?   @db.Uuid
   appointmentId  String?
-  jobType        String
+  jobType        WhatsAppJobType
   scheduledFor   DateTime?
-  status         String
+  status         WhatsAppJobStatus @default(QUEUED)
   attempts       Int       @default(0)
   lastError      String?
   idempotencyKey String    @map("idempotency_key")
@@ -1386,32 +1384,3 @@ model CnjSync {
   @@index([tenantId, status, nextSyncAt])
 }
 
-model WhatsAppJob {
-  id             String            @id @default(uuid()) @db.Uuid
-  tenantId       String            @db.Uuid
-  periciaId      String            @db.Uuid
-  jobType        WhatsAppJobType
-  status         WhatsAppJobStatus @default(QUEUED)
-  scheduledFor   DateTime
-  nextAttemptAt  DateTime?
-  attempts       Int               @default(0)
-  maxAttempts    Int               @default(4)
-  idempotencyKey String
-  phone          String?
-  payload        Json?
-  lastError      Json?
-  providerRef    String?
-  sentAt         DateTime?
-  canceledAt     DateTime?
-  createdAt      DateTime          @default(now())
-  updatedAt      DateTime          @updatedAt
-  createdBy      String?           @db.Uuid
-  updatedBy      String?           @db.Uuid
-
-  tenant  Tenant  @relation(fields: [tenantId], references: [id], onDelete: Cascade)
-  pericia Pericia @relation(fields: [periciaId], references: [id], onDelete: Cascade)
-
-  @@unique([tenantId, idempotencyKey])
-  @@index([tenantId, status, scheduledFor])
-  @@index([tenantId, periciaId, jobType])
-}
