@@ -6,6 +6,7 @@ import { AppModule } from './app.module';
 import { PrismaClient, UserRole } from '@prisma/client';
 import * as bcrypt from 'bcryptjs';
 import { getPrismaClientOptions, resolveDatabaseUrl } from './prisma/database-url';
+import { json, Request, Response } from 'express';
 
 const BOOTSTRAP_TENANT_ID = '11111111-1111-1111-1111-111111111111';
 
@@ -98,6 +99,13 @@ async function bootstrap() {
       : (_origin, cb) => cb(null, true),
     credentials: true,
   });
+
+
+  app.use(json({
+    verify: (req: Request & { rawBody?: string }, _res: Response, buf: Buffer) => {
+      req.rawBody = buf.toString('utf8');
+    },
+  }));
 
   app.useGlobalPipes(new ValidationPipe());
   app.useGlobalFilters(new HttpExceptionFilter());

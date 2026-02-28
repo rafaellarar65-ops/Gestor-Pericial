@@ -2,6 +2,7 @@ import { Injectable } from '@nestjs/common';
 import { PericiaPaymentStatus, Prisma } from '@prisma/client';
 import { RequestContextService } from '../../common/request-context.service';
 import { PrismaService } from '../../prisma/prisma.service';
+import { WhatsappService } from '../whatsapp/whatsapp.service';
 import {
   AutomaticVaraChargeDto,
   CreateEmailTemplateDto,
@@ -17,6 +18,7 @@ export class CommunicationsService {
   constructor(
     private readonly prisma: PrismaService,
     private readonly context: RequestContextService,
+    private readonly whatsappService: WhatsappService,
   ) {}
 
   sendEmail(dto: SendEmailDto) {
@@ -119,30 +121,18 @@ export class CommunicationsService {
 
   async sendWhatsappMessage(dto: SendWhatsappMessageDto) {
     const tenantId = this.context.get('tenantId') ?? '';
-    const log = await this.prisma.activityLog.create({
-      data: {
-        tenantId,
-        entityType: 'WHATSAPP_MESSAGE',
-        entityId: dto.periciaId ?? dto.to,
-        action: 'OUTBOUND_WHATSAPP_API',
-        payloadJson: {
-          to: dto.to,
-          message: dto.message,
-          provider: 'whatsapp-cloud-api',
-          status: 'queued',
-          sentAt: new Date().toISOString(),
-        },
-      },
+    return this.whatsappService.sendTenantMessage({
+      tenantId,
+      to: dto.to,
+      message: dto.message,
+      periciaId: dto.periciaId,
     });
-
-    return { queued: true, provider: 'whatsapp-cloud-api', messageId: log.id };
   }
 
   async listWhatsappMessages(periciaId?: string) {
-    return this.prisma.activityLog.findMany({
+    return this.prisma.whatsappMessage.findMany({
       where: {
-        entityType: 'WHATSAPP_MESSAGE',
-        ...(periciaId ? { entityId: periciaId } : {}),
+        ...(periciaId ? { periciaId } : {}),
       },
       orderBy: { createdAt: 'desc' },
       take: 50,
