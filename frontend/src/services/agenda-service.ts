@@ -1,5 +1,6 @@
 import { apiClient } from '@/lib/api-client';
 import type { AgendaEvent, AgendaTask } from '@/types/api';
+import type { BatchLot } from '@/hooks/use-schedule-lot';
 
 export type BatchSchedulePayload = {
   date: string;
@@ -9,13 +10,45 @@ export type BatchSchedulePayload = {
 
 type BatchScheduleItemRequest = {
   periciaId: string;
-  title: string;
-  type: 'PERICIA';
+  title?: string;
+  type?: string;
   startAt: string;
+};
+
+type BatchScheduleMetadata = {
+  cityNames?: string[];
+  date?: string;
+  startTime?: string;
+  durationMinutes?: number;
+  intervalMinutes?: number;
+  location?: string;
+  modalidade?: string;
+  source?: string;
 };
 
 type BatchScheduleRequest = {
   items: BatchScheduleItemRequest[];
+  metadata?: BatchScheduleMetadata;
+};
+
+type SchedulingBatchItem = {
+  periciaId: string;
+  scheduledAt: string;
+};
+
+type SchedulingBatchResponse = {
+  id: string;
+  createdAt: string;
+  cityNames: string[];
+  date: string;
+  startTime: string;
+  durationMinutes: number;
+  intervalMinutes: number;
+  location?: string;
+  modalidade?: string;
+  source: 'CSV' | 'WORD';
+  status: string;
+  items: SchedulingBatchItem[];
 };
 
 export const agendaService = {
@@ -66,5 +99,22 @@ export const agendaService = {
     };
 
     await apiClient.post('/agenda/batch-scheduling', requestPayload);
+  },
+
+  scheduleLot: async (payload: { items: { periciaId: string; startAt: string }[]; metadata: BatchScheduleMetadata }): Promise<void> => {
+    const requestPayload: BatchScheduleRequest = {
+      items: payload.items.map((item) => ({
+        periciaId: item.periciaId,
+        startAt: item.startAt,
+      })),
+      metadata: payload.metadata,
+    };
+
+    await apiClient.post('/agenda/batch-scheduling', requestPayload);
+  },
+
+  listSchedulingBatches: async (): Promise<SchedulingBatchResponse[]> => {
+    const { data } = await apiClient.get<SchedulingBatchResponse[]>('/agenda/batch-scheduling');
+    return Array.isArray(data) ? data : [];
   },
 };
