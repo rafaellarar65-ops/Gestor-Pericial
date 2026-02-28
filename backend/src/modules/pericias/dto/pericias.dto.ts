@@ -1,7 +1,7 @@
 import { ApiProperty, ApiPropertyOptional } from '@nestjs/swagger';
 import { PericiaPaymentStatus } from '@prisma/client';
 import { Type } from 'class-transformer';
-import { IsArray, IsBoolean, IsDateString, IsEnum, IsInt, IsNotEmpty, IsNumber, IsOptional, IsString, IsUUID, Max, Min, ValidateNested } from 'class-validator';
+import { IsArray, IsBoolean, IsDateString, IsEnum, IsIn, IsInt, IsNotEmpty, IsNumber, IsOptional, IsString, IsUUID, Max, Min, ValidateNested } from 'class-validator';
 
 export class CreatePericiasDto {
   @ApiProperty()
@@ -23,6 +23,11 @@ export class CreatePericiasDto {
   @IsOptional()
   @IsUUID()
   tipoPericiaId?: string;
+
+  @ApiPropertyOptional({ description: 'Código da modalidade (ex.: telepericia)' })
+  @IsOptional()
+  @IsString()
+  modalidadeCodigo?: string;
 
   @ApiPropertyOptional()
   @IsOptional()
@@ -176,6 +181,11 @@ export class ListPericiasDto {
   @IsUUID()
   tipoPericiaId?: string;
 
+  @ApiPropertyOptional({ description: 'Código da modalidade (ex.: telepericia)' })
+  @IsOptional()
+  @IsString()
+  modalidadeCodigo?: string;
+
   @ApiPropertyOptional()
   @IsOptional()
   @IsDateString()
@@ -232,6 +242,48 @@ export class ChangeStatusPericiaDto {
   @IsOptional()
   @IsString()
   motivo?: string;
+}
+
+
+
+export class ToggleUrgentPericiaDto {
+  @ApiProperty()
+  @IsBoolean()
+  isUrgent!: boolean;
+}
+
+export class TelepericiaQueueQueryDto {
+  @ApiPropertyOptional({ default: 1 })
+  @Type(() => Number)
+  @IsOptional()
+  @IsInt()
+  @Min(1)
+  page = 1;
+
+  @ApiPropertyOptional({ default: 50 })
+  @Type(() => Number)
+  @IsOptional()
+  @IsInt()
+  @Min(1)
+  @Max(200)
+  limit = 50;
+
+  @ApiPropertyOptional({ enum: ['PENDENTE', 'ENVIADA', 'ENTREGUE', 'RESPONDIDA', 'ERRO'] })
+  @IsOptional()
+  @IsIn(['PENDENTE', 'ENVIADA', 'ENTREGUE', 'RESPONDIDA', 'ERRO'])
+  whatsappStatus?: 'PENDENTE' | 'ENVIADA' | 'ENTREGUE' | 'RESPONDIDA' | 'ERRO';
+
+  @ApiPropertyOptional()
+  @IsOptional()
+  @IsString()
+  search?: string;
+}
+
+export class RegisterTelepericiaAttemptDto {
+  @ApiPropertyOptional()
+  @IsOptional()
+  @IsString()
+  whatsappStatus?: string;
 }
 
 export class ImportPericiasDto {

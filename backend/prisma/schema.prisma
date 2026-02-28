@@ -359,6 +359,7 @@ model Pericia {
   checklist                   Json?
   anexosResumo                Json?
   isUrgent                    Boolean              @default(false)
+  urgentCheckedAt             DateTime?
   agendada                    Boolean              @default(false)
   laudoEnviado                Boolean              @default(false)
   finalizada                  Boolean              @default(false)
@@ -373,6 +374,10 @@ model Pericia {
   dataEnvioLaudo              DateTime?
   origemImportacao            String?
   dataUltimaMovimentacaoCnj   DateTime?
+  telepericiaStatusChangedAt  DateTime?
+  whatsappStatus              String?
+  telepericiaConfirmedAt      DateTime?
+  telepericiaLastAttemptAt    DateTime?
   metadata                    Json?
   deletedAt                   DateTime?
   createdAt                   DateTime             @default(now())

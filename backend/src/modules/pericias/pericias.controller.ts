@@ -8,6 +8,9 @@ import {
   CreatePericiasDto,
   ImportPericiasDto,
   ListPericiasDto,
+  RegisterTelepericiaAttemptDto,
+  TelepericiaQueueQueryDto,
+  ToggleUrgentPericiaDto,
   UpdatePericiasDto,
 } from './dto/pericias.dto';
 import { PericiasService } from './pericias.service';
@@ -49,6 +52,13 @@ export class PericiasController {
     return this.service.cityOverviewList();
   }
 
+
+  @Get('telepericia/queue')
+  @ApiOperation({ summary: 'Fila operacional de perícias em modalidade telepericia' })
+  telepericiaQueue(@Query() query: TelepericiaQueueQueryDto) {
+    return this.service.telepericiaQueue(query);
+  }
+
   @Get(':id')
   get(@Param('id') id: string) {
     return this.service.findOne(id);
@@ -62,6 +72,18 @@ export class PericiasController {
   @Patch(':id')
   update(@Param('id') id: string, @Body() dto: UpdatePericiasDto) {
     return this.service.update(id, dto);
+  }
+
+  @Patch(':id/urgent')
+  @ApiOperation({ summary: 'Marca/desmarca perícia como urgente atualizando urgentCheckedAt' })
+  updateUrgent(@Param('id') id: string, @Body() dto: ToggleUrgentPericiaDto) {
+    return this.service.updateUrgent(id, dto.isUrgent);
+  }
+
+  @Patch(':id/telepericia-attempt')
+  @ApiOperation({ summary: 'Registra tentativa operacional da teleperícia' })
+  registerTelepericiaAttempt(@Param('id') id: string, @Body() dto: RegisterTelepericiaAttemptDto) {
+    return this.service.registerTelepericiaAttempt(id, dto.whatsappStatus);
   }
 
   @Patch('batch-update')

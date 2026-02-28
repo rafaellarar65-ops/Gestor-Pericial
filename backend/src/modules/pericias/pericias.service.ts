@@ -8,6 +8,7 @@ import {
   CreatePericiasDto,
   ImportPericiasDto,
   ListPericiasDto,
+  TelepericiaQueueQueryDto,
   UpdatePericiasDto,
 } from './dto/pericias.dto';
 
@@ -48,6 +49,7 @@ export class PericiasService {
       ...(query.statusId ? { statusId: query.statusId } : {}),
       ...(query.cidadeId ? { cidadeId: query.cidadeId } : {}),
       ...(query.tipoPericiaId ? { tipoPericiaId: query.tipoPericiaId } : {}),
+      ...(query.modalidadeCodigo ? { modalidade: { codigo: query.modalidadeCodigo } } : {}),
       ...(query.dateFrom || query.dateTo
         ? { dataNomeacao: { ...(query.dateFrom ? { gte: new Date(query.dateFrom) } : {}), ...(query.dateTo ? { lte: new Date(query.dateTo) } : {}) } }
         : {}),
@@ -170,6 +172,81 @@ export class PericiasService {
     });
 
     return updated;
+  }
+
+
+  async telepericiaQueue(query: TelepericiaQueueQueryDto) {
+    const where: Prisma.PericiaWhereInput = {
+      modalidade: { codigo: 'telepericia' },
+      ...(query.whatsappStatus ? { whatsappStatus: query.whatsappStatus } : {}),
+      ...(query.search
+        ? {
+            OR: [
+              { processoCNJ: { contains: query.search, mode: 'insensitive' } },
+              { periciadoNome: { contains: query.search, mode: 'insensitive' } },
+              { autorNome: { contains: query.search, mode: 'insensitive' } },
+            ],
+          }
+        : {}),
+    };
+
+    const [items, total] = await this.prisma.$transaction([
+      this.prisma.pericia.findMany({
+        where,
+        select: {
+          id: true,
+          processoCNJ: true,
+          periciadoNome: true,
+          autorNome: true,
+          dataAgendamento: true,
+          isUrgent: true,
+          urgentCheckedAt: true,
+          telepericiaStatusChangedAt: true,
+          whatsappStatus: true,
+          telepericiaConfirmedAt: true,
+          telepericiaLastAttemptAt: true,
+          createdAt: true,
+          status: { select: { id: true, nome: true, codigo: true } },
+        },
+        orderBy: [
+          { isUrgent: 'desc' },
+          { urgentCheckedAt: 'asc' },
+          { telepericiaStatusChangedAt: 'asc' },
+          { dataAgendamento: 'asc' },
+          { createdAt: 'asc' },
+        ],
+        skip: (query.page - 1) * query.limit,
+        take: query.limit,
+      }),
+      this.prisma.pericia.count({ where }),
+    ]);
+
+    return { items, pagination: { page: query.page, limit: query.limit, total } };
+  }
+
+  async updateUrgent(id: string, isUrgent: boolean) {
+    await this.findOne(id);
+
+    return this.prisma.pericia.update({
+      where: { id },
+      data: {
+        isUrgent,
+        urgentCheckedAt: isUrgent ? new Date() : null,
+      },
+    });
+  }
+
+  async registerTelepericiaAttempt(id: string, whatsappStatus?: string) {
+    await this.findOne(id);
+
+    return this.prisma.pericia.update({
+      where: { id },
+      data: {
+        telepericiaLastAttemptAt: new Date(),
+        telepericiaStatusChangedAt: new Date(),
+        ...(whatsappStatus !== undefined ? { whatsappStatus } : {}),
+      },
+    });
   }
 
   async dashboard() {

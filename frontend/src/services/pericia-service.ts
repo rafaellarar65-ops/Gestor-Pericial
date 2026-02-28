@@ -9,6 +9,7 @@ import type {
   PericiaDetail,
   PericiaTimelineResponse,
   Recebimento,
+  TelepericiaQueueResponse,
 } from '@/types/api';
 
 export const periciaService = {
@@ -84,6 +85,24 @@ export const periciaService = {
     },
   ): Promise<PericiaDetail> => {
     const { data } = await apiClient.patch<PericiaDetail>(`/pericias/${id}`, payload);
+    return data;
+  },
+
+
+  telepericiaQueue: async (): Promise<TelepericiaQueueResponse> => {
+    const { data } = await apiClient.get<TelepericiaQueueResponse>('/pericias/telepericia/queue');
+    return data;
+  },
+
+  updateUrgent: async (id: string, isUrgent: boolean): Promise<PericiaDetail> => {
+    const { data } = await apiClient.patch<PericiaDetail>(`/pericias/${id}/urgent`, { isUrgent });
+    return data;
+  },
+
+  registerTelepericiaAttempt: async (id: string, whatsappStatus?: string): Promise<PericiaDetail> => {
+    const { data } = await apiClient.patch<PericiaDetail>(`/pericias/${id}/telepericia-attempt`, {
+      ...(whatsappStatus ? { whatsappStatus } : {}),
+    });
     return data;
   },
 
