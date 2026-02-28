@@ -45,7 +45,7 @@ const FilaAgendamentoPage = () => {
 
   const { data, isLoading, isError } = useQuery({
     queryKey: ['pericias-agendar'],
-    queryFn: () => periciaService.list(1, { limit: 300, search: '' }),
+    queryFn: () => periciaService.list(1, { limit: 100, search: '' }),
   });
 
   const { data: history = [] } = useQuery({
