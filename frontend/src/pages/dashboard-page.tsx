@@ -9,6 +9,7 @@ type ActionCard = {
   badge: string;
   href: string;
   color: string;
+  kpiKey?: string;
   Icon: React.ComponentType<{ size?: number; className?: string }>;
 };
 
@@ -19,6 +20,7 @@ const ACTION_CARDS: ActionCard[] = [
     badge: 'TRIAGEM INICIAL',
     href: '/nomeacoes',
     color: 'bg-blue-600',
+    kpiKey: 'novas_nomeacoes',
     Icon: Scale,
   },
   {
@@ -27,6 +29,7 @@ const ACTION_CARDS: ActionCard[] = [
     badge: 'FILA DE ESPERA',
     href: '/fila-agendamento',
     color: 'bg-yellow-500',
+    kpiKey: 'agendar_data',
     Icon: CalendarClock,
   },
   {
@@ -35,6 +38,7 @@ const ACTION_CARDS: ActionCard[] = [
     badge: 'CALENDÁRIO',
     href: '/pericias-hoje',
     color: 'bg-pink-600',
+    kpiKey: 'proximas_pericias',
     Icon: Calendar,
   },
   {
@@ -43,6 +47,7 @@ const ACTION_CARDS: ActionCard[] = [
     badge: 'PRODUÇÃO',
     href: '/laudos-pendentes',
     color: 'bg-teal-600',
+    kpiKey: 'enviar_laudos',
     Icon: FileText,
   },
   {
@@ -51,6 +56,7 @@ const ACTION_CARDS: ActionCard[] = [
     badge: 'PRIORIDADE ALTA',
     href: '/comunicacao',
     color: 'bg-orange-500',
+    kpiKey: 'esclarecimentos',
     Icon: MessageSquareWarning,
   },
   {
@@ -59,6 +65,7 @@ const ACTION_CARDS: ActionCard[] = [
     badge: 'FINANCEIRO',
     href: '/cobranca',
     color: 'bg-green-600',
+    kpiKey: 'a_receber',
     Icon: DollarSign,
   },
 ];
@@ -83,8 +90,28 @@ const NEW_MODULE_CARDS: ActionCard[] = [
   },
 ];
 
+
+const normalizeKpiText = (value: string) =>
+  value
+    .normalize('NFD')
+    .replace(/[^\w\s-]/g, '')
+    .toLowerCase()
+    .trim()
+    .replace(/[\s-]+/g, '_');
+
 const DashboardPage = () => {
   const { data, isLoading } = useDashboardQuery();
+
+  const kpiValueByCard = ACTION_CARDS.reduce<Record<string, string>>((acc, card) => {
+    const normalizedCardTitle = normalizeKpiText(card.title);
+    const kpi = data?.kpis?.find((item) => {
+      const normalizedLabel = normalizeKpiText(item.label);
+      return (card.kpiKey && item.key === card.kpiKey) || normalizedLabel === normalizedCardTitle;
+    });
+
+    acc[card.title] = kpi?.value ?? '—';
+    return acc;
+  }, {});
 
   return (
     <div className="space-y-5">
@@ -141,9 +168,9 @@ const DashboardPage = () => {
       ) : (
         <>
           <div className="grid grid-cols-1 gap-4 md:grid-cols-3">
-            {ACTION_CARDS.map((card, index) => {
+            {ACTION_CARDS.map((card) => {
               const Icon = card.Icon;
-              const value = data?.kpis?.[index]?.value ?? '—';
+              const value = kpiValueByCard[card.title] ?? '—';
               return (
                 <div
                   className={`relative overflow-hidden rounded-xl ${card.color} p-5 text-white shadow-md`}
