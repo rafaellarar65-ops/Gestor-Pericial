@@ -1,5 +1,5 @@
 import { Injectable, NotFoundException } from '@nestjs/common';
-import { Prisma } from '@prisma/client';
+import { PaymentMatchStatus, Prisma } from '@prisma/client';
 import { PericiaStageFilterService } from './pericia-stage-filter.service';
 import { RequestContextService } from '../../common/request-context.service';
 import { PrismaService } from '../../prisma/prisma.service';
@@ -20,6 +20,42 @@ export class PericiasService {
     private readonly context: RequestContextService,
     private readonly stageFilter: PericiaStageFilterService,
   ) {}
+
+  async dashboard() {
+    const [pendingCount, pendingNetSum] = await this.prisma.$transaction([
+      this.prisma.unmatchedPayment.count({
+        where: { matchStatus: PaymentMatchStatus.UNMATCHED },
+      }),
+      this.prisma.unmatchedPayment.aggregate({
+        where: { matchStatus: PaymentMatchStatus.UNMATCHED },
+        _sum: { amount: true },
+      }),
+    ]);
+
+    const pendingNetValue = pendingNetSum._sum.amount ?? new Prisma.Decimal(0);
+
+    return {
+      kpis: [
+        {
+          key: 'pagamentos_nao_vinculados_pendentes',
+          label: 'Pagamentos não vinculados (pendentes)',
+          value: String(pendingCount),
+        },
+        {
+          key: 'pagamentos_nao_vinculados_soma_liquida_pendente',
+          label: 'Soma líquida pendente (pagamentos não vinculados)',
+          value: new Intl.NumberFormat('pt-BR', {
+            style: 'currency',
+            currency: 'BRL',
+            minimumFractionDigits: 2,
+          }).format(Number(pendingNetValue)),
+        },
+      ],
+      chart: [],
+      critical: [],
+    };
+  }
+
 
   // ...demais métodos
 

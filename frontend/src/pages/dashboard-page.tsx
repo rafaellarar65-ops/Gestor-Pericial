@@ -10,6 +10,8 @@ type ActionCard = {
   href: string;
   color: string;
   kpiKey?: string;
+  descriptionValueKey?: string;
+  fullCardClick?: boolean;
   Icon: React.ComponentType<{ size?: number; className?: string }>;
 };
 
@@ -58,6 +60,17 @@ const ACTION_CARDS: ActionCard[] = [
     color: 'bg-orange-500',
     kpiKey: 'esclarecimentos',
     Icon: MessageSquareWarning,
+  },
+  {
+    title: 'PAGAMENTOS NÃO VINCULADOS',
+    subtitle: 'Registros pendentes de conciliação financeira',
+    badge: 'PENDÊNCIAS',
+    href: '/pagamentos-nao-vinculados',
+    color: 'bg-violet-600',
+    kpiKey: 'pagamentos_nao_vinculados_pendentes',
+    descriptionValueKey: 'pagamentos_nao_vinculados_soma_liquida_pendente',
+    fullCardClick: true,
+    Icon: DollarSign,
   },
   {
     title: 'A RECEBER',
@@ -109,6 +122,13 @@ const DashboardPage = () => {
       return (card.kpiKey && item.key === card.kpiKey) || normalizedLabel === normalizedCardTitle;
     });
 
+    acc[card.title] = kpi?.value ?? '—';
+    return acc;
+  }, {});
+
+  const kpiDescriptionValueByCard = ACTION_CARDS.reduce<Record<string, string>>((acc, card) => {
+    if (!card.descriptionValueKey) return acc;
+    const kpi = data?.kpis?.find((item) => item.key === card.descriptionValueKey);
     acc[card.title] = kpi?.value ?? '—';
     return acc;
   }, {});
@@ -171,6 +191,8 @@ const DashboardPage = () => {
             {ACTION_CARDS.map((card) => {
               const Icon = card.Icon;
               const value = kpiValueByCard[card.title] ?? '—';
+              const amountDescription = kpiDescriptionValueByCard[card.title];
+
               return (
                 <div
                   className={`relative overflow-hidden rounded-xl ${card.color} p-5 text-white shadow-md`}
@@ -183,14 +205,20 @@ const DashboardPage = () => {
                       <p className="text-sm font-bold tracking-wide">{card.title}</p>
                     </div>
                     <p className="mb-3 text-xs text-white/70">{card.subtitle}</p>
+                    {amountDescription ? (
+                      <p className="mb-3 text-xs font-semibold text-white/90">Soma líquida pendente: {amountDescription}</p>
+                    ) : null}
                     <div className="flex items-end justify-between">
                       <p className="text-4xl font-bold">{value}</p>
                       <span className="rounded bg-black/20 px-2 py-0.5 text-[10px] font-semibold uppercase">
                         {card.badge}
                       </span>
                     </div>
+                    {card.fullCardClick ? (
+                      <Link className="absolute inset-0 z-20" to={card.href} aria-label={`Ir para ${card.title}`} />
+                    ) : null}
                     <Link
-                      className="mt-4 flex items-center gap-1 text-xs font-semibold uppercase tracking-wider text-white/80 hover:text-white"
+                      className="relative z-30 mt-4 flex items-center gap-1 text-xs font-semibold uppercase tracking-wider text-white/80 hover:text-white"
                       to={card.href}
                     >
                       ACESSAR CENTRAL <ArrowUpRight size={12} />
