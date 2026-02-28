@@ -24,7 +24,7 @@ export type ApiListResponse<T> = {
 };
 
 export type DashboardKpi = {
-  key?: string;
+  key: string;
   label: string;
   value: string;
   trend?: string;
@@ -86,6 +86,25 @@ export type Recebimento = {
   createdAt?: string;
 };
 
+
+export type UnmatchedPaymentOrigin = 'AI_PRINT' | 'MANUAL_CSV' | 'INDIVIDUAL';
+
+export type UnmatchedPayment = {
+  id: string;
+  amount?: number | string | null;
+  transactionDate?: string | null;
+  receivedAt?: string | null;
+  payerName?: string | null;
+  cnj?: string | null;
+  description?: string | null;
+  source?: string | null;
+  origin?: UnmatchedPaymentOrigin | string | null;
+  ignored?: boolean;
+  matchStatus?: string;
+  notes?: string | null;
+  createdAt?: string;
+};
+
 export type Despesa = {
   id: string;
   categoria: string;
@@ -137,6 +156,34 @@ export type AgendaEvent = {
   description?: string;
   location?: string;
   periciaId?: string;
+  syncStatus?: 'PENDING' | 'SYNCED' | 'WARNING' | 'CONFLICT' | 'ERROR';
+};
+
+
+export type WeeklyWorkloadDay = {
+  date: string;
+  allocated_minutes: number;
+  work_window_minutes: number;
+  utilization: number;
+  conflicts: number;
+};
+
+export type WeeklyWorkload = {
+  week_start: string;
+  week_end: string;
+  days: WeeklyWorkloadDay[];
+  allocated_minutes: number;
+  work_window_minutes: number;
+  utilization: number;
+  conflicts: number;
+};
+
+export type RevenueForecast = {
+  forecast_total: number;
+  confidence: string;
+  signals: string[];
+  assumptions: string[];
+  series: Array<{ date: string; amount: number; accumulated: number }>;
 };
 
 export type AgendaTask = {
@@ -147,6 +194,31 @@ export type AgendaTask = {
   priority?: number;
   description?: string;
   periciaId?: string;
+  syncStatus?: 'PENDING' | 'SYNCED' | 'WARNING' | 'CONFLICT' | 'ERROR';
+};
+
+export type GoogleCalendarIntegration = {
+  id: string;
+  provider: 'GOOGLE';
+  email?: string;
+  selectedCalendarId?: string;
+  selectedCalendarName?: string;
+  syncEvents: boolean;
+  syncTasks: boolean;
+  mode: 'MIRROR' | 'TWO_WAY';
+  active: boolean;
+  lastSyncAt?: string;
+};
+
+export type SyncAuditLog = {
+  id: string;
+  syncType: 'EVENT' | 'TASK';
+  direction: 'PUSH' | 'PULL';
+  localEntity: string;
+  localEntityId: string;
+  status: 'PENDING' | 'SYNCED' | 'WARNING' | 'CONFLICT' | 'ERROR';
+  message?: string;
+  createdAt: string;
 };
 
 export type PhysicalManeuver = {
@@ -194,6 +266,27 @@ export type ConfigItem = {
 };
 
 
+
+export type TelepericiaQueueItem = {
+  id: string;
+  processoCNJ: string;
+  periciadoNome?: string;
+  autorNome?: string;
+  dataAgendamento?: string;
+  isUrgent: boolean;
+  urgentCheckedAt?: string;
+  telepericiaStatusChangedAt?: string;
+  whatsappStatus?: string;
+  telepericiaConfirmedAt?: string;
+  telepericiaLastAttemptAt?: string;
+  createdAt: string;
+  status?: { id: string; nome: string; codigo?: string } | null;
+};
+
+export type TelepericiaQueueResponse = {
+  items: TelepericiaQueueItem[];
+  pagination: { page: number; limit: number; total: number };
+};
 
 export type PericiaDetail = {
   id: string;
@@ -254,27 +347,93 @@ export type CityOverview = {
 
 export type CityOverviewList = { items: CityOverview[] };
 
+
+export type StageListItem = {
+  id: string;
+  processoCNJ: string;
+  autorNome: string;
+  cidade: string;
+  status: string;
+  dataNomeacao?: string;
+};
+
+export type NomeacoesGroup = {
+  key: string;
+  label: string;
+  total: number;
+  items: StageListItem[];
+};
+
+export type NomeacoesResponse = {
+  total: number;
+  groups: NomeacoesGroup[];
+};
+
+export type FilaAgendamentoCity = {
+  cidade: string;
+  total: number;
+  items: StageListItem[];
+};
+
+export type FilaAgendamentoCityResponse = {
+  total: number;
+  cities: FilaAgendamentoCity[];
+};
+
 export type ApiError = {
   message: string | string[];
   statusCode?: number;
 };
 
+export const ANALYTICS_CALENDAR_LAYERS = [
+  'OPERACIONAL',
+  'PRODUCAO',
+  'LAUDOS',
+  'ESCLARECIMENTOS',
+  'FINANCEIRO_PRODUCAO_RECEBIMENTO',
+] as const;
 
-export type DashboardSystemSettings = {
-  nomeacoesGroups: {
-    avaliar: string[];
-    aceiteHonorarios: string[];
-    majorarHonorarios: string[];
-    observacaoExtra: string[];
+export type AnalyticsCalendarLayer = (typeof ANALYTICS_CALENDAR_LAYERS)[number];
+
+export const ANALYTICS_EVENT_TYPE_COLORS: Record<string, string> = {
+  NOMEACAO: '#2563eb',
+  AGENDAMENTO: '#d97706',
+  REALIZACAO: '#0891b2',
+  LAUDO_ENVIADO: '#059669',
+  RECEBIMENTO: '#16a34a',
+};
+
+export type AnalyticsCalendarKpi = {
+  key: string;
+  label: string;
+  value: number;
+};
+
+export type AnalyticsCalendarTimelineEvent = {
+  type: string;
+  cnjId: string;
+  city: string;
+  timestamp: string;
+  value: number | null;
+  deadline: string | null;
+  status: string | null;
+};
+
+export type AnalyticsCalendarHeatmapDay = {
+  date: string;
+  receivedValue: number;
+  productionValue: number;
+  totalEvents: number;
+  intensity: number;
+};
+
+export type AnalyticsCalendarOverviewResponse = {
+  layer: AnalyticsCalendarLayer;
+  period: {
+    from: string;
+    to: string;
   };
-  dashboard: {
-    avaliarStatusCodigos: string[];
-    avaliarStatusNomeTermos: string[];
-    enviarLaudoStatusCodigos: string[];
-    enviarLaudoStatusNomeTermos: string[];
-  };
-  filas: {
-    agendamentoBloqueiaTermosStatus: string[];
-    laudosUrgenciaTermosStatus: string[];
-  };
+  kpis: AnalyticsCalendarKpi[];
+  timeline: AnalyticsCalendarTimelineEvent[];
+  heatmap: AnalyticsCalendarHeatmapDay[];
 };

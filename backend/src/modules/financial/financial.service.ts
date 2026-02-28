@@ -1,8 +1,23 @@
-import { Injectable } from '@nestjs/common';
+import { Injectable, NotFoundException } from '@nestjs/common';
 import { PaymentMatchStatus, Prisma } from '@prisma/client';
 import { RequestContextService } from '../../common/request-context.service';
 import { PrismaService } from '../../prisma/prisma.service';
-import { CreateDespesaDto, CreateRecebimentoDto, ImportRecebimentosDto, ReconcileDto } from './dto/financial.dto';
+import {
+  CreateDespesaDto,
+  CreateRecebimentoDto,
+  ImportRecebimentosDto,
+  ReconcileDto,
+  UpdateUnmatchedPaymentDto,
+} from './dto/financial.dto';
+
+type RawUnmatchedData = {
+  cnj?: string;
+  description?: string;
+  source?: string;
+  origin?: 'AI_PRINT' | 'MANUAL_CSV' | 'INDIVIDUAL' | string;
+  receivedAt?: string;
+  [key: string]: unknown;
+};
 
 @Injectable()
 export class FinancialService {
@@ -87,8 +102,111 @@ export class FinancialService {
     return { batchId: batch.id, imported: dto.rows.length };
   }
 
-  unmatched() {
-    return this.prisma.unmatchedPayment.findMany({ where: { matchStatus: PaymentMatchStatus.UNMATCHED }, orderBy: { createdAt: 'desc' } });
+  async unmatched() {
+    const rows = await this.prisma.unmatchedPayment.findMany({
+      where: { matchStatus: { in: [PaymentMatchStatus.UNMATCHED, PaymentMatchStatus.PARTIAL] } },
+      orderBy: { transactionDate: 'desc' },
+    });
+
+    return rows
+      .map((row) => {
+        const raw = (row.rawData ?? {}) as RawUnmatchedData;
+        const receivedAt = row.transactionDate ?? this.parseDate(raw.receivedAt) ?? row.createdAt;
+        const isDiscarded = row.matchStatus === PaymentMatchStatus.PARTIAL && (row.notes ?? '').includes('[DISCARDED]');
+
+        return {
+          ...row,
+          amount: row.amount ? Number(row.amount) : null,
+          receivedAt,
+          cnj: typeof raw.cnj === 'string' ? raw.cnj : null,
+          description: typeof raw.description === 'string' ? raw.description : null,
+          source: typeof raw.source === 'string' ? raw.source : null,
+          origin: typeof raw.origin === 'string' ? raw.origin : 'INDIVIDUAL',
+          ignored: isDiscarded,
+        };
+      })
+      .sort((a, b) => new Date(b.receivedAt).getTime() - new Date(a.receivedAt).getTime());
+  }
+
+  async updateUnmatched(id: string, dto: UpdateUnmatchedPaymentDto) {
+    const existing = await this.prisma.unmatchedPayment.findUnique({ where: { id } });
+    if (!existing) throw new NotFoundException('Pagamento não vinculado não encontrado.');
+
+    const raw = ((existing.rawData ?? {}) as RawUnmatchedData);
+    const nextRaw: RawUnmatchedData = {
+      ...raw,
+      ...(dto.cnj !== undefined ? { cnj: dto.cnj } : {}),
+      ...(dto.description !== undefined ? { description: dto.description } : {}),
+      ...(dto.source !== undefined ? { source: dto.source } : {}),
+      ...(dto.origin !== undefined ? { origin: dto.origin } : {}),
+      ...(dto.receivedAt !== undefined ? { receivedAt: dto.receivedAt } : {}),
+    };
+
+    const updated = await this.prisma.unmatchedPayment.update({
+      where: { id },
+      data: {
+        ...(dto.amount !== undefined ? { amount: new Prisma.Decimal(dto.amount) } : {}),
+        ...(dto.receivedAt !== undefined ? { transactionDate: new Date(dto.receivedAt) } : {}),
+        ...(dto.payerName !== undefined ? { payerName: dto.payerName } : {}),
+        ...(dto.notes !== undefined ? { notes: dto.notes } : {}),
+        rawData: nextRaw as Prisma.InputJsonValue,
+      },
+    });
+
+    return { ...updated, amount: updated.amount ? Number(updated.amount) : null };
+  }
+
+  async linkUnmatched(id: string, body: { periciaId?: string; note?: string }) {
+    const existing = await this.prisma.unmatchedPayment.findUnique({ where: { id } });
+    if (!existing) throw new NotFoundException('Pagamento não vinculado não encontrado.');
+
+    const note = body.note?.trim() || 'Vinculado manualmente';
+
+    const updated = await this.prisma.unmatchedPayment.update({
+      where: { id },
+      data: {
+        matchStatus: PaymentMatchStatus.MATCHED,
+        notes: body.periciaId ? `${note} | periciaId:${body.periciaId}` : note,
+      },
+    });
+
+    return { ...updated, amount: updated.amount ? Number(updated.amount) : null };
+  }
+
+  async discardUnmatched(id: string, note?: string) {
+    const existing = await this.prisma.unmatchedPayment.findUnique({ where: { id } });
+    if (!existing) throw new NotFoundException('Pagamento não vinculado não encontrado.');
+
+    const updated = await this.prisma.unmatchedPayment.update({
+      where: { id },
+      data: {
+        matchStatus: PaymentMatchStatus.PARTIAL,
+        notes: `[DISCARDED] ${note?.trim() || 'Ignorado manualmente'}`,
+      },
+    });
+
+    return { ...updated, amount: updated.amount ? Number(updated.amount) : null, status: 'DISCARDED' as const };
+  }
+
+  async deleteUnmatched(id: string, reason?: string) {
+    const existing = await this.prisma.unmatchedPayment.findUnique({ where: { id } });
+    if (!existing) throw new NotFoundException('Pagamento não vinculado não encontrado.');
+
+    await this.prisma.activityLog.create({
+      data: {
+        tenantId: existing.tenantId,
+        entityType: 'UnmatchedPayment',
+        entityId: existing.id,
+        action: 'DELETE',
+        payloadJson: {
+          reason: reason?.trim() || 'Exclusão manual',
+          previous: existing,
+        },
+      },
+    });
+
+    await this.prisma.unmatchedPayment.delete({ where: { id } });
+    return { deleted: true, id };
   }
 
   async reconcile(dto: ReconcileDto) {
@@ -117,7 +235,64 @@ export class FinancialService {
     };
   }
 
+
+  async revenueForecast() {
+    const recebimentos = await this.prisma.recebimento.findMany({
+      orderBy: { dataRecebimento: 'asc' },
+      take: 90,
+    });
+
+    const points = recebimentos
+      .map((item) => ({
+        date: item.dataRecebimento.toISOString().slice(0, 10),
+        amount: Number(item.valorLiquido ?? item.valorBruto ?? 0),
+      }))
+      .filter((p) => p.amount > 0);
+
+    const avg = points.length ? points.reduce((sum, p) => sum + p.amount, 0) / points.length : 0;
+    const trend = points.length >= 2 ? points[points.length - 1].amount - points[0].amount : 0;
+    const projection = Math.max(0, avg + trend / Math.max(points.length, 1));
+
+    const forecastDays = Array.from({ length: 14 }).map((_, i) => {
+      const base = new Date();
+      base.setDate(base.getDate() + i + 1);
+      return {
+        date: base.toISOString().slice(0, 10),
+        amount: Number((projection * (0.85 + ((i % 4) * 0.07))).toFixed(2)),
+      };
+    });
+
+    const accumulated = [];
+    let running = 0;
+    for (const point of forecastDays) {
+      running += point.amount;
+      accumulated.push({ ...point, accumulated: Number(running.toFixed(2)) });
+    }
+
+    return {
+      forecast_total: Number(running.toFixed(2)),
+      confidence: points.length >= 20 ? 'alta' : points.length >= 8 ? 'media' : 'baixa',
+      signals: [
+        `Média histórica diária considerada: R$ ${avg.toFixed(2)}`,
+        `Tendência observada da série: ${trend >= 0 ? 'alta' : 'queda'} (${trend.toFixed(2)})`,
+        `Base histórica usada: ${points.length} lançamentos de recebimento`,
+      ],
+      assumptions: [
+        'Projeção linear de curto prazo (14 dias)',
+        'Sem ajuste de sazonalidade jurídica mensal',
+        'Sem eventos extraordinários de pagamentos retroativos',
+      ],
+      series: accumulated,
+    };
+  }
+
   chargeAutomation() {
     return { enqueued: true, queue: 'charge-dispatch', message: 'Cobranças automáticas enfileiradas.' };
+  }
+
+  private parseDate(value?: string): Date | null {
+    if (!value) return null;
+    const date = new Date(value);
+    return Number.isNaN(date.getTime()) ? null : date;
   }
 }

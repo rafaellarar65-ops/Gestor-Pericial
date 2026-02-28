@@ -19,7 +19,7 @@ type ActionCard = {
   subtitle: string;
   badge: string;
   href: string;
-  tone: string;
+  color: string;
   kpiKey?: string;
   Icon: React.ComponentType<{ size?: number; className?: string }>;
 };
@@ -30,7 +30,7 @@ const ACTION_CARDS: ActionCard[] = [
     subtitle: 'Central de Triagem: Avaliar, Majorar e Observações',
     badge: 'TRIAGEM INICIAL',
     href: '/nomeacoes',
-    tone: 'bg-primary text-primary-foreground',
+    color: 'bg-blue-600',
     kpiKey: 'novas_nomeacoes',
     Icon: Scale,
   },
@@ -39,7 +39,7 @@ const ACTION_CARDS: ActionCard[] = [
     subtitle: 'Pendências de agendamento por cidade',
     badge: 'FILA DE ESPERA',
     href: '/fila-agendamento',
-    tone: 'bg-warning text-warning-foreground',
+    color: 'bg-yellow-500',
     kpiKey: 'agendar_data',
     Icon: CalendarClock,
   },
@@ -48,7 +48,7 @@ const ACTION_CARDS: ActionCard[] = [
     subtitle: 'Agenda futura (Presencial e Tele)',
     badge: 'CALENDÁRIO',
     href: '/pericias-hoje',
-    tone: 'bg-info text-info-foreground',
+    color: 'bg-pink-600',
     kpiKey: 'proximas_pericias',
     Icon: Calendar,
   },
@@ -57,7 +57,7 @@ const ACTION_CARDS: ActionCard[] = [
     subtitle: 'Redação e envio de laudos',
     badge: 'PRODUÇÃO',
     href: '/laudos-pendentes',
-    tone: 'bg-success text-success-foreground',
+    color: 'bg-teal-600',
     kpiKey: 'enviar_laudos',
     Icon: FileText,
   },
@@ -66,7 +66,7 @@ const ACTION_CARDS: ActionCard[] = [
     subtitle: 'Intimações para complementar laudo',
     badge: 'PRIORIDADE ALTA',
     href: '/comunicacao',
-    tone: 'bg-warning text-warning-foreground',
+    color: 'bg-orange-500',
     kpiKey: 'esclarecimentos',
     Icon: MessageSquareWarning,
   },
@@ -75,7 +75,7 @@ const ACTION_CARDS: ActionCard[] = [
     subtitle: 'Processos entregues aguardando pagamento (Carteira)',
     badge: 'FINANCEIRO',
     href: '/cobranca',
-    tone: 'bg-success text-success-foreground',
+    color: 'bg-green-600',
     kpiKey: 'a_receber',
     Icon: DollarSign,
   },
@@ -100,6 +100,7 @@ const NEW_MODULE_CARDS: ActionCard[] = [
   },
 ];
 
+
 const normalizeKpiText = (value: string) =>
   value
     .normalize('NFD')
@@ -117,6 +118,17 @@ const DashboardPage = () => {
       const normalizedLabel = normalizeKpiText(item.label);
       return (card.kpiKey && item.key === card.kpiKey) || normalizedLabel === normalizedCardTitle;
     });
+
+    acc[card.title] = kpi?.value ?? '—';
+    return acc;
+  }, {});
+
+  return (
+    <div className="space-y-5">
+      {/* Central de Notificações */}
+      <div className="rounded-xl bg-[#1a1d2e] p-5 text-white shadow">
+        <p className="mb-1 text-base font-semibold">Central de Notificações</p>
+        <p className="text-xs text-white/50">Pendências que requerem sua atenção imediata.</p>
 
     acc[card.title] = kpi?.value ?? '—';
     return acc;
@@ -171,7 +183,7 @@ const DashboardPage = () => {
         <LoadingState />
       ) : (
         <>
-          <div className="grid grid-cols-1 gap-3 md:grid-cols-3">
+          <div className="grid grid-cols-1 gap-4 md:grid-cols-3">
             {ACTION_CARDS.map((card) => {
               const Icon = card.Icon;
               const value = kpiValueByCard[card.title] ?? '—';

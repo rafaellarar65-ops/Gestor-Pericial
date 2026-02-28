@@ -6,6 +6,7 @@ import { AppModule } from './app.module';
 import { PrismaClient, UserRole } from '@prisma/client';
 import * as bcrypt from 'bcryptjs';
 import { getPrismaClientOptions, resolveDatabaseUrl } from './prisma/database-url';
+import { json, Request, Response } from 'express';
 
 const BOOTSTRAP_TENANT_ID = '11111111-1111-1111-1111-111111111111';
 
@@ -81,23 +82,44 @@ async function bootstrap() {
   app.setGlobalPrefix('api');
 
   const configuredOrigins = process.env.FRONTEND_URL
-    ? process.env.FRONTEND_URL.split(',').map((u) => u.trim())
-    : null;
+    ? process.env.FRONTEND_URL.split(',').map((u) => u.trim()).filter(Boolean)
+    : [];
+
+  const isAllowedOrigin = (origin?: string): boolean => {
+    // server-side calls and same-origin requests may not send Origin
+    if (!origin) return true;
+
+    // When FRONTEND_URL is not configured we keep CORS permissive to avoid login lockouts.
+    if (!configuredOrigins.length) return true;
+
+    if (configuredOrigins.some((allowed) => origin.startsWith(allowed))) {
+      return true;
+    }
+
+    // Allow common preview/staging hosts used by this project.
+    try {
+      const { hostname } = new URL(origin);
+      if (hostname.endsWith('.railway.app') || hostname.endsWith('.vercel.app')) {
+        return true;
+      }
+    } catch {
+      return false;
+    }
+
+    return false;
+  };
 
   app.enableCors({
-    // When FRONTEND_URL is not set, allow all origins (needed for first-time deploys).
-    // When set, restrict to the listed origins only.
-    origin: configuredOrigins
-      ? (origin, cb) => {
-          if (!origin || configuredOrigins.some((o) => origin.startsWith(o))) {
-            cb(null, true);
-          } else {
-            cb(null, false);
-          }
-        }
-      : (_origin, cb) => cb(null, true),
+    origin: (origin, cb) => cb(null, isAllowedOrigin(origin)),
     credentials: true,
   });
+
+
+  app.use(json({
+    verify: (req: Request & { rawBody?: string }, _res: Response, buf: Buffer) => {
+      req.rawBody = buf.toString('utf8');
+    },
+  }));
 
   app.useGlobalPipes(new ValidationPipe());
   app.useGlobalFilters(new HttpExceptionFilter());

@@ -1,5 +1,14 @@
 import { apiClient } from '@/lib/api-client';
-import type { ApiListResponse, Despesa, FinancialAnalytics, FinancialItem, Recebimento } from '@/types/api';
+import type {
+  ApiListResponse,
+  Despesa,
+  FinancialAnalytics,
+  FinancialItem,
+  RevenueForecast,
+  Recebimento,
+  UnmatchedPayment,
+  UnmatchedPaymentOrigin,
+} from '@/types/api';
 
 type RecebimentoRaw = {
   id: string;
@@ -60,8 +69,50 @@ export const financialService = {
     return data;
   },
 
+  listUnmatchedPayments: async (): Promise<UnmatchedPayment[]> => {
+    const { data } = await apiClient.get<UnmatchedPayment[]>('/financial/unmatched');
+    return Array.isArray(data) ? data : [];
+  },
+
+  linkUnmatchedPayment: async (id: string, payload: { periciaId?: string; note?: string }): Promise<UnmatchedPayment> => {
+    const { data } = await apiClient.post<UnmatchedPayment>(`/financial/unmatched/${id}/link`, payload);
+    return data;
+  },
+
+  updateUnmatchedPayment: async (
+    id: string,
+    payload: {
+      amount?: number;
+      receivedAt?: string;
+      payerName?: string;
+      cnj?: string;
+      description?: string;
+      source?: string;
+      origin?: UnmatchedPaymentOrigin;
+      notes?: string;
+    },
+  ): Promise<UnmatchedPayment> => {
+    const { data } = await apiClient.patch<UnmatchedPayment>(`/financial/unmatched/${id}`, payload);
+    return data;
+  },
+
+  deleteUnmatchedPayment: async (id: string, reason?: string): Promise<{ deleted: boolean; id: string }> => {
+    const { data } = await apiClient.delete<{ deleted: boolean; id: string }>(`/financial/unmatched/${id}`, { data: { reason } });
+    return data;
+  },
+
+  discardUnmatchedPayment: async (id: string, note?: string): Promise<UnmatchedPayment> => {
+    const { data } = await apiClient.post<UnmatchedPayment>(`/financial/unmatched/${id}/discard`, { note });
+    return data;
+  },
+
   analytics: async (): Promise<FinancialAnalytics> => {
     const { data } = await apiClient.get<FinancialAnalytics>('/financial/analytics');
+    return data;
+  },
+
+  revenueForecast: async (): Promise<RevenueForecast> => {
+    const { data } = await apiClient.get<RevenueForecast>('/financial/revenue-forecast');
     return data;
   },
 };

@@ -28,6 +28,7 @@ export const sidebarSections: SidebarSection[] = [
       { label: 'Teleperícias', href: '/telepericias' },
       { label: 'Esclarecimentos', href: '/comunicacao' },
       { label: 'Agenda', href: '/agenda' },
+      { label: 'Google Calendar', href: '/integrations/google-calendar' },
     ],
   },
   {
@@ -44,12 +45,19 @@ export const sidebarSections: SidebarSection[] = [
       { label: 'Central de Cobrança', href: '/cobranca' },
       { label: 'Importações', href: '/importacoes' },
       { label: 'Análise Financeira', href: '/financeiro' },
+      { label: 'Analytics Calendar', href: '/analytics-calendar' },
       { label: 'Relatórios Financeiros', href: '/relatorios-financeiros' },
+      { label: 'Pagamentos não vinculados', href: '/pagamentos-nao-vinculados' },
     ],
   },
   {
-    section: 'SISTEMA',
-    items: [{ label: 'Configurações', href: '/configuracoes' }],
+    section: 'SUPORTE E ADMINISTRAÇÃO',
+    items: [
+      { label: 'Documentação', href: '/documentacao' },
+      { label: 'Inbox de Email', href: '/inbox-email' },
+      { label: 'Advogados', href: '/advogados' },
+      { label: 'Despesas', href: '/despesas' },
+    ],
   },
 ];
 
