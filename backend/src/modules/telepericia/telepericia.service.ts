@@ -3,6 +3,7 @@ import { TeleSlotStatus } from '@prisma/client';
 import { randomUUID } from 'crypto';
 import { RequestContextService } from '../../common/request-context.service';
 import { PrismaService } from '../../prisma/prisma.service';
+import { WhatsappSchedulerService } from '../communications/whatsapp.scheduler.service';
 import {
   BookTeleSlotDto,
   CreateTeleSlotDto,
@@ -19,11 +20,12 @@ export class TelepericiaService {
   constructor(
     private readonly prisma: PrismaService,
     private readonly context: RequestContextService,
+    private readonly whatsappScheduler: WhatsappSchedulerService,
   ) {}
 
-  createSlot(dto: CreateTeleSlotDto) {
+  async createSlot(dto: CreateTeleSlotDto) {
     const tenantId = this.context.get('tenantId') ?? '';
-    return this.prisma.teleSlot.create({
+    const slot = await this.prisma.teleSlot.create({
       data: {
         tenantId,
         startAt: new Date(dto.startAt),
@@ -32,6 +34,17 @@ export class TelepericiaService {
         ...(dto.platform ? { platform: dto.platform } : {}),
       },
     });
+
+    if (slot.periciaId) {
+      await this.whatsappScheduler.syncPericiaJobs({
+        tenantId,
+        periciaId: slot.periciaId,
+        scheduledAt: slot.startAt,
+        shouldSchedule: true,
+      });
+    }
+
+    return slot;
   }
 
   listSlots() {
@@ -39,11 +52,28 @@ export class TelepericiaService {
   }
 
   async booking(dto: BookTeleSlotDto) {
-    await this.ensureSlot(dto.slotId);
-    return this.prisma.teleSlot.update({
+    const slot = await this.ensureSlot(dto.slotId);
+    const updatedSlot = await this.prisma.teleSlot.update({
       where: { id: dto.slotId },
       data: { periciaId: dto.periciaId, ...(dto.meetingUrl ? { meetingUrl: dto.meetingUrl } : {}), status: TeleSlotStatus.BOOKED },
     });
+
+    if (slot.periciaId && slot.periciaId !== dto.periciaId) {
+      await this.whatsappScheduler.syncPericiaJobs({
+        tenantId: updatedSlot.tenantId,
+        periciaId: slot.periciaId,
+        shouldSchedule: false,
+      });
+    }
+
+    await this.whatsappScheduler.syncPericiaJobs({
+      tenantId: updatedSlot.tenantId,
+      periciaId: dto.periciaId,
+      scheduledAt: updatedSlot.startAt,
+      shouldSchedule: true,
+    });
+
+    return updatedSlot;
   }
 
   async whatsappContact(dto: WhatsappContactDto) {

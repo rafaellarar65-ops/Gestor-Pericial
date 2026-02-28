@@ -12,12 +12,13 @@ describe('TelepericiaService', () => {
   } as any;
 
   const context = { get: jest.fn().mockReturnValue('t-1') };
+  const whatsappScheduler = { syncPericiaJobs: jest.fn() };
 
   let service: TelepericiaService;
 
   beforeEach(() => {
     jest.clearAllMocks();
-    service = new TelepericiaService(prisma, context as any);
+    service = new TelepericiaService(prisma, context as any, whatsappScheduler as any);
   });
 
   it('creates tele slot (happy path)', async () => {

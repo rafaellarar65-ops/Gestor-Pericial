@@ -1,5 +1,6 @@
 import { Injectable, NotFoundException } from '@nestjs/common';
 import { Prisma } from '@prisma/client';
+import { WhatsappSchedulerService } from '../communications/whatsapp.scheduler.service';
 import { RequestContextService } from '../../common/request-context.service';
 import { PrismaService } from '../../prisma/prisma.service';
 import {
@@ -16,11 +17,12 @@ export class PericiasService {
   constructor(
     private readonly prisma: PrismaService,
     private readonly context: RequestContextService,
+    private readonly whatsappScheduler: WhatsappSchedulerService,
   ) {}
 
-  create(dto: CreatePericiasDto) {
+  async create(dto: CreatePericiasDto) {
     const tenantId = this.context.get('tenantId') ?? '';
-    return this.prisma.pericia.create({
+    const created = await this.prisma.pericia.create({
       data: {
         tenantId,
         processoCNJ: dto.processoCNJ,
@@ -40,7 +42,11 @@ export class PericiasService {
         ...(dto.pagamentoStatus ? { pagamentoStatus: dto.pagamentoStatus } : {}),
         ...(dto.dataNomeacao ? { dataNomeacao: new Date(dto.dataNomeacao) } : {}),
       },
+      include: { modalidade: true },
     });
+
+    await this.scheduleWhatsappJobs(created.id, created.tenantId, created.dataAgendamento, created.modalidade?.codigo, created.metadata);
+    return created;
   }
 
   async findAll(query: ListPericiasDto) {
@@ -89,7 +95,7 @@ export class PericiasService {
   async update(id: string, dto: UpdatePericiasDto) {
     await this.findOne(id);
 
-    return this.prisma.pericia.update({
+    const updated = await this.prisma.pericia.update({
       where: { id },
       data: {
         ...(dto.juizNome !== undefined ? { juizNome: dto.juizNome } : {}),
@@ -106,7 +112,11 @@ export class PericiasService {
         ...(dto.dataRealizacao !== undefined ? { dataRealizacao: new Date(dto.dataRealizacao) } : {}),
         ...(dto.dataEnvioLaudo !== undefined ? { dataEnvioLaudo: new Date(dto.dataEnvioLaudo) } : {}),
       },
+      include: { modalidade: true },
     });
+
+    await this.scheduleWhatsappJobs(updated.id, updated.tenantId, updated.dataAgendamento, updated.modalidade?.codigo, updated.metadata);
+    return updated;
   }
 
   async batchUpdate(dto: BatchUpdatePericiasDto) {
@@ -548,6 +558,33 @@ export class PericiasService {
         finalizada: { total: grouped.finalizada.length },
       },
     };
+  }
+
+
+  private async scheduleWhatsappJobs(
+    periciaId: string,
+    tenantId: string,
+    dataAgendamento: Date | null,
+    modalidadeCodigo?: string | null,
+    metadata?: Prisma.JsonValue,
+  ) {
+    const isTelepericia = (modalidadeCodigo ?? '').toLowerCase() === 'telepericia';
+    const phone = this.extractPhone(metadata);
+
+    await this.whatsappScheduler.syncPericiaJobs({
+      tenantId,
+      periciaId,
+      scheduledAt: dataAgendamento,
+      phone,
+      shouldSchedule: isTelepericia,
+    });
+  }
+
+  private extractPhone(metadata?: Prisma.JsonValue) {
+    if (!metadata || typeof metadata !== 'object' || Array.isArray(metadata)) return null;
+
+    const value = (metadata as Record<string, unknown>).whatsappPhone ?? (metadata as Record<string, unknown>).phone;
+    return typeof value === 'string' ? value : null;
   }
 
 }

@@ -101,6 +101,22 @@ enum NotificationChannel {
   WHATSAPP
 }
 
+enum WhatsAppJobType {
+  REMINDER_48H
+  REMINDER_24H
+  REMINDER_2H
+  POST
+}
+
+enum WhatsAppJobStatus {
+  QUEUED
+  PROCESSING
+  SENT
+  RETRYING
+  FAILED
+  CANCELED
+}
+
 // =========================
 // Identity / Tenant
 // =========================
@@ -153,6 +169,7 @@ model Tenant {
   teleSlots           TeleSlot[]
   schedulingBatches   SchedulingBatch[]
   cnjSyncs            CnjSync[]
+  whatsAppJobs        WhatsAppJob[]
 }
 
 model User {
@@ -401,6 +418,7 @@ model Pericia {
   bankTransactions BankTransaction[]
   teleSlots        TeleSlot[]
   cnjSyncs         CnjSync[]
+  whatsAppJobs     WhatsAppJob[]
 
   @@unique([tenantId, processoCNJ])
   @@index([tenantId, processoCNJ])
@@ -1040,4 +1058,34 @@ model CnjSync {
   pericia Pericia? @relation(fields: [periciaId], references: [id], onDelete: SetNull)
 
   @@index([tenantId, status, nextSyncAt])
+}
+
+model WhatsAppJob {
+  id             String            @id @default(uuid()) @db.Uuid
+  tenantId       String            @db.Uuid
+  periciaId      String            @db.Uuid
+  jobType        WhatsAppJobType
+  status         WhatsAppJobStatus @default(QUEUED)
+  scheduledFor   DateTime
+  nextAttemptAt  DateTime?
+  attempts       Int               @default(0)
+  maxAttempts    Int               @default(4)
+  idempotencyKey String
+  phone          String?
+  payload        Json?
+  lastError      Json?
+  providerRef    String?
+  sentAt         DateTime?
+  canceledAt     DateTime?
+  createdAt      DateTime          @default(now())
+  updatedAt      DateTime          @updatedAt
+  createdBy      String?           @db.Uuid
+  updatedBy      String?           @db.Uuid
+
+  tenant  Tenant  @relation(fields: [tenantId], references: [id], onDelete: Cascade)
+  pericia Pericia @relation(fields: [periciaId], references: [id], onDelete: Cascade)
+
+  @@unique([tenantId, idempotencyKey])
+  @@index([tenantId, status, scheduledFor])
+  @@index([tenantId, periciaId, jobType])
 }
