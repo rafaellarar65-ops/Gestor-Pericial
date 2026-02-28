@@ -1,5 +1,5 @@
 import { apiClient } from '@/lib/api-client';
-import type { AgendaEvent, AgendaTask } from '@/types/api';
+import type { AgendaEvent, AgendaTask, SchedulingBatchHistory } from '@/types/api';
 
 export type BatchSchedulePayload = {
   date: string;
@@ -8,7 +8,7 @@ export type BatchSchedulePayload = {
 };
 
 type BatchScheduleItemRequest = {
-  periciaId: string;
+  periciaId?: string;
   title: string;
   type: 'PERICIA';
   startAt: string;
@@ -16,6 +16,20 @@ type BatchScheduleItemRequest = {
 
 type BatchScheduleRequest = {
   items: BatchScheduleItemRequest[];
+};
+
+export type ScheduleLotPayload = {
+  items: Array<{ periciaId: string; startAt: string }>;
+  metadata: {
+    cityNames: string[];
+    date: string;
+    startTime: string;
+    durationMinutes: number;
+    intervalMinutes: number;
+    location?: string;
+    modalidade?: string;
+    source: 'CSV' | 'WORD';
+  };
 };
 
 export const agendaService = {
@@ -57,14 +71,26 @@ export const agendaService = {
   scheduleBatch: async (payload: BatchSchedulePayload): Promise<void> => {
     const startAt = new Date(`${payload.date}T${payload.time}`).toISOString();
     const requestPayload: BatchScheduleRequest = {
-      items: payload.periciaIds.map((periciaId) => ({
-        periciaId,
-        title: 'Perícia agendada em lote',
-        type: 'PERICIA',
-        startAt,
-      })),
+      items: payload.periciaIds.map((periciaId) => ({ periciaId, title: 'Perícia agendada em lote', type: 'PERICIA', startAt })),
     };
 
     await apiClient.post('/agenda/batch-scheduling', requestPayload);
+  },
+
+  scheduleLot: async (payload: ScheduleLotPayload): Promise<void> => {
+    await apiClient.post('/agenda/batch-scheduling', {
+      metadata: payload.metadata,
+      items: payload.items.map((item) => ({
+        periciaId: item.periciaId,
+        title: 'Perícia agendada em lote',
+        type: 'PERICIA',
+        startAt: item.startAt,
+      })),
+    });
+  },
+
+  listSchedulingBatches: async (): Promise<SchedulingBatchHistory[]> => {
+    const { data } = await apiClient.get<SchedulingBatchHistory[]>('/agenda/batch-scheduling');
+    return Array.isArray(data) ? data : [];
   },
 };

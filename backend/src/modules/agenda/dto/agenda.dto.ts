@@ -7,6 +7,7 @@ import {
   IsEnum,
   IsInt,
   IsNotEmpty,
+  IsObject,
   IsOptional,
   IsString,
   IsUUID,
@@ -121,7 +122,55 @@ export class BatchScheduleItemDto {
   endAt?: string;
 }
 
+
+export class BatchScheduleMetadataDto {
+  @ApiPropertyOptional({ type: [String] })
+  @IsOptional()
+  @IsArray()
+  cityNames?: string[];
+
+  @ApiPropertyOptional()
+  @IsOptional()
+  @IsString()
+  date?: string;
+
+  @ApiPropertyOptional()
+  @IsOptional()
+  @IsString()
+  startTime?: string;
+
+  @ApiPropertyOptional()
+  @IsOptional()
+  @IsInt()
+  durationMinutes?: number;
+
+  @ApiPropertyOptional()
+  @IsOptional()
+  @IsInt()
+  intervalMinutes?: number;
+
+  @ApiPropertyOptional()
+  @IsOptional()
+  @IsString()
+  location?: string;
+
+  @ApiPropertyOptional()
+  @IsOptional()
+  @IsString()
+  modalidade?: string;
+
+  @ApiPropertyOptional({ enum: ['CSV', 'WORD'] })
+  @IsOptional()
+  @IsString()
+  source?: 'CSV' | 'WORD';
+}
+
 export class BatchScheduleDto {
+  @ApiPropertyOptional({ type: BatchScheduleMetadataDto })
+  @IsOptional()
+  @IsObject()
+  metadata?: BatchScheduleMetadataDto;
+
   @ApiProperty({ type: [BatchScheduleItemDto] })
   @IsArray()
   @ValidateNested({ each: true })

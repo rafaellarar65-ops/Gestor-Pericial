@@ -36,6 +36,13 @@ export class AgendaController {
     return this.service.listTasks();
   }
 
+
+  @Get('batch-scheduling')
+  @ApiOperation({ summary: 'Lista histórico de lotes de agendamento persistidos' })
+  listBatchScheduling() {
+    return this.service.listBatchScheduling();
+  }
+
   @Post('batch-scheduling')
   @ApiOperation({ summary: 'Agendamento em lote com transação atômica' })
   batchScheduling(@Body() dto: BatchScheduleDto) {

@@ -127,6 +127,27 @@ export type AgendaEvent = {
   periciaId?: string;
 };
 
+
+export type SchedulingBatchHistory = {
+  id: string;
+  createdAt: string;
+  cityNames: string[];
+  date: string;
+  startTime: string;
+  durationMinutes: number;
+  intervalMinutes: number;
+  location?: string;
+  modalidade?: string;
+  source: 'CSV' | 'WORD';
+  status: 'PENDENTE' | 'CONFIRMADO';
+  items: Array<{
+    periciaId: string;
+    processoCNJ?: string;
+    cidade?: string;
+    scheduledAt: string;
+  }>;
+};
+
 export type AgendaTask = {
   id: string;
   title: string;
