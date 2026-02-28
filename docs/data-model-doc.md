@@ -96,17 +96,25 @@ Usado em:
 
 ## Status operacionais (fonte atual do banco)
 
-Os códigos de status usados no cadastro base (`Status`) são:
+Os códigos de status usados no cadastro real (`Status`) são:
 
-- `NOMEADA`
-- `ACEITA`
-- `AGENDADA`
-- `REALIZADA`
-- `EM_LAUDO`
+- `AVALIAR`
+- `MAJORAR`
+- `AGUARDANDO_ACEITE_HONORARIOS`
+- `AGENDAR_DATA`
+- `DATA_AGENDADA`
+- `AUSENTE`
+- `AUSENCIA_INFORMADA`
+- `ENVIAR_LAUDO`
 - `LAUDO_ENVIADO`
-- `COBRANCA`
-- `PAGO_PARCIAL`
-- `PAGO`
+- `ESCLARECIMENTOS`
+- `AGUARDANDO_PAG`
+- `RECEBIDO_PARCIALMENTE`
+- `FINALIZADA`
+- `RECUSAR`
+- `CANCELADA`
+- `TELEPERICIA`
+- `FAZER_INDIRETA`
 
 Para a especificação completa do motor de status alinhado a esses códigos, consultar:
 

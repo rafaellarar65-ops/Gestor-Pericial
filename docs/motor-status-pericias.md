@@ -1,271 +1,272 @@
-# Motor de Status de Perícias (alinhado ao banco atual)
+# Motor de Status de Perícias (alinhado ao banco real)
 
 ## 0) Objetivo
 
-Definir um motor único e auditável para o ciclo de vida das perícias **usando os status existentes hoje no banco** (tabela `Status`, seed padrão), sem criar explosão de estados.
+Definir um motor único e auditável para o ciclo de vida das perícias, **sem divergência com os códigos hoje cadastrados na tabela `Status` do banco**.
 
-Este documento adapta o prompt original para os códigos reais:
+## 1) Fonte de verdade de status (DB real)
 
-- `NOMEADA`
-- `ACEITA`
-- `AGENDADA`
-- `REALIZADA`
-- `EM_LAUDO`
+Conforme base real compartilhada (print da tabela), os códigos ativos são:
+
+- `AVALIAR`
+- `MAJORAR`
+- `AGUARDANDO_ACEITE_HONORARIOS`
+- `AGENDAR_DATA`
+- `DATA_AGENDADA`
+- `AUSENTE`
+- `AUSENCIA_INFORMADA`
+- `ENVIAR_LAUDO`
 - `LAUDO_ENVIADO`
-- `COBRANCA`
-- `PAGO_PARCIAL`
-- `PAGO`
+- `ESCLARECIMENTOS`
+- `AGUARDANDO_PAG`
+- `RECEBIDO_PARCIALMENTE`
+- `FINALIZADA`
+- `RECUSAR`
+- `CANCELADA`
+- `TELEPERICIA`
+- `FAZER_INDIRETA`
 
-Fonte de verdade atual: `backend/prisma/seed.ts` (bloco `const statuses = [...]`).
-
----
-
-## 1) Ajustes incorporados (regras já decididas)
-
-### 1.1 “Intimado a enviar laudo” não é status
-
-Permanece como **ação interna** enquanto a perícia está em `EM_LAUDO`.
-
-### 1.2 Urgência não é removida por ações internas
-
-Urgência só é removida por **mudança de status**.
-
-### 1.3 “Aguardando pagamento” é evento financeiro
-
-No banco atual, esse macroestado mapeia para `COBRANCA`.
-Mudanças para `PAGO_PARCIAL`/`PAGO` devem vir de `payment_applied` (módulo financeiro), com log.
+> Observação: este documento substitui a versão anterior que estava baseada nos códigos do `seed.ts` local e não no cadastro real do banco em uso.
 
 ---
 
-## 2) Enums oficiais (versão alinhada ao banco)
-
-## 2.1 Status macro único (DB real)
+## 2) Enum oficial (alinhado ao banco)
 
 ```ts
-export enum PericiaStatusDb {
-  NOMEADA = "NOMEADA",
-  ACEITA = "ACEITA",
-  AGENDADA = "AGENDADA",
-  REALIZADA = "REALIZADA",
-  EM_LAUDO = "EM_LAUDO",
+export enum PericiaStatus {
+  AVALIAR = "AVALIAR",
+  MAJORAR = "MAJORAR",
+  AGUARDANDO_ACEITE_HONORARIOS = "AGUARDANDO_ACEITE_HONORARIOS",
+
+  AGENDAR_DATA = "AGENDAR_DATA",
+  DATA_AGENDADA = "DATA_AGENDADA",
+
+  AUSENTE = "AUSENTE",
+  AUSENCIA_INFORMADA = "AUSENCIA_INFORMADA",
+
+  ENVIAR_LAUDO = "ENVIAR_LAUDO",
   LAUDO_ENVIADO = "LAUDO_ENVIADO",
-  COBRANCA = "COBRANCA",
-  PAGO_PARCIAL = "PAGO_PARCIAL",
-  PAGO = "PAGO"
+  ESCLARECIMENTOS = "ESCLARECIMENTOS",
+
+  AGUARDANDO_PAG = "AGUARDANDO_PAG",
+  RECEBIDO_PARCIALMENTE = "RECEBIDO_PARCIALMENTE",
+  FINALIZADA = "FINALIZADA",
+
+  RECUSAR = "RECUSAR",
+  CANCELADA = "CANCELADA",
+
+  TELEPERICIA = "TELEPERICIA",
+  FAZER_INDIRETA = "FAZER_INDIRETA"
 }
 ```
 
-### 2.2 Modalidade (campo paralelo)
+---
 
-Sem alteração funcional de regra (continua campo paralelo).
+## 3) Regras estruturais (mantidas)
 
-> Observação prática: no cadastro base também existe `hibrida` em `Modalidade`.
+### 3.1 “Intimado a enviar laudo” não é status
+
+- Continua como ação interna em `ENVIAR_LAUDO`.
+- Deve registrar prazo de intimação e log de ação.
+- Deve ativar urgência automaticamente.
+
+### 3.2 Urgência não é removida por ação interna
+
+Urgência só é removida em mudança de status.
+
+### 3.3 Financeiro governa conclusão de pagamento
+
+A evolução entre `AGUARDANDO_PAG` → `RECEBIDO_PARCIALMENTE`/`FINALIZADA` deve ocorrer por evento financeiro (`payment_applied`) com log.
 
 ---
 
-## 3) Mapeamento do prompt original → status reais do banco
+## 4) Campos paralelos obrigatórios
 
-| Macro do prompt | Status real (DB) | Observação |
-|---|---|---|
-| `AVALIAR` | `NOMEADA` | Triagem inicial da nomeação |
-| `MAJORAR` | `NOMEADA` (com flag/ação) | Não há status próprio no DB atual |
-| `AGUARDANDO_ACEITE_HONORARIOS` | `ACEITA` (ou `NOMEADA` + flag, conforme decisão) | Precisa regra de negócio final |
-| `AGENDAR_DATA` | `ACEITA` | Etapa “pronto para agendar” sem status separado |
-| `DATA_AGENDADA` | `AGENDADA` | DB possui apenas “agendada” |
-| `AUSENTE` | `AGENDADA` + ocorrência/ação interna | Não existe status dedicado |
-| `AUSENCIA_INFORMADA` | `AGENDADA` + ocorrência/ação interna | Não existe status dedicado |
-| `ENVIAR_LAUDO` | `EM_LAUDO` | Equivalente direto |
-| `LAUDO_ENVIADO` | `LAUDO_ENVIADO` | Equivalente direto |
-| `ESCLARECIMENTOS` | `EM_LAUDO` + motivo de retorno | Sem status dedicado |
-| `AGUARDANDO_PAGAMENTO` | `COBRANCA` | Equivalente financeiro |
-| `RECEBIDA_PARCIALMENTE` | `PAGO_PARCIAL` | Equivalente financeiro |
-| `FINALIZADA` | `PAGO` | Equivalente financeiro |
-| `RECUSADA` | **sem status no DB atual** | Tratar via ação + log (ou criar status depois) |
-| `CANCELADA` | **sem status no DB atual** | Tratar via ação + log (ou criar status depois) |
+Mantidos os campos de:
+
+- urgência (`isUrgente`, `prazoUrgente`, etc.)
+- prazos operacionais (`prazoAgendamentoDias`, `prazoIndiretaDias`, `prazoEsclarecimentosDias`, `prazoIntimacaoLaudoDias`)
+- agendamento (`agendamentoData`, `agendamentoHora`, `agendamentoLocal`, `agendamentoOrigem`)
+- teleperícia (responsável/telefone)
+- laudo (`dataRealizacaoPericia`, `dataEnvioLaudo`, observações)
+- financeiro (total, recebido, saldo)
 
 ---
 
-## 4) Campos paralelos obrigatórios (mantidos)
+## 5) Matriz oficial — Status → Ações → Efeitos
 
-Os campos transversais de urgência, prazos, agendamento, teleperícia, laudo e financeiro continuam válidos como no prompt original.
+### 5.1 `AVALIAR`
 
-Pontos de ajuste por banco atual:
+- Agendar data → `AGENDAR_DATA` (com modal de prazo + modalidade)
+- Aguardar aceite de honorários → `AGUARDANDO_ACEITE_HONORARIOS`
+- Fazer indireta → `FAZER_INDIRETA` (com prazo de indireta)
+- Recusar → `RECUSAR`
 
-1. Campos que substituem status inexistente (`AUSENTE`, `ESCLARECIMENTOS`, `RECUSADA`, `CANCELADA`) devem ser representados por:
-   - flags/campos de domínio; e
-   - logs em `pericia_action_log`.
-2. `EM_LAUDO` concentra “produção de laudo”, “intimação para laudo” e “esclarecimentos”, com subtipo no payload de ação.
+### 5.2 `MAJORAR`
 
----
+- Aguardando aceite honorários → `AGUARDANDO_ACEITE_HONORARIOS`
+- Recusar → `RECUSAR`
 
-## 5) Matriz oficial (status DB → ações recomendadas → efeitos)
+### 5.3 `AGUARDANDO_ACEITE_HONORARIOS`
 
-## 5.1 `NOMEADA`
+- Agendar data → `AGENDAR_DATA`
+- Majorrar/contraproposta → `MAJORAR`
+- Recusar → `RECUSAR`
+- Cancelar → `CANCELADA`
 
-Ações recomendadas:
+### 5.4 `AGENDAR_DATA`
 
-- Aceitar perícia → `ACEITA`
-- Definir proposta/majorar (ação interna auditável)
-- Fazer indireta → `EM_LAUDO` (payload `{ origem: "INDIRETA" }`)
-- Recusar (ação interna auditável, sem status dedicado no DB atual)
+- Agendada → `DATA_AGENDADA`
+- Teleperícia (troca operacional) → `TELEPERICIA`
 
-## 5.2 `ACEITA`
+### 5.5 `TELEPERICIA`
 
-Ações recomendadas:
+- Inserir dados de teleperícia (ação interna com log)
+- Confirmar agendamento → `DATA_AGENDADA`
 
-- Agendar (data/hora/local) → `AGENDADA`
-- Ajustar modalidade (ação interna)
-- Cancelar fluxo (ação interna auditável enquanto não há status `CANCELADA`)
+### 5.6 `DATA_AGENDADA`
 
-## 5.3 `AGENDADA`
+- Perícia realizada → `ENVIAR_LAUDO`
+- Ausente → `AUSENTE`
 
-Ações recomendadas:
+### 5.7 `AUSENTE`
 
-- Marcar realização → `REALIZADA`
-- Registrar ausência (ação interna, com motivo)
-- Reagendar (permanece `AGENDADA`, atualiza data/hora/local)
+- Ausência informada → `AUSENCIA_INFORMADA`
 
-## 5.4 `REALIZADA`
+### 5.8 `AUSENCIA_INFORMADA`
 
-Ações recomendadas:
+- Agendar data novamente → `AGENDAR_DATA`
+- Cancelar → `CANCELADA`
 
-- Iniciar elaboração de laudo → `EM_LAUDO`
+### 5.9 `FAZER_INDIRETA`
 
-## 5.5 `EM_LAUDO`
+- Produção e envio de laudo indireto dentro do fluxo de laudo
+- Transição recomendada: `FAZER_INDIRETA` → `ENVIAR_LAUDO`
 
-Ações recomendadas:
+### 5.10 `ENVIAR_LAUDO`
 
-- Intimado a enviar laudo (ação interna; ativa urgência)
-- Registrar esclarecimentos (ação interna)
-- Enviar laudo → `LAUDO_ENVIADO`
+- Intimado a enviar laudo (ação interna; não muda status)
+- Laudo enviado → `LAUDO_ENVIADO`
 
-## 5.6 `LAUDO_ENVIADO`
+### 5.11 `LAUDO_ENVIADO`
 
-Automação:
+- Esclarecimentos → `ESCLARECIMENTOS`
+- Sem impugnação (manual/automação +20d) → `AGUARDANDO_PAG`
 
-- Após +20 dias sem impugnação → `COBRANCA` (origem `SISTEMA`)
+### 5.12 `ESCLARECIMENTOS`
 
-Ações recomendadas:
+- Esclarecimentos enviados → `LAUDO_ENVIADO`
 
-- Retornar para esclarecimentos (ação interna + opcional retorno para `EM_LAUDO`)
-- Avançar manualmente para `COBRANCA` quando aplicável
+### 5.13 `AGUARDANDO_PAG`
 
-## 5.7 `COBRANCA`
+- Evento financeiro com saldo > 0 → `RECEBIDO_PARCIALMENTE`
+- Evento financeiro com saldo <= 0 → `FINALIZADA`
 
-Somente evento financeiro altera status:
+### 5.14 `RECEBIDO_PARCIALMENTE`
 
-- `payment_applied` com saldo > 0 → `PAGO_PARCIAL`
-- `payment_applied` com saldo <= 0 → `PAGO`
+- Novo evento financeiro com saldo <= 0 → `FINALIZADA`
 
-## 5.8 `PAGO_PARCIAL`
+### 5.15 Status de encerramento
 
-Novo `payment_applied`:
-
-- saldo <= 0 → `PAGO`
-
-## 5.9 `PAGO`
-
-Estado final operacional.
+- `FINALIZADA`, `RECUSAR`, `CANCELADA` permanecem consultáveis em “Todas as perícias” e busca.
 
 ---
 
 ## 6) Auditoria obrigatória
 
-## 6.1 Log de mudança de status (imutável)
+### 6.1 `pericia_status_log` (imutável)
 
-`pericia_status_log` com campos mínimos do prompt original.
+Campos mínimos:
 
-## 6.2 Log de ações internas
+- `id`
+- `periciaId`
+- `statusAnterior`
+- `statusNovo`
+- `dataMudanca`
+- `usuarioId`
+- `origemMudanca` (`DROPDOWN` | `BOTAO` | `SISTEMA` | `LOTE`)
+- `payload` (JSON)
 
-`pericia_action_log` para: urgência, modalidade, teleperícia, intimação de laudo, ausência, majorar, recusa/cancelamento enquanto sem status dedicado.
+### 6.2 `pericia_action_log`
+
+Para ações internas:
+
+- urgência
+- teleperícia
+- modalidade
+- intimação de laudo
+- observações relevantes
 
 ---
 
-## 7) Regras de UI (obrigatórias)
+## 7) Regras de UI
 
-1. Urgência sempre no cabeçalho.
-2. Dropdown de status sempre disponível com modal obrigatório quando necessário.
-3. Botões de resolução recomendada por status DB atual.
-4. Itens sem status dedicado (ausência, esclarecimento, recusa, cancelamento) aparecem como badge/etiqueta secundária baseada em ações/logs.
+1. Checkbox “Urgente” sempre no cabeçalho (com modal de prazo ao marcar).
+2. Dropdown de status sempre disponível com validação de modal obrigatório.
+3. Botões de “Resoluções recomendadas” dinâmicos por status.
+4. Mudança de status sempre gera log e resolve urgência automaticamente.
 
 ---
 
-## 8) Diagrama final (Mermaid, alinhado ao banco)
+## 8) Diagrama (Mermaid)
 
 ```mermaid
 stateDiagram-v2
-  [*] --> NOMEADA
+  [*] --> AVALIAR
 
-  NOMEADA --> ACEITA: aceitar
-  NOMEADA --> EM_LAUDO: fazer indireta
-  NOMEADA --> NOMEADA: majorar/recusar (ação interna)
+  AVALIAR --> AGENDAR_DATA
+  AVALIAR --> AGUARDANDO_ACEITE_HONORARIOS
+  AVALIAR --> FAZER_INDIRETA
+  AVALIAR --> RECUSAR
 
-  ACEITA --> AGENDADA: agendar
-  AGENDADA --> REALIZADA: perícia realizada
-  AGENDADA --> AGENDADA: ausência/reagendar (ação interna)
+  MAJORAR --> AGUARDANDO_ACEITE_HONORARIOS
+  MAJORAR --> RECUSAR
 
-  REALIZADA --> EM_LAUDO: iniciar laudo
-  EM_LAUDO --> EM_LAUDO: intimado/esclarecimentos (ação interna)
-  EM_LAUDO --> LAUDO_ENVIADO: laudo enviado
+  AGUARDANDO_ACEITE_HONORARIOS --> AGENDAR_DATA
+  AGUARDANDO_ACEITE_HONORARIOS --> MAJORAR
+  AGUARDANDO_ACEITE_HONORARIOS --> RECUSAR
+  AGUARDANDO_ACEITE_HONORARIOS --> CANCELADA
 
-  LAUDO_ENVIADO --> COBRANCA: +20d sem impugnação (sistema)
-  LAUDO_ENVIADO --> COBRANCA: avanço manual
-  LAUDO_ENVIADO --> EM_LAUDO: retorno para esclarecimentos
+  AGENDAR_DATA --> DATA_AGENDADA
+  AGENDAR_DATA --> TELEPERICIA
 
-  COBRANCA --> PAGO_PARCIAL: payment_applied (saldo > 0)
-  COBRANCA --> PAGO: payment_applied (saldo <= 0)
-  PAGO_PARCIAL --> PAGO: payment_applied (saldo <= 0)
+  TELEPERICIA --> DATA_AGENDADA
+
+  DATA_AGENDADA --> ENVIAR_LAUDO
+  DATA_AGENDADA --> AUSENTE
+  AUSENTE --> AUSENCIA_INFORMADA
+  AUSENCIA_INFORMADA --> AGENDAR_DATA
+  AUSENCIA_INFORMADA --> CANCELADA
+
+  FAZER_INDIRETA --> ENVIAR_LAUDO
+
+  ENVIAR_LAUDO --> LAUDO_ENVIADO
+  LAUDO_ENVIADO --> ESCLARECIMENTOS
+  ESCLARECIMENTOS --> LAUDO_ENVIADO
+  LAUDO_ENVIADO --> AGUARDANDO_PAG
+
+  AGUARDANDO_PAG --> RECEBIDO_PARCIALMENTE
+  AGUARDANDO_PAG --> FINALIZADA
+  RECEBIDO_PARCIALMENTE --> FINALIZADA
 ```
 
 ---
 
-## 9) Checklist de endpoints (adaptado)
+## 9) Checklist de endpoints
 
 ### Backend
 
 - `POST /pericias/:id/status`
-  - valida payload obrigatório por status destino
-  - persiste campos complementares
-  - cria `pericia_status_log`
-  - se mudou status: resolve urgência automaticamente
-
 - `POST /pericias/:id/urgencia`
-  - marcar/desmarcar urgente
-  - ao marcar: prazo obrigatório
-  - log em `pericia_action_log`
-
 - `POST /pericias/:id/modalidade`
-  - alterna modalidade
-  - log ação
-
 - `POST /pericias/:id/telepericia`
-  - salva responsável
-  - log ação
-
 - `POST /pericias/:id/intimacao-laudo`
-  - marca intimado + prazo
-  - ativa urgência
-  - log ação
-
-- Job periódico:
-  - `LAUDO_ENVIADO` + 20 dias → `COBRANCA` (`origem=SISTEMA`)
-
-- Listener financeiro:
-  - `payment_applied` → recalcula saldo → `PAGO_PARCIAL`/`PAGO` com log
+- Job de evolução automática de `LAUDO_ENVIADO` para `AGUARDANDO_PAG`
+- Listener financeiro `payment_applied` para parcial/finalização
 
 ### Frontend
 
 - Header com urgência
 - Dropdown de status com modais obrigatórios
-- Resoluções recomendadas por status DB
-- Lote de agendamento atualiza para `AGENDADA`
-
----
-
-## 10) Dúvidas em aberto (precisam decisão)
-
-1. `MAJORAR` deve ficar como ação interna em `NOMEADA` ou virar novo status cadastrado?
-2. `RECUSADA` e `CANCELADA` serão criados na tabela `Status` ou permanecem apenas como ação auditável?
-3. `AGUARDANDO_ACEITE_HONORARIOS` deve ser uma subetapa de `NOMEADA` (flag) ou usar `ACEITA` como etapa intermediária operacional?
-
-Enquanto não houver decisão, este documento considera a abordagem **sem criar novos status no banco**.
+- Botões de resolução por status
+- Atualização em lote para agendamento
