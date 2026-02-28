@@ -1,7 +1,8 @@
 import { ApiProperty, ApiPropertyOptional } from '@nestjs/swagger';
-import { TelepericiaSlotType } from '@prisma/client';
 import { Type } from 'class-transformer';
 import { IsArray, IsDateString, IsEnum, IsInt, IsOptional, IsString, IsUUID, Matches, Max, Min, ValidateNested } from 'class-validator';
+
+const SLOT_TYPES = ['SEQUENTIAL', 'CUSTOM'] as const;
 
 export class CreateTeleSlotDto {
   @ApiProperty({ description: 'Data base do slot (YYYY-MM-DD)' })
@@ -18,10 +19,10 @@ export class CreateTeleSlotDto {
   @Min(15)
   durationMinutes!: number;
 
-  @ApiPropertyOptional({ enum: TelepericiaSlotType, default: TelepericiaSlotType.SEQUENTIAL })
+  @ApiPropertyOptional({ enum: SLOT_TYPES, default: 'SEQUENTIAL' })
   @IsOptional()
-  @IsEnum(TelepericiaSlotType)
-  slotType?: TelepericiaSlotType;
+  @IsEnum(SLOT_TYPES)
+  slotType?: (typeof SLOT_TYPES)[number];
 
   @ApiProperty({ minimum: 5, description: 'Duração de cada atendimento dentro do slot' })
   @Type(() => Number)

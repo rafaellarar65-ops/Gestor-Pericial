@@ -1,5 +1,5 @@
 import { Injectable, NotFoundException } from '@nestjs/common';
-import { AgendaEventStatus, AgendaTaskStatus } from '@prisma/client';
+import { AgendaEventStatus, AgendaEventType, AgendaTaskStatus, Prisma } from '@prisma/client';
 import { RequestContextService } from '../../common/request-context.service';
 import { PrismaService } from '../../prisma/prisma.service';
 import {
@@ -27,13 +27,6 @@ type StatusHistoryEntry = {
   reason?: string;
 };
 
-type StatusHistoryEntry = {
-  from: AgendaEventStatus;
-  to: AgendaEventStatus;
-  changedAt: string;
-  changedBy?: string;
-  reason?: string;
-};
 
 @Injectable()
 export class AgendaService {
@@ -110,6 +103,11 @@ export class AgendaService {
     return this.prisma.agendaTask.findMany({ where: { tenantId }, orderBy: { dueAt: 'asc' } });
   }
 
+  listBatchScheduling() {
+    const tenantId = this.context.get('tenantId') as string;
+    return this.prisma.schedulingBatch.findMany({ where: { tenantId }, orderBy: { createdAt: 'desc' } });
+  }
+
   async batchScheduling(dto: BatchScheduleDto) {
     const tenantId = this.context.get('tenantId') as string;
     const created = await this.prisma.$transaction(
@@ -117,8 +115,8 @@ export class AgendaService {
         this.prisma.agendaEvent.create({
           data: {
             tenantId,
-            title: item.title,
-            type: item.type,
+            title: item.title ?? "Agendamento",
+            type: item.type ?? AgendaEventType.OUTRO,
             status: item.status ?? AgendaEventStatus.AGENDADA,
             source: item.source,
             aiSuggested: item.aiSuggested,
@@ -322,7 +320,7 @@ export class AgendaService {
         this.prisma.agendaEvent.create({
           data: {
             tenantId,
-            title: item.title,
+            title: item.title ?? "Agendamento",
             startAt: new Date(item.startAt),
             endAt: new Date(item.endAt),
             type: AgendaEventType.BLOCO_TRABALHO,

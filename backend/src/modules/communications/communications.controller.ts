@@ -10,11 +10,13 @@ import {
   CreateLawyerDto,
   CreateMessageTemplateDto,
   GenerateHubEmailDto,
+  InterpretWhatsappInboundDto,
   InboxFilterDto,
   PreviewTemplateDto,
   SendEmailDto,
   SendWhatsappMessageDto,
   UpdateMessageTemplateDto,
+  UpdateWhatsappConsentDto,
   UpsertUolhostEmailConfigDto,
 } from './dto/communications.dto';
 
@@ -52,7 +54,7 @@ export class CommunicationsController {
 
   @Get('message-templates')
   listMessageTemplates(@Query('channel') channel?: 'whatsapp_template' | 'whatsapp_freeform' | 'clipboard' | 'wa_me_prefill') {
-    return this.service.listMessageTemplates(channel);
+    return this.service.listMessageTemplates(channel as string | undefined);
   }
 
   @Patch('message-templates/:id')
