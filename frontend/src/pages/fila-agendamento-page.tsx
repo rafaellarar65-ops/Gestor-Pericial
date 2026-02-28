@@ -16,7 +16,9 @@ const toCityName = (cidade: Pericia['cidade']) =>
   typeof cidade === 'string' ? cidade : (cidade as { nome?: string })?.nome ?? 'Sem cidade';
 
 const toStatusText = (status: Pericia['status']) =>
-  typeof status === 'string' ? status : (status as { codigo?: string; nome?: string })?.codigo ?? (status as { nome?: string })?.nome ?? '';
+  typeof status === 'string'
+    ? status
+    : (status as { codigo?: string; nome?: string })?.codigo ?? (status as { nome?: string })?.nome ?? '';
 
 const isPendingScheduling = (p: Pericia) => {
   const s = toStatusText(p.status).toUpperCase();
@@ -68,15 +70,17 @@ const FilaAgendamentoPage = () => {
       }
     });
 
-    return Array.from(byCity.entries()).map(([city, items]) => ({ city, items })).sort((a, b) => b.items.length - a.items.length);
+    return Array.from(byCity.entries())
+      .map(([city, items]) => ({ city, items }))
+      .sort((a, b) => b.items.length - a.items.length);
   }, [pendingPericias, search]);
 
-  const selectedCityItems = useMemo(() => cityGroups.filter((g) => selectedCities.has(g.city)).flatMap((g) => g.items), [cityGroups, selectedCities]);
-
-  const confirmedPericiaIds = useMemo(
-    () => new Set(history.flatMap((lot) => lot.items.map((item) => item.periciaId))),
-    [history],
+  const selectedCityItems = useMemo(
+    () => cityGroups.filter((group) => selectedCities.has(group.city)).flatMap((group) => group.items),
+    [cityGroups, selectedCities],
   );
+
+  const confirmedPericiaIds = useMemo(() => new Set(history.flatMap((lot) => lot.items.map((item) => item.periciaId))), [history]);
 
   const { draftLot, conflicts, isValid } = useScheduleLot(prepList, params, confirmedPericiaIds);
 
@@ -98,7 +102,13 @@ const FilaAgendamentoPage = () => {
         },
       });
 
-      await Promise.all(draftLot.items.map((item) => periciaService.updateDates(item.periciaId, { dataAgendamento: item.scheduledAt })));
+      await Promise.all(
+        draftLot.items.map((item) =>
+          periciaService.updateDates(item.periciaId, {
+            dataAgendamento: item.scheduledAt,
+          }),
+        ),
+      );
     },
     onSuccess: () => {
       void queryClient.invalidateQueries({ queryKey: ['pericias-agendar'] });
@@ -110,7 +120,9 @@ const FilaAgendamentoPage = () => {
       setPrepList([]);
       toast.success('Lote confirmado e persistido no backend.');
     },
-    onError: () => toast.error('Não foi possível persistir o lote.'),
+    onError: () => {
+      toast.error('Não foi possível persistir o lote.');
+    },
   });
 
   const toggleCity = (city: string) => {
@@ -138,10 +150,39 @@ const FilaAgendamentoPage = () => {
         <p className="text-sm text-muted-foreground">Seleção, parâmetros, revisão e confirmação com persistência no backend.</p>
       </header>
 
-      {step === 1 && <StepSelect cityGroups={cityGroups} search={search} onSearchChange={setSearch} selectedCities={selectedCities} onToggleCity={toggleCity} onNext={goToStep2} />}
-      {step === 2 && <StepSchedule params={params} totalItems={prepList.length} onParamsChange={(patch) => setParams((prev) => ({ ...prev, ...patch }))} onBack={() => setStep(1)} onNext={() => setStep(3)} />}
+      {step === 1 && (
+        <StepSelect
+          cityGroups={cityGroups}
+          search={search}
+          onSearchChange={setSearch}
+          selectedCities={selectedCities}
+          onToggleCity={toggleCity}
+          onNext={goToStep2}
+        />
+      )}
+
+      {step === 2 && (
+        <StepSchedule
+          params={params}
+          totalItems={prepList.length}
+          onParamsChange={(patch) => setParams((prev) => ({ ...prev, ...patch }))}
+          onBack={() => setStep(1)}
+          onNext={() => setStep(3)}
+        />
+      )}
+
       {step === 3 && <StepReview draftLot={draftLot} conflicts={conflicts} onBack={() => setStep(2)} onNext={() => setStep(4)} />}
-      {step === 4 && <StepConfirm draftLot={draftLot} isSubmitting={confirmLotMutation.isPending} onBack={() => setStep(3)} onConfirm={() => isValid && confirmLotMutation.mutate()} />}
+
+      {step === 4 && (
+        <StepConfirm
+          draftLot={draftLot}
+          isSubmitting={confirmLotMutation.isPending}
+          onBack={() => setStep(3)}
+          onConfirm={() => {
+            if (isValid) confirmLotMutation.mutate();
+          }}
+        />
+      )}
 
       <Card className="space-y-3 p-4">
         <h2 className="text-xl font-semibold">Histórico de Lotes (backend)</h2>
@@ -151,7 +192,9 @@ const FilaAgendamentoPage = () => {
           <div className="space-y-2">
             {history.map((lot) => (
               <article key={lot.id} className="rounded border p-3 text-sm">
-                <p className="font-medium">Lote #{lot.id.slice(0, 8)} • {new Date(lot.createdAt).toLocaleString('pt-BR')}</p>
+                <p className="font-medium">
+                  Lote #{lot.id.slice(0, 8)} • {new Date(lot.createdAt).toLocaleString('pt-BR')}
+                </p>
                 <p>Cidades: {lot.cityNames.join(', ') || '—'}</p>
                 <p>Itens: {lot.items.length}</p>
               </article>
