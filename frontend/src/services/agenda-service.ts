@@ -37,6 +37,23 @@ export const agendaService = {
     return data;
   },
 
+
+  updateEvent: async (
+    eventId: string,
+    payload: {
+      title?: string;
+      type?: string;
+      startAt?: string;
+      endAt?: string;
+      description?: string;
+      location?: string;
+      status?: string;
+    },
+  ): Promise<AgendaEvent> => {
+    const { data } = await apiClient.patch<AgendaEvent>(`/agenda/events/${eventId}`, payload);
+    return data;
+  },
+
   listTasks: async (): Promise<AgendaTask[]> => {
     const { data } = await apiClient.get<AgendaTask[]>('/agenda/tasks');
     return Array.isArray(data) ? data : [];
