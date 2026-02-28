@@ -1,5 +1,15 @@
 import { ApiProperty, ApiPropertyOptional } from '@nestjs/swagger';
-import { IsBoolean, IsDateString, IsIn, IsNotEmpty, IsObject, IsOptional, IsString, IsUUID } from 'class-validator';
+import {
+  IsArray,
+  IsBoolean,
+  IsIn,
+  IsNotEmpty,
+  IsObject,
+  IsOptional,
+  IsString,
+  IsUUID,
+  ArrayNotEmpty,
+} from 'class-validator';
 
 export class CreateEmailTemplateDto {
   @ApiProperty()
@@ -189,4 +199,123 @@ export class AutomaticVaraChargeDto {
   @IsOptional()
   @IsUUID('4', { each: true })
   periciaIds?: string[];
+}
+
+export const TEMPLATE_CHANNELS = ['whatsapp_template', 'whatsapp_freeform', 'clipboard', 'wa_me_prefill'] as const;
+
+export class CreateMessageTemplateDto {
+  @ApiProperty({ enum: TEMPLATE_CHANNELS })
+  @IsString()
+  @IsIn(TEMPLATE_CHANNELS)
+  channel!: (typeof TEMPLATE_CHANNELS)[number];
+
+  @ApiProperty()
+  @IsString()
+  @IsNotEmpty()
+  name!: string;
+
+  @ApiProperty()
+  @IsString()
+  @IsNotEmpty()
+  body!: string;
+
+  @ApiPropertyOptional({ type: [String] })
+  @IsOptional()
+  @IsArray()
+  @IsString({ each: true })
+  placeholdersUsed?: string[];
+
+  @ApiPropertyOptional({ type: Object })
+  @IsOptional()
+  @IsObject()
+  variablesMapping?: Record<string, string>;
+}
+
+export class UpdateMessageTemplateDto {
+  @ApiPropertyOptional({ enum: TEMPLATE_CHANNELS })
+  @IsOptional()
+  @IsString()
+  @IsIn(TEMPLATE_CHANNELS)
+  channel?: (typeof TEMPLATE_CHANNELS)[number];
+
+  @ApiPropertyOptional()
+  @IsOptional()
+  @IsString()
+  @IsNotEmpty()
+  name?: string;
+
+  @ApiPropertyOptional()
+  @IsOptional()
+  @IsString()
+  @IsNotEmpty()
+  body?: string;
+
+  @ApiPropertyOptional({ type: [String] })
+  @IsOptional()
+  @IsArray()
+  @IsString({ each: true })
+  placeholdersUsed?: string[];
+
+  @ApiPropertyOptional({ type: Object })
+  @IsOptional()
+  @IsObject()
+  variablesMapping?: Record<string, string>;
+}
+
+export class PreviewTemplateDto {
+  @ApiPropertyOptional()
+  @IsOptional()
+  @IsUUID()
+  periciaId?: string;
+}
+
+export const INBOX_FILTERS = [
+  'nao_confirmados',
+  'pediram_reagendamento',
+  'falha_envio',
+  'optin_pendente',
+  'inbound_nao_vinculado',
+] as const;
+
+export class InboxFilterDto {
+  @ApiPropertyOptional({ enum: INBOX_FILTERS })
+  @IsOptional()
+  @IsString()
+  @IsIn(INBOX_FILTERS)
+  filter?: (typeof INBOX_FILTERS)[number];
+}
+
+export class BulkResendTemplateDto {
+  @ApiProperty({ type: [String] })
+  @ArrayNotEmpty()
+  @IsUUID('4', { each: true })
+  messageIds!: string[];
+
+  @ApiProperty()
+  @IsUUID()
+  templateId!: string;
+}
+
+export class BulkGrantOptInDto {
+  @ApiProperty({ type: [String] })
+  @ArrayNotEmpty()
+  @IsUUID('4', { each: true })
+  messageIds!: string[];
+}
+
+export class BulkLinkInboundDto {
+  @ApiProperty({ type: [String] })
+  @ArrayNotEmpty()
+  @IsUUID('4', { each: true })
+  messageIds!: string[];
+
+  @ApiPropertyOptional()
+  @IsOptional()
+  @IsUUID()
+  processoId?: string;
+
+  @ApiPropertyOptional()
+  @IsOptional()
+  @IsUUID()
+  periciaId?: string;
 }

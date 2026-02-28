@@ -1,10 +1,18 @@
 import { ApiProperty, ApiPropertyOptional } from '@nestjs/swagger';
-import { AgendaEventType, AgendaTaskStatus } from '@prisma/client';
+import {
+  AgendaEventSource,
+  AgendaEventStatus,
+  AgendaEventType,
+  AgendaTaskStatus,
+  ExternalSyncStatus,
+} from '@prisma/client';
 import { Type } from 'class-transformer';
 import {
   IsArray,
+  IsBoolean,
   IsDateString,
   IsEnum,
+  IsIn,
   IsInt,
   IsNotEmpty,
   IsOptional,
@@ -42,6 +50,66 @@ export class CreateAgendaEventDto {
   @ApiPropertyOptional()
   @IsOptional()
   @IsString()
+  cnjId?: string;
+
+  @ApiPropertyOptional()
+  @IsOptional()
+  @IsUUID()
+  cityId?: string;
+
+  @ApiPropertyOptional()
+  @IsOptional()
+  @IsString()
+  city?: string;
+
+  @ApiPropertyOptional({ enum: AgendaEventStatus })
+  @IsOptional()
+  @IsEnum(AgendaEventStatus)
+  status?: AgendaEventStatus;
+
+  @ApiPropertyOptional({ enum: AgendaEventSource })
+  @IsOptional()
+  @IsEnum(AgendaEventSource)
+  source?: AgendaEventSource;
+
+  @ApiPropertyOptional()
+  @IsOptional()
+  @IsBoolean()
+  aiSuggested?: boolean;
+
+  @ApiPropertyOptional({ enum: ExternalSyncStatus })
+  @IsOptional()
+  @IsEnum(ExternalSyncStatus)
+  syncStatus?: ExternalSyncStatus;
+
+  @ApiPropertyOptional()
+  @IsOptional()
+  @IsString()
+  syncErrorMessage?: string;
+
+  @ApiPropertyOptional()
+  @IsOptional()
+  @IsString()
+  externalProvider?: string;
+
+  @ApiPropertyOptional()
+  @IsOptional()
+  @IsString()
+  externalEventId?: string;
+
+  @ApiPropertyOptional()
+  @IsOptional()
+  @IsString()
+  externalEtag?: string;
+
+  @ApiPropertyOptional()
+  @IsOptional()
+  @IsDateString()
+  externalLastModifiedAt?: string;
+
+  @ApiPropertyOptional()
+  @IsOptional()
+  @IsString()
   description?: string;
 }
 
@@ -65,6 +133,71 @@ export class UpdateAgendaEventDto {
   @IsOptional()
   @IsDateString()
   endAt?: string;
+
+  @ApiPropertyOptional({ enum: AgendaEventStatus })
+  @IsOptional()
+  @IsEnum(AgendaEventStatus)
+  status?: AgendaEventStatus;
+
+  @ApiPropertyOptional({ description: 'Motivo da alteração de status' })
+  @IsOptional()
+  @IsString()
+  statusChangeReason?: string;
+
+  @ApiPropertyOptional()
+  @IsOptional()
+  @IsString()
+  cnjId?: string;
+
+  @ApiPropertyOptional()
+  @IsOptional()
+  @IsUUID()
+  cityId?: string;
+
+  @ApiPropertyOptional()
+  @IsOptional()
+  @IsString()
+  city?: string;
+
+  @ApiPropertyOptional({ enum: AgendaEventSource })
+  @IsOptional()
+  @IsEnum(AgendaEventSource)
+  source?: AgendaEventSource;
+
+  @ApiPropertyOptional()
+  @IsOptional()
+  @IsBoolean()
+  aiSuggested?: boolean;
+
+  @ApiPropertyOptional({ enum: ExternalSyncStatus })
+  @IsOptional()
+  @IsEnum(ExternalSyncStatus)
+  syncStatus?: ExternalSyncStatus;
+
+  @ApiPropertyOptional()
+  @IsOptional()
+  @IsString()
+  syncErrorMessage?: string;
+
+  @ApiPropertyOptional()
+  @IsOptional()
+  @IsString()
+  externalProvider?: string;
+
+  @ApiPropertyOptional()
+  @IsOptional()
+  @IsString()
+  externalEventId?: string;
+
+  @ApiPropertyOptional()
+  @IsOptional()
+  @IsString()
+  externalEtag?: string;
+
+  @ApiPropertyOptional()
+  @IsOptional()
+  @IsDateString()
+  externalLastModifiedAt?: string;
 }
 
 export class CreateAgendaTaskDto {
@@ -105,12 +238,106 @@ export class BatchScheduleItemDto {
   @ApiPropertyOptional()
   @IsOptional()
   @IsString()
+  cnjId?: string;
+
+  @ApiPropertyOptional()
+  @IsOptional()
+  @IsUUID()
+  cityId?: string;
+
+  @ApiPropertyOptional()
+  @IsOptional()
+  @IsString()
+  city?: string;
+
+  @ApiProperty()
+  @IsString()
   title?: string;
 
   @ApiPropertyOptional({ enum: AgendaEventType })
   @IsOptional()
   @IsEnum(AgendaEventType)
   type?: AgendaEventType;
+
+  @ApiPropertyOptional({ enum: AgendaEventStatus })
+  @IsOptional()
+  @IsEnum(AgendaEventStatus)
+  status?: AgendaEventStatus;
+
+  @ApiPropertyOptional({ enum: AgendaEventSource })
+  @IsOptional()
+  @IsEnum(AgendaEventSource)
+  source?: AgendaEventSource;
+
+  @ApiPropertyOptional()
+  @IsOptional()
+  @IsBoolean()
+  aiSuggested?: boolean;
+
+  @ApiPropertyOptional({ enum: ExternalSyncStatus })
+  @IsOptional()
+  @IsEnum(ExternalSyncStatus)
+  syncStatus?: ExternalSyncStatus;
+
+  @ApiPropertyOptional()
+  @IsOptional()
+  @IsString()
+  externalProvider?: string;
+
+  @ApiPropertyOptional()
+  @IsOptional()
+  @IsString()
+  externalEventId?: string;
+
+  @ApiPropertyOptional()
+  @IsOptional()
+  @IsString()
+  externalEtag?: string;
+
+  @ApiPropertyOptional()
+  @IsOptional()
+  @IsDateString()
+  externalLastModifiedAt?: string;
+
+  @ApiPropertyOptional({ enum: AgendaEventStatus })
+  @IsOptional()
+  @IsEnum(AgendaEventStatus)
+  status?: AgendaEventStatus;
+
+  @ApiPropertyOptional({ enum: AgendaEventSource })
+  @IsOptional()
+  @IsEnum(AgendaEventSource)
+  source?: AgendaEventSource;
+
+  @ApiPropertyOptional()
+  @IsOptional()
+  @IsBoolean()
+  aiSuggested?: boolean;
+
+  @ApiPropertyOptional({ enum: ExternalSyncStatus })
+  @IsOptional()
+  @IsEnum(ExternalSyncStatus)
+  syncStatus?: ExternalSyncStatus;
+
+  @ApiPropertyOptional()
+  @IsOptional()
+  @IsString()
+  externalProvider?: string;
+
+  @ApiPropertyOptional()
+  @IsOptional()
+  @IsString()
+  externalEventId?: string;
+
+  @ApiPropertyOptional()
+  @IsOptional()
+  @IsString()
+  externalEtag?: string;
+
+  @ApiPropertyOptional()
+  @IsOptional()
+  @IsDateString()
+  externalLastModifiedAt?: string;
 
   @ApiProperty()
   @IsDateString()
@@ -176,4 +403,43 @@ export class BatchScheduleDto {
   @ValidateNested()
   @Type(() => BatchScheduleMetadataDto)
   metadata?: BatchScheduleMetadataDto;
+}
+
+export class ExportWeeklyPdfDto {
+  @ApiPropertyOptional({ description: 'Data de referência da semana (YYYY-MM-DD)' })
+  @IsOptional()
+  @IsString()
+  startDate?: string;
+
+  @ApiPropertyOptional({ enum: ['compacto', 'detalhado'], default: 'compacto' })
+  @IsOptional()
+  @IsIn(['compacto', 'detalhado'])
+  mode?: 'compacto' | 'detalhado';
+}
+
+export class AiSuggestLaudoBlocksDto {
+  @ApiPropertyOptional({ description: 'Data de referência da semana (YYYY-MM-DD)' })
+  @IsOptional()
+  @IsString()
+  startDate?: string;
+
+  @ApiProperty({ example: 90 })
+  @IsInt()
+  @Min(15)
+  avg_minutes_per_laudo!: number;
+
+  @ApiProperty({ example: 8 })
+  @IsInt()
+  @Min(1)
+  backlog!: number;
+
+  @ApiProperty({ type: [String], example: ['09:00', '14:00'] })
+  @IsArray()
+  @IsString({ each: true })
+  preferred_windows!: string[];
+
+  @ApiProperty({ example: 45 })
+  @IsInt()
+  @Min(15)
+  min_buffer_minutes!: number;
 }

@@ -30,7 +30,7 @@ const ACTION_CARDS: ActionCard[] = [
     subtitle: 'Central de Triagem: Avaliar, Majorar e Observações',
     badge: 'TRIAGEM INICIAL',
     href: '/nomeacoes',
-    tone: 'bg-primary text-primary-foreground',
+    tone: 'bg-blue-600 text-white',
     kpiKey: 'novas_nomeacoes',
     Icon: Scale,
   },
@@ -39,7 +39,7 @@ const ACTION_CARDS: ActionCard[] = [
     subtitle: 'Pendências de agendamento por cidade',
     badge: 'FILA DE ESPERA',
     href: '/fila-agendamento',
-    tone: 'bg-warning text-warning-foreground',
+    tone: 'bg-yellow-500 text-white',
     kpiKey: 'agendar_data',
     Icon: CalendarClock,
   },
@@ -48,7 +48,7 @@ const ACTION_CARDS: ActionCard[] = [
     subtitle: 'Agenda futura (Presencial e Tele)',
     badge: 'CALENDÁRIO',
     href: '/pericias-hoje',
-    tone: 'bg-info text-info-foreground',
+    tone: 'bg-pink-600 text-white',
     kpiKey: 'proximas_pericias',
     Icon: Calendar,
   },
@@ -57,7 +57,7 @@ const ACTION_CARDS: ActionCard[] = [
     subtitle: 'Redação e envio de laudos',
     badge: 'PRODUÇÃO',
     href: '/laudos-pendentes',
-    tone: 'bg-success text-success-foreground',
+    tone: 'bg-teal-600 text-white',
     kpiKey: 'enviar_laudos',
     Icon: FileText,
   },
@@ -66,7 +66,7 @@ const ACTION_CARDS: ActionCard[] = [
     subtitle: 'Intimações para complementar laudo',
     badge: 'PRIORIDADE ALTA',
     href: '/comunicacao',
-    tone: 'bg-warning text-warning-foreground',
+    tone: 'bg-orange-500 text-white',
     kpiKey: 'esclarecimentos',
     Icon: MessageSquareWarning,
   },
@@ -75,7 +75,7 @@ const ACTION_CARDS: ActionCard[] = [
     subtitle: 'Processos entregues aguardando pagamento (Carteira)',
     badge: 'FINANCEIRO',
     href: '/cobranca',
-    tone: 'bg-success text-success-foreground',
+    tone: 'bg-green-600 text-white',
     kpiKey: 'a_receber',
     Icon: DollarSign,
   },
@@ -171,7 +171,7 @@ const DashboardPage = () => {
         <LoadingState />
       ) : (
         <>
-          <div className="grid grid-cols-1 gap-3 md:grid-cols-3">
+          <div className="grid grid-cols-1 gap-4 md:grid-cols-3">
             {ACTION_CARDS.map((card) => {
               const Icon = card.Icon;
               const value = kpiValueByCard[card.title] ?? '—';
@@ -185,7 +185,9 @@ const DashboardPage = () => {
                     </div>
                     <p className="text-xs opacity-90">{card.subtitle}</p>
                     <div className="flex items-end justify-between">
-                      <p className="text-3xl font-bold" data-testid={`dashboard-kpi-${card.kpiKey}`}>{value}</p>
+                      <p className="text-3xl font-bold" data-testid={`dashboard-kpi-${card.kpiKey}`}>
+                        {value}
+                      </p>
                       <span className="rounded bg-black/20 px-2 py-0.5 text-[10px] font-semibold uppercase">{card.badge}</span>
                     </div>
                     <Link className="inline-flex items-center gap-1 text-xs font-semibold uppercase tracking-wide opacity-90 hover:opacity-100" to={card.href}>

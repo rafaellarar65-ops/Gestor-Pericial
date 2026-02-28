@@ -1,16 +1,22 @@
-import { Injectable } from '@nestjs/common';
-import { AgendaTaskStatus, PericiaPaymentStatus, Prisma } from '@prisma/client';
+import { BadRequestException, Injectable, NotFoundException } from '@nestjs/common';
+import { PericiaPaymentStatus, Prisma } from '@prisma/client';
 import { RequestContextService } from '../../common/request-context.service';
 import { PrismaService } from '../../prisma/prisma.service';
+import { WhatsappService } from '../whatsapp/whatsapp.service';
 import {
   AutomaticVaraChargeDto,
+  BulkGrantOptInDto,
+  BulkLinkInboundDto,
+  BulkResendTemplateDto,
   CreateEmailTemplateDto,
   CreateLawyerDto,
+  CreateMessageTemplateDto,
   GenerateHubEmailDto,
-  InterpretWhatsappInboundDto,
+  InboxFilterDto,
+  PreviewTemplateDto,
   SendEmailDto,
   SendWhatsappMessageDto,
-  UpdateWhatsappConsentDto,
+  UpdateMessageTemplateDto,
   UpsertUolhostEmailConfigDto,
 } from './dto/communications.dto';
 import { WhatsappRulesEngine, type WhatsappConsentStatus } from './whatsapp.rules-engine';
@@ -22,12 +28,27 @@ interface WhatsappTenantConfig {
   contactConsents?: Record<string, WhatsappConsentStatus>;
 }
 
+type Channel = 'whatsapp_template' | 'whatsapp_freeform' | 'clipboard' | 'wa_me_prefill';
+
 @Injectable()
 export class CommunicationsService {
+  private readonly allowedPlaceholders = new Set([
+    'tenant.nome',
+    'pericia.processoCNJ',
+    'pericia.autorNome',
+    'pericia.reuNome',
+    'pericia.periciadoNome',
+    'pericia.dataAgendamento',
+    'pericia.horaAgendamento',
+    'contact.nome',
+    'contact.telefone',
+    'contact.email',
+  ]);
+
   constructor(
     private readonly prisma: PrismaService,
     private readonly context: RequestContextService,
-    private readonly whatsappRulesEngine: WhatsappRulesEngine,
+    private readonly whatsappService: WhatsappService,
   ) {}
 
   sendEmail(dto: SendEmailDto) {
@@ -130,64 +151,18 @@ export class CommunicationsService {
 
   async sendWhatsappMessage(dto: SendWhatsappMessageDto) {
     const tenantId = this.context.get('tenantId') ?? '';
-    const tenantConfig = await this.getWhatsappTenantConfig(tenantId);
-    const contactConsents = tenantConfig.contactConsents ?? {};
-
-    const consentStatus = dto.consentStatus ?? (dto.contactId ? contactConsents[dto.contactId] : undefined) ?? 'unknown';
-    const evaluation = this.whatsappRulesEngine.evaluateAutomation({
-      consentStatus,
-      isAutomation: dto.isAutomation ?? true,
-      messageType: dto.messageType ?? 'freeform',
-      lastInboundAt: dto.lastInboundAt ? new Date(dto.lastInboundAt) : undefined,
-      freeformEnabled: tenantConfig.freeformEnabled ?? false,
-      consentExceptionContactIds: tenantConfig.consentExceptionContactIds ?? [],
-      contactId: dto.contactId,
+    return this.whatsappService.sendTenantMessage({
+      tenantId,
+      to: dto.to,
+      message: dto.message,
+      periciaId: dto.periciaId,
     });
-
-    if (!evaluation.allowed) {
-      return {
-        queued: false,
-        blocked: true,
-        reason: evaluation.reason,
-        serviceWindowOpen: evaluation.serviceWindowOpen,
-        serviceWindowHours: evaluation.serviceWindowHours,
-      };
-    }
-
-    const log = await this.prisma.activityLog.create({
-      data: {
-        tenantId,
-        entityType: 'WHATSAPP_MESSAGE',
-        entityId: dto.periciaId ?? dto.to,
-        action: 'OUTBOUND_WHATSAPP_API',
-        payloadJson: {
-          to: dto.to,
-          message: dto.message,
-          provider: 'whatsapp-cloud-api',
-          status: 'queued',
-          sentAt: new Date().toISOString(),
-          messageType: dto.messageType ?? 'freeform',
-          consentStatus,
-          serviceWindowOpen: evaluation.serviceWindowOpen,
-          serviceWindowHours: evaluation.serviceWindowHours,
-        },
-      },
-    });
-
-    return {
-      queued: true,
-      provider: 'whatsapp-cloud-api',
-      messageId: log.id,
-      serviceWindowOpen: evaluation.serviceWindowOpen,
-      serviceWindowHours: evaluation.serviceWindowHours,
-    };
   }
 
   async listWhatsappMessages(periciaId?: string) {
-    return this.prisma.activityLog.findMany({
+    return this.prisma.whatsappMessage.findMany({
       where: {
-        entityType: 'WHATSAPP_MESSAGE',
-        ...(periciaId ? { entityId: periciaId } : {}),
+        ...(periciaId ? { periciaId } : {}),
       },
       orderBy: { createdAt: 'desc' },
       take: 50,
@@ -324,11 +299,261 @@ export class CommunicationsService {
     };
   }
 
-  private async getWhatsappTenantConfig(tenantId: string): Promise<WhatsappTenantConfig> {
-    const setting = await this.prisma.integrationSettings.findFirst({
-      where: { tenantId, provider: 'WHATSAPP' },
+  async createMessageTemplate(dto: CreateMessageTemplateDto) {
+    const tenantId = this.context.get('tenantId') ?? '';
+    const validation = this.validateMessageTemplate(dto.channel, dto.body, dto.placeholdersUsed, dto.variablesMapping);
+
+    return this.prisma.messageTemplate.create({
+      data: {
+        tenantId,
+        channel: dto.channel,
+        name: dto.name,
+        body: dto.body,
+        placeholdersUsed: validation.placeholders as unknown as Prisma.InputJsonValue,
+        variablesMapping: (dto.variablesMapping ?? {}) as unknown as Prisma.InputJsonValue,
+      },
+    });
+  }
+
+  async listMessageTemplates(channel?: Channel) {
+    return this.prisma.messageTemplate.findMany({
+      where: channel ? { channel } : undefined,
+      orderBy: { createdAt: 'desc' },
+    });
+  }
+
+  async updateMessageTemplate(id: string, dto: UpdateMessageTemplateDto) {
+    const existing = await this.prisma.messageTemplate.findUnique({ where: { id } });
+    if (!existing) throw new NotFoundException('Template não encontrado');
+
+    const channel = dto.channel ?? (existing.channel as Channel);
+    const body = dto.body ?? existing.body;
+    const placeholders = dto.placeholdersUsed ?? ((existing.placeholdersUsed as string[] | null) ?? undefined);
+    const mapping = dto.variablesMapping ?? ((existing.variablesMapping as Record<string, string> | null) ?? undefined);
+    const validation = this.validateMessageTemplate(channel, body, placeholders, mapping);
+
+    return this.prisma.messageTemplate.update({
+      where: { id },
+      data: {
+        ...(dto.channel ? { channel: dto.channel } : {}),
+        ...(dto.name ? { name: dto.name } : {}),
+        ...(dto.body ? { body: dto.body } : {}),
+        placeholdersUsed: validation.placeholders as unknown as Prisma.InputJsonValue,
+        variablesMapping: (mapping ?? {}) as unknown as Prisma.InputJsonValue,
+      },
+    });
+  }
+
+  async deleteMessageTemplate(id: string) {
+    await this.prisma.messageTemplate.delete({ where: { id } });
+    return { deleted: true };
+  }
+
+  async previewMessageTemplate(id: string, dto: PreviewTemplateDto) {
+    const tenantId = this.context.get('tenantId') ?? '';
+    const template = await this.prisma.messageTemplate.findUnique({ where: { id } });
+    if (!template) throw new NotFoundException('Template não encontrado');
+
+    const tenant = await this.prisma.tenant.findUnique({ where: { id: tenantId } });
+    const pericia = dto.periciaId
+      ? await this.prisma.pericia.findFirst({ where: { id: dto.periciaId, tenantId } })
+      : null;
+
+    const metadataContact = (pericia?.metadata as Record<string, unknown> | null)?.contact as Record<string, string> | undefined;
+    const values: Record<string, string> = {
+      'tenant.nome': tenant?.name ?? '',
+      'pericia.processoCNJ': pericia?.processoCNJ ?? '',
+      'pericia.autorNome': pericia?.autorNome ?? '',
+      'pericia.reuNome': pericia?.reuNome ?? '',
+      'pericia.periciadoNome': pericia?.periciadoNome ?? '',
+      'pericia.dataAgendamento': pericia?.dataAgendamento?.toISOString().slice(0, 10) ?? '',
+      'pericia.horaAgendamento': pericia?.horaAgendamento ?? '',
+      'contact.nome': metadataContact?.nome ?? pericia?.periciadoNome ?? '',
+      'contact.telefone': metadataContact?.telefone ?? '',
+      'contact.email': metadataContact?.email ?? '',
+    };
+
+    const mapping = (template.variablesMapping as Record<string, string> | null) ?? {};
+    let previewText = template.body;
+
+    if (template.channel === 'whatsapp_template') {
+      const vars = this.extractMetaVariables(template.body);
+      vars.forEach((variable) => {
+        const source = mapping[variable];
+        const value = source ? values[source] ?? '' : '';
+        previewText = previewText.replace(new RegExp(`\\{\\{${variable}\\}\\}`, 'g'), value);
+      });
+    } else {
+      const placeholders = this.extractNamedPlaceholders(template.body);
+      placeholders.forEach((placeholder) => {
+        previewText = previewText.replace(new RegExp(`\\{\\{${placeholder}\\}\\}`, 'g'), values[placeholder] ?? '');
+      });
+    }
+
+    return {
+      id: template.id,
+      channel: template.channel,
+      preview: previewText,
+      context: values,
+    };
+  }
+
+  async listInbox(dto: InboxFilterDto) {
+    const logs = await this.prisma.activityLog.findMany({
+      where: { entityType: 'WHATSAPP_MESSAGE' },
+      orderBy: { createdAt: 'desc' },
+      take: 200,
     });
 
-    return (setting?.config as WhatsappTenantConfig | null) ?? {};
+    const rows = logs.map((log) => {
+      const payload = (log.payloadJson as Record<string, unknown> | null) ?? {};
+      const tags = (payload.tags as string[] | undefined) ?? [];
+      return {
+        id: log.id,
+        entityId: log.entityId,
+        action: log.action,
+        to: String(payload.to ?? ''),
+        message: String(payload.message ?? ''),
+        status: String(payload.status ?? ''),
+        tags,
+        linkedPericiaId: (payload.linkedPericiaId as string | undefined) ?? null,
+        createdAt: log.createdAt,
+      };
+    });
+
+    const byFilter = dto.filter
+      ? rows.filter((row) => {
+          if (dto.filter === 'nao_confirmados') return row.tags.includes('nao_confirmado');
+          if (dto.filter === 'pediram_reagendamento') return row.tags.includes('reagendamento');
+          if (dto.filter === 'falha_envio') return row.status === 'failed';
+          if (dto.filter === 'optin_pendente') return row.tags.includes('optin_pendente');
+          if (dto.filter === 'inbound_nao_vinculado') return row.action === 'INBOUND_WHATSAPP' && !row.linkedPericiaId;
+          return true;
+        })
+      : rows;
+
+    return byFilter;
+  }
+
+  async bulkResendTemplate(dto: BulkResendTemplateDto) {
+    const template = await this.prisma.messageTemplate.findUnique({ where: { id: dto.templateId } });
+    if (!template) throw new NotFoundException('Template não encontrado');
+
+    const messages = await this.prisma.activityLog.findMany({ where: { id: { in: dto.messageIds } } });
+    const created = await Promise.all(messages.map((msg) => {
+      const payload = (msg.payloadJson as Record<string, unknown> | null) ?? {};
+      return this.prisma.activityLog.create({
+        data: {
+          tenantId: msg.tenantId,
+          entityType: 'WHATSAPP_MESSAGE',
+          entityId: msg.entityId,
+          action: 'OUTBOUND_TEMPLATE_RESEND',
+          payloadJson: {
+            ...payload,
+            message: template.body,
+            status: 'queued',
+            resentFrom: msg.id,
+          },
+        },
+      });
+    }));
+
+    return { resent: created.length };
+  }
+
+  async bulkGrantOptIn(dto: BulkGrantOptInDto) {
+    await Promise.all(dto.messageIds.map(async (id) => {
+      const current = await this.prisma.activityLog.findUnique({ where: { id } });
+      if (!current) return null;
+      const payload = (current.payloadJson as Record<string, unknown> | null) ?? {};
+      const tags = new Set<string>((payload.tags as string[] | undefined) ?? []);
+      tags.delete('optin_pendente');
+      tags.add('optin_confirmado');
+      return this.prisma.activityLog.update({
+        where: { id },
+        data: { payloadJson: { ...payload, tags: [...tags] } as Prisma.InputJsonValue },
+      });
+    }));
+
+    return { updated: dto.messageIds.length };
+  }
+
+  async bulkLinkInbound(dto: BulkLinkInboundDto) {
+    if (!dto.periciaId && !dto.processoId) {
+      throw new BadRequestException('Informe periciaId ou processoId');
+    }
+
+    await Promise.all(dto.messageIds.map(async (id) => {
+      const current = await this.prisma.activityLog.findUnique({ where: { id } });
+      if (!current) return null;
+      const payload = (current.payloadJson as Record<string, unknown> | null) ?? {};
+      return this.prisma.activityLog.update({
+        where: { id },
+        data: {
+          payloadJson: {
+            ...payload,
+            linkedPericiaId: dto.periciaId ?? null,
+            linkedProcessoId: dto.processoId ?? null,
+          } as Prisma.InputJsonValue,
+        },
+      });
+    }));
+
+    return { linked: dto.messageIds.length };
+  }
+
+  private extractNamedPlaceholders(body: string): string[] {
+    const matches = [...body.matchAll(/\{\{\s*([a-zA-Z0-9_.]+)\s*\}\}/g)].map((m) => m[1]);
+    return [...new Set(matches)];
+  }
+
+  private extractMetaVariables(body: string): string[] {
+    const matches = [...body.matchAll(/\{\{\s*(\d+)\s*\}\}/g)].map((m) => m[1]);
+    return [...new Set(matches)];
+  }
+
+  private validateMessageTemplate(
+    channel: Channel,
+    body: string,
+    placeholdersUsed?: string[],
+    variablesMapping?: Record<string, string>,
+  ) {
+    if (channel === 'whatsapp_template') {
+      const vars = this.extractMetaVariables(body);
+      if (vars.length === 0) {
+        throw new BadRequestException('Template Meta deve possuir variáveis no formato {{1..n}}');
+      }
+
+      const ordered = vars.map((x) => Number(x)).sort((a, b) => a - b);
+      for (let i = 0; i < ordered.length; i += 1) {
+        if (ordered[i] !== i + 1) {
+          throw new BadRequestException('Template Meta deve usar variáveis sequenciais {{1..n}} sem lacunas');
+        }
+      }
+
+      if (!variablesMapping) {
+        throw new BadRequestException('Template Meta exige variablesMapping obrigatório');
+      }
+
+      ordered.forEach((value) => {
+        const key = String(value);
+        if (!variablesMapping[key]) {
+          throw new BadRequestException(`Mapeamento obrigatório para variável {{${key}}}`);
+        }
+        if (!this.allowedPlaceholders.has(variablesMapping[key])) {
+          throw new BadRequestException(`Placeholder desconhecido no mapping: ${variablesMapping[key]}`);
+        }
+      });
+
+      return { placeholders: ordered.map(String) };
+    }
+
+    const placeholders = placeholdersUsed?.length ? placeholdersUsed : this.extractNamedPlaceholders(body);
+    const unknown = placeholders.filter((item) => !this.allowedPlaceholders.has(item));
+    if (unknown.length) {
+      throw new BadRequestException(`Placeholder desconhecido: ${unknown.join(', ')}`);
+    }
+
+    return { placeholders };
   }
 }

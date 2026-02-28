@@ -35,11 +35,39 @@ enum FontePagamento {
 
 enum AgendaEventType {
   PERICIA
+  PERICIA_AGENDADA
   PRAZO
   LAUDO
   DESLOCAMENTO
+  BLOQUEIO
+  BLOCO_LAUDO
   BLOCO_TRABALHO
   OUTRO
+}
+
+enum AgendaEventStatus {
+  AGENDADA
+  REALIZADA
+  FALTOU
+  REMARCADA
+  CANCELADA
+}
+
+enum AgendaEventSource {
+  MANUAL
+  CNJ
+  GOOGLE_CALENDAR
+  IMPORTACAO
+  IA
+  OUTRO
+}
+
+enum ExternalSyncStatus {
+  PENDING
+  SYNCED
+  ERROR
+  CONFLICT
+  DISABLED
 }
 
 enum AgendaTaskStatus {
@@ -49,10 +77,9 @@ enum AgendaTaskStatus {
   CANCELED
 }
 
-enum TeleSlotStatus {
-  AVAILABLE
-  BOOKED
-  BLOCKED
+enum TelepericiaSlotType {
+  SEQUENTIAL
+  CUSTOM
 }
 
 enum CnjSyncStatus {
@@ -101,6 +128,29 @@ enum NotificationChannel {
   WHATSAPP
 }
 
+enum CalendarSyncType {
+  EVENT
+  TASK
+}
+
+enum CalendarSyncDirection {
+  PUSH
+  PULL
+}
+
+enum CalendarSyncStatus {
+  PENDING
+  SYNCED
+  WARNING
+  CONFLICT
+  ERROR
+}
+
+enum CalendarSyncMode {
+  MIRROR
+  TWO_WAY
+}
+
 // =========================
 // Identity / Tenant
 // =========================
@@ -113,55 +163,52 @@ model Tenant {
   createdBy String?  @db.Uuid
   updatedBy String?  @db.Uuid
 
-  users                    User[]
-  userProfiles             UserProfile[]
-  pericias                 Pericia[]
-  cidades                  Cidade[]
-  varas                    Vara[]
-  tribunais                Tribunal[]
-  tiposPericia             TipoPericia[]
-  modalidades              Modalidade[]
-  statuses                 Status[]
-  locais                   Local[]
-  lawyers                  Lawyer[]
-  caseDocuments            CaseDocument[]
-  lawyerOnPericias         LawyerOnPericia[]
-  preLaudos                PreLaudo[]
-  examPlans                ExamPlan[]
-  examsPerformed           ExamPerformed[]
-  physicalManeuvers        PhysicalManeuver[]
-  knowledgeItems           KnowledgeItem[]
-  agendaEvents             AgendaEvent[]
-  agendaTasks              AgendaTask[]
-  recebimentos             Recebimento[]
-  importBatches            ImportBatch[]
-  unmatchedPayments        UnmatchedPayment[]
-  despesas                 Despesa[]
-  bankTransactions         BankTransaction[]
-  cashLedgerItems          CashLedgerItem[]
-  paymentProfiles          PaymentProfile[]
-  payers                   Payer[]
-  smartRules               SmartRule[]
-  automationRules          AutomationRule[]
-  logStatuses              LogStatus[]
-  activityLogs             ActivityLog[]
-  dailyUsage               DailyUsage[]
-  emailConfigs             EmailConfig[]
-  emailTemplates           EmailTemplate[]
-  integrationSettings      IntegrationSettings[]
-  notificationConfigs      NotificationConfig[]
-  teleSlots                TeleSlot[]
-  telepericiaSlots         TelepericiaSlot[]
-  telepericiaSlotItems     TelepericiaSlotItem[]
-  schedulingBatches        SchedulingBatch[]
-  cnjSyncs                 CnjSync[]
-  whatsappAccounts         WhatsappAccount[]
-  whatsappContacts         WhatsappContact[]
-  whatsappTemplates        WhatsappTemplate[]
-  whatsappMessages         WhatsappMessage[]
-  whatsappJobs             WhatsappJob[]
-  whatsappUnlinkedInbounds WhatsappUnlinkedInbound[]
-  messageTemplates         MessageTemplate[]
+  users               User[]
+  userProfiles        UserProfile[]
+  pericias            Pericia[]
+  cidades             Cidade[]
+  varas               Vara[]
+  tribunais           Tribunal[]
+  tiposPericia        TipoPericia[]
+  modalidades         Modalidade[]
+  statuses            Status[]
+  locais              Local[]
+  lawyers             Lawyer[]
+  caseDocuments       CaseDocument[]
+  lawyerOnPericias    LawyerOnPericia[]
+  preLaudos           PreLaudo[]
+  examPlans           ExamPlan[]
+  examsPerformed      ExamPerformed[]
+  physicalManeuvers   PhysicalManeuver[]
+  knowledgeItems      KnowledgeItem[]
+  agendaEvents        AgendaEvent[]
+  agendaTasks         AgendaTask[]
+  calendarIntegrations CalendarIntegration[]
+  syncAuditLogs       SyncAuditLog[]
+  recebimentos        Recebimento[]
+  importBatches       ImportBatch[]
+  unmatchedPayments   UnmatchedPayment[]
+  despesas            Despesa[]
+  bankTransactions    BankTransaction[]
+  cashLedgerItems     CashLedgerItem[]
+  paymentProfiles     PaymentProfile[]
+  payers              Payer[]
+  smartRules          SmartRule[]
+  automationRules     AutomationRule[]
+  logStatuses         LogStatus[]
+  activityLogs        ActivityLog[]
+  whatsappMessages    WhatsappMessage[]
+  dailyUsage          DailyUsage[]
+  emailConfigs        EmailConfig[]
+  emailTemplates      EmailTemplate[]
+  messageTemplates    MessageTemplate[]
+  integrationSettings IntegrationSettings[]
+  notificationConfigs NotificationConfig[]
+  teleSlots           TelepericiaSlot[]
+  teleSlotItems       TelepericiaSlotItem[]
+  schedulingBatches   SchedulingBatch[]
+  cnjSyncs            CnjSync[]
+  whatsAppJobs        WhatsAppJob[]
 }
 
 model User {
@@ -218,10 +265,11 @@ model Cidade {
   createdBy String?  @db.Uuid
   updatedBy String?  @db.Uuid
 
-  tenant            Tenant            @relation(fields: [tenantId], references: [id], onDelete: Cascade)
-  varas             Vara[]
-  pericias          Pericia[]
-  locais            Local[]
+  tenant      Tenant    @relation(fields: [tenantId], references: [id], onDelete: Cascade)
+  varas       Vara[]
+  pericias    Pericia[]
+  locais      Local[]
+  agendaEvents AgendaEvent[]
   schedulingBatches SchedulingBatch[]
 
   @@unique([tenantId, nome, uf])
@@ -346,50 +394,53 @@ model Local {
 // =========================
 
 model Pericia {
-  id                         String               @id @default(uuid()) @db.Uuid
-  tenantId                   String               @db.Uuid
-  processoCNJ                String
-  processoCNJDigits          String?
-  cidadeId                   String?              @db.Uuid
-  varaId                     String?              @db.Uuid
-  tipoPericiaId              String?              @db.Uuid
-  modalidadeId               String?              @db.Uuid
-  statusId                   String?              @db.Uuid
-  localId                    String?              @db.Uuid
-  juizNome                   String?
-  autorNome                  String?
-  reuNome                    String?
-  periciadoNome              String?
-  periciadoCpf               String?
-  periciadoNascimento        DateTime?
-  observacoes                String?
-  extraObservation           String?
-  esclarecimentos            Json?
-  checklist                  Json?
-  anexosResumo               Json?
-  isUrgent                   Boolean              @default(false)
-  urgentCheckedAt            DateTime?
-  telepericiaStatusChangedAt DateTime?
-  agendada                   Boolean              @default(false)
-  laudoEnviado               Boolean              @default(false)
-  finalizada                 Boolean              @default(false)
-  pagamentoStatus            PericiaPaymentStatus @default(PENDENTE)
-  honorariosPrevistosJG      Decimal?             @db.Decimal(12, 2)
-  honorariosPrevistosPartes  Decimal?             @db.Decimal(12, 2)
-  valorRecebidoTotal         Decimal?             @db.Decimal(12, 2)
-  dataNomeacao               DateTime?
-  dataAgendamento            DateTime?
-  horaAgendamento            String?
-  dataRealizacao             DateTime?
-  dataEnvioLaudo             DateTime?
-  origemImportacao           String?
-  dataUltimaMovimentacaoCnj  DateTime?
-  metadata                   Json?
-  deletedAt                  DateTime?
-  createdAt                  DateTime             @default(now())
-  updatedAt                  DateTime             @updatedAt
-  createdBy                  String?              @db.Uuid
-  updatedBy                  String?              @db.Uuid
+  id                          String               @id @default(uuid()) @db.Uuid
+  tenantId                    String               @db.Uuid
+  processoCNJ                 String
+  processoCNJDigits           String?
+  cidadeId                    String?              @db.Uuid
+  varaId                      String?              @db.Uuid
+  tipoPericiaId               String?              @db.Uuid
+  modalidadeId                String?              @db.Uuid
+  statusId                    String?              @db.Uuid
+  localId                     String?              @db.Uuid
+  juizNome                    String?
+  autorNome                   String?
+  reuNome                     String?
+  periciadoNome               String?
+  periciadoCpf                String?
+  periciadoNascimento         DateTime?
+  observacoes                 String?
+  extraObservation            String?
+  esclarecimentos             Json?
+  checklist                   Json?
+  anexosResumo                Json?
+  isUrgent                    Boolean              @default(false)
+  urgentCheckedAt             DateTime?
+  agendada                    Boolean              @default(false)
+  laudoEnviado                Boolean              @default(false)
+  finalizada                  Boolean              @default(false)
+  pagamentoStatus             PericiaPaymentStatus @default(PENDENTE)
+  honorariosPrevistosJG       Decimal?             @db.Decimal(12, 2)
+  honorariosPrevistosPartes   Decimal?             @db.Decimal(12, 2)
+  valorRecebidoTotal          Decimal?             @db.Decimal(12, 2)
+  dataNomeacao                DateTime?
+  dataAgendamento             DateTime?
+  horaAgendamento             String?
+  dataRealizacao              DateTime?
+  dataEnvioLaudo              DateTime?
+  origemImportacao            String?
+  dataUltimaMovimentacaoCnj   DateTime?
+  telepericiaStatusChangedAt  DateTime?
+  whatsappStatus              String?
+  telepericiaConfirmedAt      DateTime?
+  telepericiaLastAttemptAt    DateTime?
+  metadata                    Json?
+  deletedAt                   DateTime?
+  createdAt                   DateTime             @default(now())
+  updatedAt                   DateTime             @updatedAt
+  createdBy                   String?              @db.Uuid
+  updatedBy                   String?              @db.Uuid
 
   tenant      Tenant       @relation(fields: [tenantId], references: [id], onDelete: Cascade)
   cidade      Cidade?      @relation(fields: [cidadeId], references: [id], onDelete: SetNull)
@@ -399,23 +450,20 @@ model Pericia {
   status      Status?      @relation(fields: [statusId], references: [id], onDelete: SetNull)
   local       Local?       @relation(fields: [localId], references: [id], onDelete: SetNull)
 
-  lawyers                  LawyerOnPericia[]
-  caseDocuments            CaseDocument[]
-  preLaudo                 PreLaudo?
-  examPlans                ExamPlan[]
-  examsPerformed           ExamPerformed[]
-  agendaEvents             AgendaEvent[]
-  agendaTasks              AgendaTask[]
-  recebimentos             Recebimento[]
-  despesas                 Despesa[]
-  logStatuses              LogStatus[]
-  bankTransactions         BankTransaction[]
-  teleSlots                TeleSlot[]
-  telepericiaSlotItems     TelepericiaSlotItem[]
-  cnjSyncs                 CnjSync[]
-  whatsappMessages         WhatsappMessage[]
-  whatsappJobs             WhatsappJob[]
-  whatsappUnlinkedInbounds WhatsappUnlinkedInbound[]
+  lawyers          LawyerOnPericia[]
+  caseDocuments    CaseDocument[]
+  preLaudo         PreLaudo?
+  examPlans        ExamPlan[]
+  examsPerformed   ExamPerformed[]
+  agendaEvents     AgendaEvent[]
+  agendaTasks      AgendaTask[]
+  recebimentos     Recebimento[]
+  despesas         Despesa[]
+  logStatuses      LogStatus[]
+  bankTransactions BankTransaction[]
+  teleSlots        TelepericiaSlotItem[]
+  cnjSyncs         CnjSync[]
+  whatsappMessages WhatsappMessage[]
 
   @@unique([tenantId, processoCNJ])
   @@index([tenantId, processoCNJ])
@@ -805,49 +853,77 @@ model KnowledgeItem {
 }
 
 model AgendaEvent {
-  id          String          @id @default(uuid()) @db.Uuid
-  tenantId    String          @db.Uuid
-  periciaId   String?         @db.Uuid
-  title       String
-  description String?
-  type        AgendaEventType
-  startAt     DateTime
-  endAt       DateTime?
-  allDay      Boolean         @default(false)
-  location    String?
-  metadata    Json?
-  createdAt   DateTime        @default(now())
-  updatedAt   DateTime        @updatedAt
-  createdBy   String?         @db.Uuid
-  updatedBy   String?         @db.Uuid
+  id           String         @id @default(uuid()) @db.Uuid
+  tenantId     String         @db.Uuid
+  periciaId    String?        @db.Uuid
+  cnjId        String?
+  cityId       String?        @db.Uuid
+  city         String?
+  title        String
+  description  String?
+  type         AgendaEventType
+  status       AgendaEventStatus @default(AGENDADA)
+  source       AgendaEventSource @default(MANUAL)
+  aiSuggested  Boolean        @default(false)
+  statusHistory Json?
+  syncStatus   ExternalSyncStatus @default(PENDING)
+  syncErrorMessage String?
+  externalProvider String?
+  externalEventId String?
+  externalEtag String?
+  externalLastModifiedAt DateTime?
+  startAt      DateTime
+  endAt        DateTime?
+  allDay       Boolean        @default(false)
+  location     String?
+  metadata     Json?
+  externalId   String?
+  externalCalendarId String?
+  externalLastModifiedAt DateTime?
+  lastSyncAt   DateTime?
+  syncStatus   CalendarSyncStatus @default(PENDING)
+  createdAt    DateTime       @default(now())
+  updatedAt    DateTime       @updatedAt
+  createdBy    String?        @db.Uuid
+  updatedBy    String?        @db.Uuid
 
   tenant  Tenant   @relation(fields: [tenantId], references: [id], onDelete: Cascade)
   pericia Pericia? @relation(fields: [periciaId], references: [id], onDelete: SetNull)
+  cityRef Cidade? @relation(fields: [cityId], references: [id], onDelete: SetNull)
 
   @@index([tenantId, startAt])
   @@index([tenantId, periciaId, startAt])
+  @@index([tenantId, status, startAt])
+  @@index([tenantId, syncStatus])
+  @@index([tenantId, externalProvider, externalEventId])
 }
 
 model AgendaTask {
-  id          String           @id @default(uuid()) @db.Uuid
-  tenantId    String           @db.Uuid
-  periciaId   String?          @db.Uuid
-  title       String
-  description String?
-  dueAt       DateTime?
-  status      AgendaTaskStatus @default(TODO)
-  priority    Int              @default(3)
-  completedAt DateTime?
-  metadata    Json?
-  createdAt   DateTime         @default(now())
-  updatedAt   DateTime         @updatedAt
-  createdBy   String?          @db.Uuid
-  updatedBy   String?          @db.Uuid
+  id           String          @id @default(uuid()) @db.Uuid
+  tenantId     String          @db.Uuid
+  periciaId    String?         @db.Uuid
+  title        String
+  description  String?
+  dueAt        DateTime?
+  status       AgendaTaskStatus @default(TODO)
+  priority     Int             @default(3)
+  completedAt  DateTime?
+  metadata     Json?
+  externalId   String?
+  externalCalendarId String?
+  externalLastModifiedAt DateTime?
+  lastSyncAt   DateTime?
+  syncStatus   CalendarSyncStatus @default(PENDING)
+  createdAt    DateTime        @default(now())
+  updatedAt    DateTime        @updatedAt
+  createdBy    String?         @db.Uuid
+  updatedBy    String?         @db.Uuid
 
   tenant  Tenant   @relation(fields: [tenantId], references: [id], onDelete: Cascade)
   pericia Pericia? @relation(fields: [periciaId], references: [id], onDelete: SetNull)
 
   @@index([tenantId, dueAt, status])
+  @@index([tenantId, externalId])
 }
 
 // =========================
@@ -1114,6 +1190,35 @@ model ActivityLog {
   @@index([tenantId, entityType, entityId, createdAt])
 }
 
+model WhatsappMessage {
+  id               String   @id @default(uuid()) @db.Uuid
+  tenantId         String   @db.Uuid
+  periciaId        String?  @db.Uuid
+  provider         String   @default("whatsapp-cloud-api")
+  eventType        String
+  direction        String
+  status           String?
+  waMessageId      String?
+  fromPhone        String?
+  toPhone          String?
+  messageBody      String?
+  errorCode        String?
+  errorMessage     String?
+  payloadJson      Json?
+  providerResponse Json?
+  createdAt        DateTime @default(now())
+  updatedAt        DateTime @updatedAt
+  createdBy        String?  @db.Uuid
+  updatedBy        String?  @db.Uuid
+
+  tenant  Tenant  @relation(fields: [tenantId], references: [id], onDelete: Cascade)
+  pericia Pericia? @relation(fields: [periciaId], references: [id], onDelete: SetNull)
+
+  @@index([tenantId, periciaId, createdAt])
+  @@index([tenantId, waMessageId])
+  @@index([tenantId, status, createdAt])
+}
+
 model DailyUsage {
   id          String   @id @default(uuid()) @db.Uuid
   tenantId    String   @db.Uuid
@@ -1169,6 +1274,25 @@ model EmailTemplate {
   @@unique([tenantId, key])
 }
 
+
+model MessageTemplate {
+  id               String   @id @default(uuid()) @db.Uuid
+  tenantId         String   @db.Uuid
+  channel          String
+  name             String
+  body             String
+  placeholdersUsed Json?
+  variablesMapping Json?
+  createdAt        DateTime @default(now())
+  updatedAt        DateTime @updatedAt
+  createdBy        String?  @db.Uuid
+  updatedBy        String?  @db.Uuid
+
+  tenant Tenant @relation(fields: [tenantId], references: [id], onDelete: Cascade)
+
+  @@index([tenantId, channel, createdAt])
+}
+
 model IntegrationSettings {
   id            String   @id @default(uuid()) @db.Uuid
   tenantId      String   @db.Uuid
@@ -1184,6 +1308,56 @@ model IntegrationSettings {
   tenant Tenant @relation(fields: [tenantId], references: [id], onDelete: Cascade)
 
   @@unique([tenantId, provider])
+}
+
+model CalendarIntegration {
+  id                    String           @id @default(uuid()) @db.Uuid
+  tenantId              String           @db.Uuid
+  provider              String           @default("GOOGLE")
+  email                 String?
+  accessToken           String?
+  refreshToken          String?
+  tokenExpiresAt        DateTime?
+  selectedCalendarId    String?
+  selectedCalendarName  String?
+  syncEvents            Boolean          @default(true)
+  syncTasks             Boolean          @default(false)
+  mode                  CalendarSyncMode @default(MIRROR)
+  active                Boolean          @default(false)
+  lastSyncAt            DateTime?
+  createdAt             DateTime         @default(now())
+  updatedAt             DateTime         @updatedAt
+  createdBy             String?          @db.Uuid
+  updatedBy             String?          @db.Uuid
+
+  tenant Tenant @relation(fields: [tenantId], references: [id], onDelete: Cascade)
+  syncAuditLogs SyncAuditLog[]
+
+  @@unique([tenantId, provider])
+}
+
+model SyncAuditLog {
+  id                String                @id @default(uuid()) @db.Uuid
+  tenantId          String                @db.Uuid
+  integrationId     String?               @db.Uuid
+  syncType          CalendarSyncType
+  direction         CalendarSyncDirection
+  localEntity       String
+  localEntityId     String                @db.Uuid
+  externalId        String?
+  status            CalendarSyncStatus
+  message           String?
+  localUpdatedAt    DateTime?
+  externalUpdatedAt DateTime?
+  syncedAt          DateTime?
+  payload           Json?
+  createdAt         DateTime              @default(now())
+
+  tenant      Tenant               @relation(fields: [tenantId], references: [id], onDelete: Cascade)
+  integration CalendarIntegration? @relation(fields: [integrationId], references: [id], onDelete: SetNull)
+
+  @@index([tenantId, createdAt])
+  @@index([tenantId, syncType, status])
 }
 
 model NotificationConfig {
@@ -1202,26 +1376,50 @@ model NotificationConfig {
   @@unique([tenantId, channel])
 }
 
-model TeleSlot {
-  id         String         @id @default(uuid()) @db.Uuid
-  tenantId   String         @db.Uuid
-  periciaId  String?        @db.Uuid
-  startAt    DateTime
-  endAt      DateTime
-  status     TeleSlotStatus @default(AVAILABLE)
-  meetingUrl String?
-  accessCode String?
-  platform   String?
+model TelepericiaSlot {
+  id                         String              @id @default(uuid()) @db.Uuid
+  tenantId                   String              @db.Uuid
+  date                       DateTime            @db.Date
+  startTime                  String              @map("start_time") @db.VarChar(5)
+  durationMinutes            Int                 @map("duration_minutes")
+  slotType                   TelepericiaSlotType @default(SEQUENTIAL) @map("slot_type")
+  appointmentDurationMinutes Int                 @map("appointment_duration_minutes")
+  gapMinutes                 Int                 @default(0) @map("gap_minutes")
+  capacity                   Int                 @default(1)
+  timezone                   String              @default("America/Sao_Paulo")
+  metadata                   Json?
+  createdAt                  DateTime            @default(now())
+  updatedAt                  DateTime            @updatedAt
+  createdBy                  String?             @db.Uuid
+  updatedBy                  String?             @db.Uuid
+
+  tenant Tenant                @relation(fields: [tenantId], references: [id], onDelete: Cascade)
+  items  TelepericiaSlotItem[]
+
+  @@map("telepericia_slots")
+  @@index([tenantId, date])
+}
+
+model TelepericiaSlotItem {
+  id         String   @id @default(uuid()) @db.Uuid
+  tenantId   String   @db.Uuid
+  slotId     String   @db.Uuid
+  periciaId  String   @db.Uuid
+  orderIndex Int      @map("order_index")
   metadata   Json?
-  createdAt  DateTime       @default(now())
-  updatedAt  DateTime       @updatedAt
-  createdBy  String?        @db.Uuid
-  updatedBy  String?        @db.Uuid
+  createdAt  DateTime @default(now())
+  updatedAt  DateTime @updatedAt
+  createdBy  String?  @db.Uuid
+  updatedBy  String?  @db.Uuid
 
-  tenant  Tenant   @relation(fields: [tenantId], references: [id], onDelete: Cascade)
-  pericia Pericia? @relation(fields: [periciaId], references: [id], onDelete: SetNull)
+  tenant  Tenant         @relation(fields: [tenantId], references: [id], onDelete: Cascade)
+  slot    TelepericiaSlot @relation(fields: [slotId], references: [id], onDelete: Cascade)
+  pericia Pericia        @relation(fields: [periciaId], references: [id], onDelete: Cascade)
 
-  @@index([tenantId, startAt, status])
+  @@unique([slotId, periciaId])
+  @@unique([slotId, orderIndex])
+  @@map("telepericia_slot_items")
+  @@index([tenantId, slotId])
 }
 
 model SchedulingBatch {
@@ -1261,4 +1459,34 @@ model CnjSync {
   pericia Pericia? @relation(fields: [periciaId], references: [id], onDelete: SetNull)
 
   @@index([tenantId, status, nextSyncAt])
+}
+
+model WhatsAppJob {
+  id             String            @id @default(uuid()) @db.Uuid
+  tenantId       String            @db.Uuid
+  periciaId      String            @db.Uuid
+  jobType        WhatsAppJobType
+  status         WhatsAppJobStatus @default(QUEUED)
+  scheduledFor   DateTime
+  nextAttemptAt  DateTime?
+  attempts       Int               @default(0)
+  maxAttempts    Int               @default(4)
+  idempotencyKey String
+  phone          String?
+  payload        Json?
+  lastError      Json?
+  providerRef    String?
+  sentAt         DateTime?
+  canceledAt     DateTime?
+  createdAt      DateTime          @default(now())
+  updatedAt      DateTime          @updatedAt
+  createdBy      String?           @db.Uuid
+  updatedBy      String?           @db.Uuid
+
+  tenant  Tenant  @relation(fields: [tenantId], references: [id], onDelete: Cascade)
+  pericia Pericia @relation(fields: [periciaId], references: [id], onDelete: Cascade)
+
+  @@unique([tenantId, idempotencyKey])
+  @@index([tenantId, status, scheduledFor])
+  @@index([tenantId, periciaId, jobType])
 }

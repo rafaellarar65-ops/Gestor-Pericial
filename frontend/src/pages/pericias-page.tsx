@@ -48,24 +48,20 @@ export const PericiasPage = () => {
   const [dataNomeacaoInicio, setDataNomeacaoInicio] = useState('');
   const [dataNomeacaoFim, setDataNomeacaoFim] = useState('');
 
-  const cidadesQuery = useQuery({ queryKey: ['config', 'cidades'], queryFn: () => configService.list('cidades') });
-  const varasQuery = useQuery({ queryKey: ['config', 'varas'], queryFn: () => configService.list('varas') });
-  const statusQuery = useQuery({ queryKey: ['config', 'status'], queryFn: () => configService.list('status') });
+  const parsedMin = parseCurrency(valorMin);
+  const parsedMax = parseCurrency(valorMax);
 
   const hasActiveSearch =
     search.trim().length >= 3 ||
     statusId !== 'all' ||
     cidadeId !== 'all' ||
     varaId !== 'all' ||
-    Boolean(valorMin.trim()) ||
-    Boolean(valorMax.trim()) ||
+    Boolean(parsedMin) ||
+    Boolean(parsedMax) ||
     Boolean(dataNomeacaoInicio) ||
     Boolean(dataNomeacaoFim);
 
-  const parsedMin = parseCurrency(valorMin);
-  const parsedMax = parseCurrency(valorMax);
-
-  const { data, isLoading, isError } = usePericiasQuery(
+  const { data, isLoading, isError, isFetching, refetch } = usePericiasQuery(
     page,
     {
       limit: 100,
@@ -81,11 +77,12 @@ export const PericiasPage = () => {
     hasActiveSearch,
   );
 
+  const cidadesQuery = useQuery({ queryKey: ['config', 'cidades'], queryFn: () => configService.list('cidades') });
+  const varasQuery = useQuery({ queryKey: ['config', 'varas'], queryFn: () => configService.list('varas') });
+  const statusQuery = useQuery({ queryKey: ['config', 'status'], queryFn: () => configService.list('status') });
+
   const cidades = useMemo(
-    () =>
-      [...(cidadesQuery.data ?? [])].sort((a, b) =>
-        a.nome.localeCompare(b.nome, 'pt-BR', { sensitivity: 'base' }),
-      ),
+    () => [...(cidadesQuery.data ?? [])].sort((a, b) => a.nome.localeCompare(b.nome, 'pt-BR', { sensitivity: 'base' })),
     [cidadesQuery.data],
   );
 
@@ -112,6 +109,14 @@ export const PericiasPage = () => {
     setDataNomeacaoFim('');
   };
 
+  const handleRefresh = () => {
+    if (hasActiveSearch) {
+      clearFilters();
+      return;
+    }
+    void refetch();
+  };
+
   if (cidadesQuery.isError || varasQuery.isError || statusQuery.isError) return <ErrorState message="Erro ao carregar filtros" />;
 
   return (
@@ -122,13 +127,22 @@ export const PericiasPage = () => {
         </h1>
 
         <div className="flex flex-wrap gap-2">
-          <button className="inline-flex items-center gap-2 rounded-md border px-3 py-2 text-sm font-semibold" type="button">
-            <RotateCw size={14} />
+          <button
+            className="inline-flex items-center gap-2 rounded-md border px-3 py-2 text-sm font-semibold disabled:cursor-not-allowed disabled:opacity-70"
+            disabled={isFetching}
+            onClick={handleRefresh}
+            type="button"
+          >
+            <RotateCw className={isFetching ? 'animate-spin' : ''} size={14} />
           </button>
           <button className="inline-flex items-center gap-2 rounded-md border px-3 py-2 text-sm font-semibold text-purple-700" type="button">
             <Bot size={14} /> IA
           </button>
-          <button className="inline-flex items-center gap-2 rounded-md border px-3 py-2 text-sm font-semibold" type="button">
+          <button
+            className="inline-flex items-center gap-2 rounded-md border px-3 py-2 text-sm font-semibold"
+            onClick={() => navigate('/importacoes')}
+            type="button"
+          >
             <Upload size={14} /> Importar
           </button>
           <button

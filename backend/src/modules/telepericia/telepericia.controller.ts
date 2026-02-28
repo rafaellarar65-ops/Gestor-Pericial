@@ -1,12 +1,14 @@
-import { Body, Controller, Get, Post } from '@nestjs/common';
+import { Body, Controller, Delete, Get, Param, Patch, Post } from '@nestjs/common';
 import { ApiBearerAuth, ApiOperation, ApiTags } from '@nestjs/swagger';
 import {
-  BookTeleSlotDto,
+  AssignTelepericiaItemDto,
   CreateTeleSlotDto,
   CreateVirtualRoomDto,
+  ReorderTelepericiaItemsDto,
   SecureUploadQrDto,
   SendRoomMessageDto,
   StartRealtimeSessionDto,
+  UpdateTeleSlotDto,
   UploadSessionDto,
   WhatsappContactDto,
 } from './dto/telepericia.dto';
@@ -28,9 +30,34 @@ export class TelepericiaController {
     return this.service.listSlots();
   }
 
-  @Post('booking')
-  booking(@Body() dto: BookTeleSlotDto) {
-    return this.service.booking(dto);
+  @Get('slots/:slotId')
+  getSlot(@Param('slotId') slotId: string) {
+    return this.service.getSlot(slotId);
+  }
+
+  @Patch('slots/:slotId')
+  updateSlot(@Param('slotId') slotId: string, @Body() dto: UpdateTeleSlotDto) {
+    return this.service.updateSlot(slotId, dto);
+  }
+
+  @Delete('slots/:slotId')
+  deleteSlot(@Param('slotId') slotId: string) {
+    return this.service.deleteSlot(slotId);
+  }
+
+  @Post('slots/:slotId/assign')
+  assign(@Param('slotId') slotId: string, @Body() dto: AssignTelepericiaItemDto) {
+    return this.service.assign(slotId, dto);
+  }
+
+  @Patch('slots/:slotId/reorder')
+  reorder(@Param('slotId') slotId: string, @Body() dto: ReorderTelepericiaItemsDto) {
+    return this.service.reorder(slotId, dto);
+  }
+
+  @Delete('slots/:slotId/items/:itemId')
+  deleteItem(@Param('slotId') slotId: string, @Param('itemId') itemId: string) {
+    return this.service.deleteItem(slotId, itemId);
   }
 
   @Post('whatsapp-contact')
