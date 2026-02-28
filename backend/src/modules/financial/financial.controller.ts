@@ -1,7 +1,14 @@
 import { Body, Controller, Get, Post, Query } from '@nestjs/common';
 import { ApiBearerAuth, ApiOperation, ApiTags } from '@nestjs/swagger';
 import { FinancialService } from './financial.service';
-import { CreateDespesaDto, CreateRecebimentoDto, ImportRecebimentosDto, ReconcileDto } from './dto/financial.dto';
+import {
+  CreateDespesaDto,
+  CreateRecebimentoDto,
+  FinancialImportAiPrintResponseDto,
+  ImportAiPrintDto,
+  ImportRecebimentosDto,
+  ReconcileDto,
+} from './dto/financial.dto';
 
 @ApiTags('financial')
 @ApiBearerAuth()
@@ -29,6 +36,13 @@ export class FinancialController {
   @Get('despesas')
   listDespesas() {
     return this.service.listDespesas();
+  }
+
+
+  @Post('import-ai-print')
+  @ApiOperation({ summary: 'Importa print financeiro com IA' })
+  importAiPrint(@Body() dto: ImportAiPrintDto): Promise<FinancialImportAiPrintResponseDto> {
+    return this.service.importAiPrint(dto);
   }
 
   @Post('import-batch')

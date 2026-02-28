@@ -3,6 +3,7 @@ import { FontePagamento } from '@prisma/client';
 import { Type } from 'class-transformer';
 import {
   IsArray,
+  IsBase64,
   IsDateString,
   IsEnum,
   IsNumber,
@@ -88,4 +89,82 @@ export class ReconcileDto {
   @ApiProperty()
   @IsString()
   note!: string;
+}
+
+export class FinancialImportAiPrintItemDto {
+  @ApiPropertyOptional()
+  @IsOptional()
+  @IsString()
+  cnj?: string;
+
+  @ApiPropertyOptional()
+  @IsOptional()
+  bruto?: number | string;
+
+  @ApiPropertyOptional()
+  @IsOptional()
+  desconto?: number | string;
+
+  @ApiPropertyOptional()
+  @IsOptional()
+  liquido?: number | string;
+
+  @ApiPropertyOptional()
+  @IsOptional()
+  @IsString()
+  data?: string;
+
+  @ApiPropertyOptional()
+  @IsOptional()
+  @IsString()
+  status?: string;
+
+  @ApiPropertyOptional()
+  @IsOptional()
+  @IsUUID()
+  periciaId?: string;
+}
+
+export class FinancialImportAiPrintResponseDto {
+  @ApiProperty({
+    type: Object,
+    example: {
+      totalBruto: 5000,
+      totalLiquido: 4700,
+      totalImpostos: 300,
+      dataPagamento: '2026-01-15',
+      detectedSource: 'TJ',
+    },
+  })
+  global!: {
+    totalBruto?: number | string;
+    totalLiquido?: number | string;
+    totalImpostos?: number | string;
+    dataPagamento?: string;
+    detectedSource?: string;
+  };
+
+  @ApiProperty({ type: [FinancialImportAiPrintItemDto] })
+  @IsArray()
+  @ValidateNested({ each: true })
+  @Type(() => FinancialImportAiPrintItemDto)
+  items!: FinancialImportAiPrintItemDto[];
+}
+
+export class ImportAiPrintDto {
+  @ApiProperty()
+  @IsString()
+  source!: string;
+
+  @ApiProperty()
+  @IsString()
+  fileName!: string;
+
+  @ApiProperty()
+  @IsString()
+  mimeType!: string;
+
+  @ApiProperty()
+  @IsBase64()
+  contentBase64!: string;
 }

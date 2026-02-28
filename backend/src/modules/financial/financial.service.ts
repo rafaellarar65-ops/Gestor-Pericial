@@ -2,7 +2,14 @@ import { Injectable } from '@nestjs/common';
 import { PaymentMatchStatus, Prisma } from '@prisma/client';
 import { RequestContextService } from '../../common/request-context.service';
 import { PrismaService } from '../../prisma/prisma.service';
-import { CreateDespesaDto, CreateRecebimentoDto, ImportRecebimentosDto, ReconcileDto } from './dto/financial.dto';
+import {
+  CreateDespesaDto,
+  CreateRecebimentoDto,
+  FinancialImportAiPrintResponseDto,
+  ImportAiPrintDto,
+  ImportRecebimentosDto,
+  ReconcileDto,
+} from './dto/financial.dto';
 
 @Injectable()
 export class FinancialService {
@@ -49,6 +56,22 @@ export class FinancialService {
 
   listDespesas() {
     return this.prisma.despesa.findMany({ orderBy: { dataCompetencia: 'desc' } });
+  }
+
+
+  async importAiPrint(dto: ImportAiPrintDto): Promise<FinancialImportAiPrintResponseDto> {
+    // Contrato dedicado para integração com motor de IA.
+    // Neste momento retornamos estrutura padrão para o front preencher e validar candidatos.
+    void dto;
+    return {
+      global: {
+        totalBruto: 0,
+        totalLiquido: 0,
+        totalImpostos: 0,
+        dataPagamento: new Date().toISOString().slice(0, 10),
+      },
+      items: [],
+    };
   }
 
   async importBatch(dto: ImportRecebimentosDto) {
