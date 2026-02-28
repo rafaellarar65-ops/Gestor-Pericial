@@ -74,6 +74,25 @@ export type Recebimento = {
   createdAt?: string;
 };
 
+
+export type UnmatchedPaymentOrigin = 'AI_PRINT' | 'MANUAL_CSV' | 'INDIVIDUAL';
+
+export type UnmatchedPayment = {
+  id: string;
+  amount?: number | string | null;
+  transactionDate?: string | null;
+  receivedAt?: string | null;
+  payerName?: string | null;
+  cnj?: string | null;
+  description?: string | null;
+  source?: string | null;
+  origin?: UnmatchedPaymentOrigin | string | null;
+  ignored?: boolean;
+  matchStatus?: string;
+  notes?: string | null;
+  createdAt?: string;
+};
+
 export type Despesa = {
   id: string;
   categoria: string;
