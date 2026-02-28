@@ -59,6 +59,7 @@ const pages = {
   comunicacao: lazyWithRetry(() => import('@/pages/comunicacao-page')),
   inbox: lazyWithRetry(() => import('@/pages/inbox-email-page')),
   configuracoes: lazyWithRetry(() => import('@/pages/configuracoes-page')),
+  googleCalendarIntegrations: lazyWithRetry(() => import('@/pages/integrations-google-calendar-page')),
   documentacao: lazyWithRetry(() => import('@/pages/documentacao-page')),
   notFound: lazyWithRetry(() => import('@/pages/not-found-page')),
 } as const;
@@ -106,6 +107,7 @@ export const router = createBrowserRouter([
           { path: '/comunicacao', handle: { crumb: 'Comunicação' }, element: withSuspense(pages.comunicacao) },
           { path: '/inbox-email', handle: { crumb: 'Inbox de Email' }, element: withSuspense(pages.inbox) },
           { path: '/configuracoes', handle: { crumb: 'Configurações' }, element: withSuspense(pages.configuracoes) },
+          { path: '/integrations/google-calendar', handle: { crumb: 'Google Calendar' }, element: withSuspense(pages.googleCalendarIntegrations) },
           { path: '/documentacao', handle: { crumb: 'Documentação' }, element: withSuspense(pages.documentacao) },
         ],
       },

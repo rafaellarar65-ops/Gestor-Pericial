@@ -15,6 +15,7 @@ type AgendaRow = {
   fim: string;
   local: string;
   status: Exclude<AgendaStatus, 'todos'>;
+  syncStatus: 'PENDING' | 'SYNCED' | 'WARNING' | 'CONFLICT' | 'ERROR';
 };
 
 const getValue = (item: Record<string, string | number | undefined>, keys: string[]): string => {
@@ -40,6 +41,14 @@ const inferStatus = (item: Record<string, string | number | undefined>): AgendaR
   return 'agendado';
 };
 
+
+const syncIndicator = (status: AgendaRow['syncStatus']) => {
+  if (status === 'SYNCED') return '✅';
+  if (status === 'CONFLICT') return '🔀';
+  if (status === 'WARNING' || status === 'ERROR') return '⚠️';
+  return '⏳';
+};
+
 const mapAgendaRow = (item: Record<string, string | number | undefined>, index: number): AgendaRow => ({
   id: getValue(item, ['id']) || `agenda-${index}`,
   titulo: getValue(item, ['title', 'titulo']) || 'Evento sem título',
@@ -48,6 +57,7 @@ const mapAgendaRow = (item: Record<string, string | number | undefined>, index: 
   fim: getValue(item, ['endAt', 'fim']),
   local: getValue(item, ['location', 'local']) || 'Não informado',
   status: inferStatus(item),
+  syncStatus: (getValue(item, ['syncStatus', 'sync_status']).toUpperCase() as AgendaRow['syncStatus']) || 'PENDING',
 });
 
 const Page = () => {
@@ -120,6 +130,7 @@ const Page = () => {
                   <th className="px-2 py-2 text-left">Fim</th>
                   <th className="px-2 py-2 text-left">Local</th>
                   <th className="px-2 py-2 text-left">Status</th>
+                  <th className="px-2 py-2 text-left">Sync</th>
                   <th className="px-2 py-2 text-right">Ações</th>
                 </tr>
               </thead>
@@ -132,6 +143,7 @@ const Page = () => {
                     <td className="px-2 py-2">{toDateTime(row.fim)}</td>
                     <td className="px-2 py-2">{row.local}</td>
                     <td className="px-2 py-2 capitalize">{row.status}</td>
+                    <td className="px-2 py-2" title={row.syncStatus}>{syncIndicator(row.syncStatus)}</td>
                     <td className="px-2 py-2 text-right">
                       <Button size="sm" variant="outline">
                         Editar

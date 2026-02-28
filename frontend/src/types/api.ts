@@ -144,6 +144,7 @@ export type AgendaEvent = {
   description?: string;
   location?: string;
   periciaId?: string;
+  syncStatus?: 'PENDING' | 'SYNCED' | 'WARNING' | 'CONFLICT' | 'ERROR';
 };
 
 export type AgendaTask = {
@@ -154,6 +155,31 @@ export type AgendaTask = {
   priority?: number;
   description?: string;
   periciaId?: string;
+  syncStatus?: 'PENDING' | 'SYNCED' | 'WARNING' | 'CONFLICT' | 'ERROR';
+};
+
+export type GoogleCalendarIntegration = {
+  id: string;
+  provider: 'GOOGLE';
+  email?: string;
+  selectedCalendarId?: string;
+  selectedCalendarName?: string;
+  syncEvents: boolean;
+  syncTasks: boolean;
+  mode: 'MIRROR' | 'TWO_WAY';
+  active: boolean;
+  lastSyncAt?: string;
+};
+
+export type SyncAuditLog = {
+  id: string;
+  syncType: 'EVENT' | 'TASK';
+  direction: 'PUSH' | 'PULL';
+  localEntity: string;
+  localEntityId: string;
+  status: 'PENDING' | 'SYNCED' | 'WARNING' | 'CONFLICT' | 'ERROR';
+  message?: string;
+  createdAt: string;
 };
 
 export type PhysicalManeuver = {

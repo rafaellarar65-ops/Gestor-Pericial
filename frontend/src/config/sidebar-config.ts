@@ -28,6 +28,7 @@ export const sidebarSections: SidebarSection[] = [
       { label: 'Teleperícias', href: '/telepericias' },
       { label: 'Esclarecimentos', href: '/comunicacao' },
       { label: 'Agenda', href: '/agenda' },
+      { label: 'Google Calendar', href: '/integrations/google-calendar' },
     ],
   },
   {

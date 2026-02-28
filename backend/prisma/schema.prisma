@@ -101,6 +101,29 @@ enum NotificationChannel {
   WHATSAPP
 }
 
+enum CalendarSyncType {
+  EVENT
+  TASK
+}
+
+enum CalendarSyncDirection {
+  PUSH
+  PULL
+}
+
+enum CalendarSyncStatus {
+  PENDING
+  SYNCED
+  WARNING
+  CONFLICT
+  ERROR
+}
+
+enum CalendarSyncMode {
+  MIRROR
+  TWO_WAY
+}
+
 // =========================
 // Identity / Tenant
 // =========================
@@ -133,6 +156,8 @@ model Tenant {
   knowledgeItems      KnowledgeItem[]
   agendaEvents        AgendaEvent[]
   agendaTasks         AgendaTask[]
+  calendarIntegrations CalendarIntegration[]
+  syncAuditLogs       SyncAuditLog[]
   recebimentos        Recebimento[]
   importBatches       ImportBatch[]
   unmatchedPayments   UnmatchedPayment[]
@@ -595,6 +620,11 @@ model AgendaEvent {
   allDay       Boolean        @default(false)
   location     String?
   metadata     Json?
+  externalId   String?
+  externalCalendarId String?
+  externalLastModifiedAt DateTime?
+  lastSyncAt   DateTime?
+  syncStatus   CalendarSyncStatus @default(PENDING)
   createdAt    DateTime       @default(now())
   updatedAt    DateTime       @updatedAt
   createdBy    String?        @db.Uuid
@@ -605,6 +635,7 @@ model AgendaEvent {
 
   @@index([tenantId, startAt])
   @@index([tenantId, periciaId, startAt])
+  @@index([tenantId, externalId])
 }
 
 model AgendaTask {
@@ -618,6 +649,11 @@ model AgendaTask {
   priority     Int             @default(3)
   completedAt  DateTime?
   metadata     Json?
+  externalId   String?
+  externalCalendarId String?
+  externalLastModifiedAt DateTime?
+  lastSyncAt   DateTime?
+  syncStatus   CalendarSyncStatus @default(PENDING)
   createdAt    DateTime        @default(now())
   updatedAt    DateTime        @updatedAt
   createdBy    String?         @db.Uuid
@@ -627,6 +663,7 @@ model AgendaTask {
   pericia Pericia? @relation(fields: [periciaId], references: [id], onDelete: SetNull)
 
   @@index([tenantId, dueAt, status])
+  @@index([tenantId, externalId])
 }
 
 // =========================
@@ -963,6 +1000,56 @@ model IntegrationSettings {
   tenant Tenant @relation(fields: [tenantId], references: [id], onDelete: Cascade)
 
   @@unique([tenantId, provider])
+}
+
+model CalendarIntegration {
+  id                    String           @id @default(uuid()) @db.Uuid
+  tenantId              String           @db.Uuid
+  provider              String           @default("GOOGLE")
+  email                 String?
+  accessToken           String?
+  refreshToken          String?
+  tokenExpiresAt        DateTime?
+  selectedCalendarId    String?
+  selectedCalendarName  String?
+  syncEvents            Boolean          @default(true)
+  syncTasks             Boolean          @default(false)
+  mode                  CalendarSyncMode @default(MIRROR)
+  active                Boolean          @default(false)
+  lastSyncAt            DateTime?
+  createdAt             DateTime         @default(now())
+  updatedAt             DateTime         @updatedAt
+  createdBy             String?          @db.Uuid
+  updatedBy             String?          @db.Uuid
+
+  tenant Tenant @relation(fields: [tenantId], references: [id], onDelete: Cascade)
+  syncAuditLogs SyncAuditLog[]
+
+  @@unique([tenantId, provider])
+}
+
+model SyncAuditLog {
+  id                String                @id @default(uuid()) @db.Uuid
+  tenantId          String                @db.Uuid
+  integrationId     String?               @db.Uuid
+  syncType          CalendarSyncType
+  direction         CalendarSyncDirection
+  localEntity       String
+  localEntityId     String                @db.Uuid
+  externalId        String?
+  status            CalendarSyncStatus
+  message           String?
+  localUpdatedAt    DateTime?
+  externalUpdatedAt DateTime?
+  syncedAt          DateTime?
+  payload           Json?
+  createdAt         DateTime              @default(now())
+
+  tenant      Tenant               @relation(fields: [tenantId], references: [id], onDelete: Cascade)
+  integration CalendarIntegration? @relation(fields: [integrationId], references: [id], onDelete: SetNull)
+
+  @@index([tenantId, createdAt])
+  @@index([tenantId, syncType, status])
 }
 
 model NotificationConfig {
