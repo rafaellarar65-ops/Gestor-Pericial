@@ -1,6 +1,7 @@
-import { Controller, Get } from '@nestjs/common';
+import { Controller, Get, Query } from '@nestjs/common';
 import { ApiBearerAuth, ApiOperation, ApiTags } from '@nestjs/swagger';
 import { PericiasService } from './pericias.service';
+import { ListNomeacoesDto } from './dto/pericias.dto';
 
 @ApiTags('views')
 @ApiBearerAuth()
@@ -10,8 +11,15 @@ export class ViewsController {
 
   @Get('nomeacoes')
   @ApiOperation({ summary: 'Perícias aguardando agendamento (nomeações)' })
-  nomeacoes() {
-    return this.service.nomeacoes();
+  nomeacoes(@Query() query: ListNomeacoesDto) {
+    return this.service.nomeacoes(query);
+  }
+
+
+  @Get('fila-agendamento-cidades')
+  @ApiOperation({ summary: 'Fila de agendamento segmentada por cidade' })
+  filaAgendamentoPorCidade() {
+    return this.service.filaAgendamentoPorCidade();
   }
 
   @Get('pericias-hoje')

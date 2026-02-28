@@ -9,6 +9,8 @@ import type {
   PericiaDetail,
   PericiaTimelineResponse,
   Recebimento,
+  NomeacoesResponse,
+  FilaAgendamentoCityResponse,
 } from '@/types/api';
 
 export const periciaService = {
@@ -17,20 +19,18 @@ export const periciaService = {
     return data;
   },
 
-  list: async (
-    page: number,
-    filters?: {
-      limit?: number;
-      search?: string;
-      statusId?: string;
-      cidadeId?: string;
-      dateFrom?: string;
-      dateTo?: string;
-      varaId?: string;
-      valorMin?: number;
-      valorMax?: number;
-    },
-  ): Promise<ApiListResponse<Pericia>> => {
+
+  nomeacoes: async (): Promise<NomeacoesResponse> => {
+    const { data } = await apiClient.get<NomeacoesResponse>('/nomeacoes');
+    return data;
+  },
+
+  filaAgendamentoPorCidade: async (): Promise<FilaAgendamentoCityResponse> => {
+    const { data } = await apiClient.get<FilaAgendamentoCityResponse>('/fila-agendamento-cidades');
+    return data;
+  },
+
+  list: async (page: number, filters?: { limit?: number; search?: string }): Promise<ApiListResponse<Pericia>> => {
     const { data } = await apiClient.get<{ items: Pericia[]; pagination: { total: number; page: number; limit: number } }>('/pericias', {
       params: {
         page,
@@ -104,6 +104,24 @@ export const periciaService = {
     },
   ): Promise<PericiaDetail> => {
     const { data } = await apiClient.patch<PericiaDetail>(`/pericias/${id}`, payload);
+    return data;
+  },
+
+
+  telepericiaQueue: async (): Promise<TelepericiaQueueResponse> => {
+    const { data } = await apiClient.get<TelepericiaQueueResponse>('/pericias/telepericia/queue');
+    return data;
+  },
+
+  updateUrgent: async (id: string, isUrgent: boolean): Promise<PericiaDetail> => {
+    const { data } = await apiClient.patch<PericiaDetail>(`/pericias/${id}/urgent`, { isUrgent });
+    return data;
+  },
+
+  registerTelepericiaAttempt: async (id: string, whatsappStatus?: string): Promise<PericiaDetail> => {
+    const { data } = await apiClient.patch<PericiaDetail>(`/pericias/${id}/telepericia-attempt`, {
+      ...(whatsappStatus ? { whatsappStatus } : {}),
+    });
     return data;
   },
 

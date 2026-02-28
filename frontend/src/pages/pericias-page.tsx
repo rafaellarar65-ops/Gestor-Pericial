@@ -48,19 +48,33 @@ export const PericiasPage = () => {
   const [dataNomeacaoInicio, setDataNomeacaoInicio] = useState('');
   const [dataNomeacaoFim, setDataNomeacaoFim] = useState('');
 
-  const cidadesQuery = useQuery({ queryKey: ['config', 'cidades'], queryFn: () => configService.list('cidades') });
-  const varasQuery = useQuery({ queryKey: ['config', 'varas'], queryFn: () => configService.list('varas') });
-  const statusQuery = useQuery({ queryKey: ['config', 'status'], queryFn: () => configService.list('status') });
+  const {
+    data,
+    isLoading,
+    isError,
+    isFetching,
+    refetch,
+  } = usePericiasQuery(page, {
+    limit: 100,
+    search: search.trim().length >= 3 ? search : undefined,
+  });
 
-  const hasActiveSearch =
-    search.trim().length >= 3 ||
-    statusId !== 'all' ||
-    cidadeId !== 'all' ||
-    varaId !== 'all' ||
-    Boolean(valorMin.trim()) ||
-    Boolean(valorMax.trim()) ||
-    Boolean(dataNomeacaoInicio) ||
-    Boolean(dataNomeacaoFim);
+  const hasActiveFilters = Boolean(search.trim()) || statusFilter !== 'todos' || cityFilter !== 'todas';
+
+  const handleRefresh = () => {
+    if (hasActiveFilters) {
+      setSearch('');
+      setStatusFilter('todos');
+      setCityFilter('todas');
+      setSearchParams(new URLSearchParams(), { replace: true });
+      return;
+    }
+
+    void refetch();
+  };
+
+  const rows = useMemo(() => {
+    const source = (data?.items ?? []) as Array<Record<string, unknown>>;
 
   const parsedMin = parseCurrency(valorMin);
   const parsedMax = parseCurrency(valorMax);
@@ -122,13 +136,22 @@ export const PericiasPage = () => {
         </h1>
 
         <div className="flex flex-wrap gap-2">
-          <button className="inline-flex items-center gap-2 rounded-md border px-3 py-2 text-sm font-semibold" type="button">
-            <RotateCw size={14} />
+          <button
+            className="inline-flex items-center gap-2 rounded-md border px-3 py-2 text-sm font-semibold disabled:cursor-not-allowed disabled:opacity-70"
+            disabled={isFetching}
+            onClick={handleRefresh}
+            type="button"
+          >
+            <RotateCw className={isFetching ? 'animate-spin' : ''} size={14} />
           </button>
           <button className="inline-flex items-center gap-2 rounded-md border px-3 py-2 text-sm font-semibold text-purple-700" type="button">
             <Bot size={14} /> IA
           </button>
-          <button className="inline-flex items-center gap-2 rounded-md border px-3 py-2 text-sm font-semibold" type="button">
+          <button
+            className="inline-flex items-center gap-2 rounded-md border px-3 py-2 text-sm font-semibold"
+            onClick={() => navigate('/importacoes')}
+            type="button"
+          >
             <Upload size={14} /> Importar
           </button>
           <button
