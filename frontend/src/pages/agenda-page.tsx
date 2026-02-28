@@ -33,6 +33,8 @@ const toDateTime = (value: string) => {
   return Number.isNaN(date.getTime()) ? value : date.toLocaleString('pt-BR');
 };
 
+const toCsvValue = (value: string) => `"${value.replaceAll('"', '""')}"`;
+
 const inferStatus = (item: Record<string, string | number | undefined>): AgendaRow['status'] => {
   const raw = getValue(item, ['status', 'state']).toLowerCase();
   if (raw.includes('realiz')) return 'realizado';
@@ -73,6 +75,25 @@ const Page = () => {
     [rows, busca, status, periodo],
   );
 
+  const handleExportAgenda = () => {
+    const header = ['Título', 'Tipo', 'Início', 'Fim', 'Local', 'Status'];
+    const csvLines = [header, ...filteredRows.map((row) => [row.titulo, row.tipo, row.inicio, row.fim, row.local, row.status])]
+      .map((line) => line.map((value) => toCsvValue(value || '—')).join(';'));
+
+    const filtroDescricao = [`busca=${busca || 'todos'}`, `status=${status}`, `periodo=${periodo || 'todos'}`].join(',');
+    const csvContent = [`"Filtros";"${filtroDescricao}"`, ...csvLines].join('\n');
+    const blob = new Blob([csvContent], { type: 'text/csv;charset=utf-8;' });
+    const url = URL.createObjectURL(blob);
+    const link = document.createElement('a');
+
+    link.href = url;
+    link.setAttribute('download', `agenda-${periodo || 'completa'}.csv`);
+    document.body.appendChild(link);
+    link.click();
+    document.body.removeChild(link);
+    URL.revokeObjectURL(url);
+  };
+
   if (isLoading) return <LoadingState />;
   if (isError) return <ErrorState message="Erro ao carregar agenda." />;
 
@@ -84,7 +105,7 @@ const Page = () => {
           <p className="text-sm text-muted-foreground">Gerencie eventos, horários e compromissos operacionais.</p>
         </div>
         <div className="flex gap-2">
-          <Button variant="outline">Exportar agenda</Button>
+          <Button onClick={handleExportAgenda} variant="outline">Exportar agenda</Button>
           <Button>Criar evento</Button>
         </div>
       </header>
