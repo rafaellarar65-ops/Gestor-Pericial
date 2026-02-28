@@ -398,6 +398,57 @@ export class PericiasService {
     };
   }
 
+
+  async filaAgendamentoPorCidade() {
+    const where: Prisma.PericiaWhereInput = {
+      dataAgendamento: null,
+      finalizada: false,
+      laudoEnviado: false,
+    };
+
+    const items = await this.prisma.pericia.findMany({
+      where,
+      include: { cidade: true, status: true },
+      orderBy: [{ cidade: { nome: 'asc' } }, { dataNomeacao: 'desc' }],
+      take: 500,
+    });
+
+    const grouped = items.reduce<
+      Record<
+        string,
+        Array<{
+          id: string;
+          processoCNJ: string;
+          autorNome: string;
+          cidade: string;
+          status: string;
+          dataNomeacao?: string;
+        }>
+      >
+    >((acc, item) => {
+      const cidade = item.cidade?.nome ?? 'Sem cidade';
+      if (!acc[cidade]) acc[cidade] = [];
+      acc[cidade].push({
+        id: item.id,
+        processoCNJ: item.processoCNJ,
+        autorNome: item.autorNome ?? '',
+        cidade,
+        status: item.status?.codigo ?? '',
+        dataNomeacao: item.dataNomeacao?.toISOString(),
+      });
+      return acc;
+    }, {});
+
+    const cities = Object.entries(grouped)
+      .map(([cidade, records]) => ({ cidade, total: records.length, items: records }))
+      .sort((a, b) => b.total - a.total || a.cidade.localeCompare(b.cidade));
+
+    return {
+      total: items.length,
+      cities,
+    };
+  }
+
   async laudosPendentes() {
     const items = await this.prisma.pericia.findMany({
       where: { agendada: true, laudoEnviado: false, finalizada: false },

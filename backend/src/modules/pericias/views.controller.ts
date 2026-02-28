@@ -15,6 +15,12 @@ export class ViewsController {
     return this.service.nomeacoes(query);
   }
 
+  @Get('fila-agendamento-cidades')
+  @ApiOperation({ summary: 'Fila de agendamento segmentada por cidade' })
+  filaAgendamentoPorCidade() {
+    return this.service.filaAgendamentoPorCidade();
+  }
+
   @Get('pericias-hoje')
   @ApiOperation({ summary: 'Perícias agendadas para hoje' })
   periciasHoje() {
