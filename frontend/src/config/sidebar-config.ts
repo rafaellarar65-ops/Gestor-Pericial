@@ -44,6 +44,7 @@ export const sidebarSections: SidebarSection[] = [
       { label: 'Central de Cobrança', href: '/cobranca' },
       { label: 'Importações', href: '/importacoes' },
       { label: 'Análise Financeira', href: '/financeiro' },
+      { label: 'Analytics Calendar', href: '/analytics-calendar' },
       { label: 'Relatórios Financeiros', href: '/relatorios-financeiros' },
       { label: 'Pagamentos não vinculados', href: '/pagamentos-nao-vinculados' },
     ],

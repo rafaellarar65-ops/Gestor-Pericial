@@ -298,3 +298,56 @@ export type ApiError = {
   message: string | string[];
   statusCode?: number;
 };
+
+export const ANALYTICS_CALENDAR_LAYERS = [
+  'OPERACIONAL',
+  'PRODUCAO',
+  'LAUDOS',
+  'ESCLARECIMENTOS',
+  'FINANCEIRO_PRODUCAO_RECEBIMENTO',
+] as const;
+
+export type AnalyticsCalendarLayer = (typeof ANALYTICS_CALENDAR_LAYERS)[number];
+
+export const ANALYTICS_EVENT_TYPE_COLORS: Record<string, string> = {
+  NOMEACAO: '#2563eb',
+  AGENDAMENTO: '#d97706',
+  REALIZACAO: '#0891b2',
+  LAUDO_ENVIADO: '#059669',
+  RECEBIMENTO: '#16a34a',
+};
+
+export type AnalyticsCalendarKpi = {
+  key: string;
+  label: string;
+  value: number;
+};
+
+export type AnalyticsCalendarTimelineEvent = {
+  type: string;
+  cnjId: string;
+  city: string;
+  timestamp: string;
+  value: number | null;
+  deadline: string | null;
+  status: string | null;
+};
+
+export type AnalyticsCalendarHeatmapDay = {
+  date: string;
+  receivedValue: number;
+  productionValue: number;
+  totalEvents: number;
+  intensity: number;
+};
+
+export type AnalyticsCalendarOverviewResponse = {
+  layer: AnalyticsCalendarLayer;
+  period: {
+    from: string;
+    to: string;
+  };
+  kpis: AnalyticsCalendarKpi[];
+  timeline: AnalyticsCalendarTimelineEvent[];
+  heatmap: AnalyticsCalendarHeatmapDay[];
+};
