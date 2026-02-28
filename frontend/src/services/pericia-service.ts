@@ -17,12 +17,32 @@ export const periciaService = {
     return data;
   },
 
-  list: async (page: number, filters?: { limit?: number; search?: string }): Promise<ApiListResponse<Pericia>> => {
+  list: async (
+    page: number,
+    filters?: {
+      limit?: number;
+      search?: string;
+      statusId?: string;
+      cidadeId?: string;
+      dateFrom?: string;
+      dateTo?: string;
+      varaId?: string;
+      valorMin?: number;
+      valorMax?: number;
+    },
+  ): Promise<ApiListResponse<Pericia>> => {
     const { data } = await apiClient.get<{ items: Pericia[]; pagination: { total: number; page: number; limit: number } }>('/pericias', {
       params: {
         page,
         limit: filters?.limit ?? 25,
         ...(filters?.search ? { search: filters.search } : {}),
+        ...(filters?.statusId ? { statusId: filters.statusId } : {}),
+        ...(filters?.cidadeId ? { cidadeId: filters.cidadeId } : {}),
+        ...(filters?.dateFrom ? { dateFrom: filters.dateFrom } : {}),
+        ...(filters?.dateTo ? { dateTo: filters.dateTo } : {}),
+        ...(filters?.varaId ? { varaId: filters.varaId } : {}),
+        ...(filters?.valorMin !== undefined ? { valorMin: filters.valorMin } : {}),
+        ...(filters?.valorMax !== undefined ? { valorMax: filters.valorMax } : {}),
       },
     });
 
