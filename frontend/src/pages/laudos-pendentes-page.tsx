@@ -1,7 +1,7 @@
-import { useMemo } from 'react';
+import { useMemo, useState } from 'react';
 import { Link } from 'react-router-dom';
 import { FileText, MapPin, FileEdit, AlertTriangle, CheckCircle2, ClipboardList } from 'lucide-react';
-import { EmptyState, ErrorState, LoadingState } from '@/components/ui/state';
+import { ErrorState, LoadingState } from '@/components/ui/state';
 import { useDomainData } from '@/hooks/use-domain-data';
 
 type LaudoItem = {
@@ -10,14 +10,57 @@ type LaudoItem = {
   autorNome?: string;
   reuNome?: string;
   cidade?: string;
-  status?: string;
+  dataRealizacao?: string;
+  status?:
+    | string
+    | {
+      nome?: string;
+      codigo?: string;
+    };
   isUrgent?: boolean | string | number;
-  [key: string]: string | number | boolean | undefined;
+  [key: string]: string | number | boolean | undefined | { nome?: string; codigo?: string };
+};
+
+const normalizeStatus = (value?: string): string =>
+  (value ?? '')
+    .normalize('NFD')
+    .replace(/[\u0300-\u036f]/g, '')
+    .replace(/[\s-]+/g, '_')
+    .toUpperCase()
+    .trim();
+
+const getStatusCandidates = (item: LaudoItem): string[] => {
+  const status = item.status;
+  if (typeof status === 'string') return [status];
+  if (status && typeof status === 'object') return [status.nome ?? '', status.codigo ?? ''];
+  return [];
+};
+
+const isEnviarLaudoStatus = (item: LaudoItem): boolean => {
+  const normalizedCandidates = getStatusCandidates(item).map(normalizeStatus);
+  return normalizedCandidates.some((candidate) => candidate === 'ENVIAR_LAUDO' || candidate === 'ENVIARLAUDO');
+};
+
+const getStatusLabel = (item: LaudoItem): string | undefined => {
+  const status = item.status;
+  if (typeof status === 'string') return status;
+  return status?.nome ?? status?.codigo;
+};
+
+const getDelayDays = (item: LaudoItem): number | null => {
+  if (!item.dataRealizacao) return null;
+  const realizationDate = new Date(item.dataRealizacao);
+  if (Number.isNaN(realizationDate.getTime())) return null;
+
+  const now = new Date();
+  const diffMs = now.getTime() - realizationDate.getTime();
+  return Math.max(0, Math.floor(diffMs / (1000 * 60 * 60 * 24)));
 };
 
 const isItemUrgent = (item: LaudoItem): boolean => {
   if (item.isUrgent === true || item.isUrgent === 1 || item.isUrgent === 'true') return true;
-  if (typeof item.status === 'string' && item.status.toUpperCase().includes('URGENTE')) return true;
+  const statusText = getStatusLabel(item);
+  if (typeof statusText === 'string' && statusText.toUpperCase().includes('URGENTE')) return true;
   return false;
 };
 
@@ -36,6 +79,8 @@ const LaudoCard = ({ item, index }: { item: LaudoItem; index: number }) => {
   const urgent = isItemUrgent(item);
   const itemId = item.id ?? index;
   const detailHref = `/pericias/${itemId}`;
+  const statusLabel = getStatusLabel(item);
+  const delayDays = getDelayDays(item);
 
   return (
     <div
@@ -79,16 +124,22 @@ const LaudoCard = ({ item, index }: { item: LaudoItem; index: number }) => {
             <MapPin size={12} className="text-orange-500" />
             {item.cidade ?? '—'}
           </span>
-          {item.status && (
+          {statusLabel && (
             <span
               className={`rounded-full px-2.5 py-0.5 text-[11px] font-semibold uppercase tracking-wide ${getStatusColor(
-                item.status as string,
+                statusLabel,
               )}`}
             >
-              {item.status}
+              {statusLabel}
             </span>
           )}
         </div>
+
+        <p className="mb-4 text-xs font-semibold text-orange-700">
+          {delayDays === null
+            ? 'Data de realização não informada'
+            : `Há ${delayDays} dia${delayDays !== 1 ? 's' : ''} da realização`}
+        </p>
 
         {/* Action buttons */}
         <div className="flex items-center gap-2">
@@ -113,15 +164,28 @@ const LaudoCard = ({ item, index }: { item: LaudoItem; index: number }) => {
 
 const LaudosPendentesPage = () => {
   const { data = [], isLoading, isError } = useDomainData('laudos-pendentes', '/laudos-pendentes');
+  const [prioritizeUrgent, setPrioritizeUrgent] = useState(false);
 
   const sorted = useMemo(() => {
-    const items = data as LaudoItem[];
+    const items = (data as LaudoItem[]).filter(isEnviarLaudoStatus);
+
     return [...items].sort((a, b) => {
-      const aUrgent = isItemUrgent(a) ? 0 : 1;
-      const bUrgent = isItemUrgent(b) ? 0 : 1;
-      return aUrgent - bUrgent;
+      const aDelay = getDelayDays(a) ?? -1;
+      const bDelay = getDelayDays(b) ?? -1;
+      if (aDelay !== bDelay) return bDelay - aDelay;
+
+      if (prioritizeUrgent) {
+        const aUrgent = isItemUrgent(a) ? 0 : 1;
+        const bUrgent = isItemUrgent(b) ? 0 : 1;
+        if (aUrgent !== bUrgent) return aUrgent - bUrgent;
+      }
+
+      const cnjCompare = (a.processoCNJ ?? '').localeCompare(b.processoCNJ ?? '');
+      if (cnjCompare !== 0) return cnjCompare;
+
+      return String(a.id ?? '').localeCompare(String(b.id ?? ''));
     });
-  }, [data]);
+  }, [data, prioritizeUrgent]);
 
   const total = sorted.length;
   const urgentCount = useMemo(() => sorted.filter(isItemUrgent).length, [sorted]);
@@ -146,7 +210,18 @@ const LaudosPendentesPage = () => {
 
             {/* Count badge */}
             {!isLoading && !isError && (
-              <div className="flex items-center gap-2">
+              <div className="flex flex-wrap items-center justify-end gap-2">
+                <button
+                  type="button"
+                  onClick={() => setPrioritizeUrgent((value) => !value)}
+                  className={`rounded-full px-3 py-1 text-xs font-semibold transition-colors ${
+                    prioritizeUrgent
+                      ? 'bg-red-500 text-white'
+                      : 'bg-white/20 text-white hover:bg-white/30'
+                  }`}
+                >
+                  Priorizar urgentes: {prioritizeUrgent ? 'ON' : 'OFF'}
+                </button>
                 {urgentCount > 0 && (
                   <span className="flex items-center gap-1 rounded-full bg-red-500 px-3 py-1 text-xs font-bold text-white shadow">
                     <AlertTriangle size={12} />
