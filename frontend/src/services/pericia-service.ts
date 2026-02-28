@@ -9,11 +9,24 @@ import type {
   PericiaDetail,
   PericiaTimelineResponse,
   Recebimento,
+  NomeacoesResponse,
+  FilaAgendamentoCityResponse,
 } from '@/types/api';
 
 export const periciaService = {
   dashboard: async (): Promise<DashboardResponse> => {
     const { data } = await apiClient.get<DashboardResponse>('/pericias/dashboard');
+    return data;
+  },
+
+
+  nomeacoes: async (): Promise<NomeacoesResponse> => {
+    const { data } = await apiClient.get<NomeacoesResponse>('/nomeacoes');
+    return data;
+  },
+
+  filaAgendamentoPorCidade: async (): Promise<FilaAgendamentoCityResponse> => {
+    const { data } = await apiClient.get<FilaAgendamentoCityResponse>('/fila-agendamento-cidades');
     return data;
   },
 
