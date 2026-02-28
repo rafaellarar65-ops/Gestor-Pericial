@@ -1,5 +1,5 @@
 import { ApiProperty, ApiPropertyOptional } from '@nestjs/swagger';
-import { IsBoolean, IsNotEmpty, IsObject, IsOptional, IsString, IsUUID } from 'class-validator';
+import { IsBoolean, IsDateString, IsIn, IsNotEmpty, IsObject, IsOptional, IsString, IsUUID } from 'class-validator';
 
 export class CreateEmailTemplateDto {
   @ApiProperty()
@@ -126,6 +126,58 @@ export class SendWhatsappMessageDto {
   @IsOptional()
   @IsUUID()
   periciaId?: string;
+
+  @ApiPropertyOptional({ enum: ['template', 'freeform'], default: 'freeform' })
+  @IsOptional()
+  @IsIn(['template', 'freeform'])
+  messageType?: 'template' | 'freeform';
+
+  @ApiPropertyOptional({ enum: ['granted', 'denied', 'unknown'], default: 'unknown' })
+  @IsOptional()
+  @IsIn(['granted', 'denied', 'unknown'])
+  consentStatus?: 'granted' | 'denied' | 'unknown';
+
+  @ApiPropertyOptional({ default: true })
+  @IsOptional()
+  @IsBoolean()
+  isAutomation?: boolean;
+
+  @ApiPropertyOptional({ description: 'Última data/hora de inbound do contato (ISO 8601)' })
+  @IsOptional()
+  @IsDateString()
+  lastInboundAt?: string;
+
+  @ApiPropertyOptional({ description: 'Identificador do contato de WhatsApp para exceções de consentimento.' })
+  @IsOptional()
+  @IsString()
+  contactId?: string;
+}
+
+export class UpdateWhatsappConsentDto {
+  @ApiProperty({ enum: ['granted', 'denied'] })
+  @IsIn(['granted', 'denied'])
+  consentStatus!: 'granted' | 'denied';
+}
+
+
+export class InterpretWhatsappInboundDto {
+  @ApiProperty()
+  @IsString()
+  contactId!: string;
+
+  @ApiProperty()
+  @IsString()
+  body!: string;
+
+  @ApiPropertyOptional()
+  @IsOptional()
+  @IsUUID()
+  periciaId?: string;
+
+  @ApiPropertyOptional({ default: false })
+  @IsOptional()
+  @IsBoolean()
+  hasLinkedInboxItem?: boolean;
 }
 
 export class AutomaticVaraChargeDto {

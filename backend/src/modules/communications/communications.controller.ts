@@ -1,4 +1,4 @@
-import { Body, Controller, Get, Post, Query } from '@nestjs/common';
+import { Body, Controller, Get, Param, Post, Query } from '@nestjs/common';
 import { ApiBearerAuth, ApiOperation, ApiTags } from '@nestjs/swagger';
 import { CommunicationsService } from './communications.service';
 import {
@@ -6,8 +6,10 @@ import {
   CreateEmailTemplateDto,
   CreateLawyerDto,
   GenerateHubEmailDto,
+  InterpretWhatsappInboundDto,
   SendEmailDto,
   SendWhatsappMessageDto,
+  UpdateWhatsappConsentDto,
   UpsertUolhostEmailConfigDto,
 } from './dto/communications.dto';
 
@@ -60,9 +62,15 @@ export class CommunicationsController {
   }
 
   @Post('whatsapp/send')
-  @ApiOperation({ summary: 'Dispara mensagem via WhatsApp API' })
+  @ApiOperation({ summary: 'Dispara mensagem via WhatsApp API com regras de consentimento e janela de atendimento' })
   sendWhatsappMessage(@Body() dto: SendWhatsappMessageDto) {
     return this.service.sendWhatsappMessage(dto);
+  }
+
+  @Post('whatsapp/inbound/interpret')
+  @ApiOperation({ summary: 'Interpreta inbound de WhatsApp (1/2/outros) para confirmação, reagendamento ou triagem' })
+  interpretWhatsappInbound(@Body() dto: InterpretWhatsappInboundDto) {
+    return this.service.interpretWhatsappInbound(dto);
   }
 
   @Get('whatsapp/messages')
@@ -75,5 +83,18 @@ export class CommunicationsController {
   @ApiOperation({ summary: 'Aciona cobrança consolidada de perícias pendentes por vara' })
   automaticVaraCharge(@Body() dto: AutomaticVaraChargeDto) {
     return this.service.automaticVaraCharge(dto);
+  }
+}
+
+@ApiTags('whatsapp')
+@ApiBearerAuth()
+@Controller('whatsapp')
+export class WhatsappController {
+  constructor(private readonly service: CommunicationsService) {}
+
+  @Post('contacts/:id/consent')
+  @ApiOperation({ summary: 'Atualiza consentimento manual (grant/deny) de contato no WhatsApp' })
+  updateContactConsent(@Param('id') id: string, @Body() dto: UpdateWhatsappConsentDto) {
+    return this.service.updateContactConsent(id, dto);
   }
 }
