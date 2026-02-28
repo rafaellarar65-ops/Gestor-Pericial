@@ -74,6 +74,25 @@ export type Recebimento = {
   createdAt?: string;
 };
 
+
+export type ImportBatch = {
+  id: string;
+  sourceFileName?: string;
+  importedAt: string;
+  status?: string;
+  totalRecords: number;
+  matchedRecords: number;
+  unmatchedRecords: number;
+  _count?: { recebimentos: number };
+};
+
+export type RecebimentoListItem = Recebimento & {
+  pericia?: {
+    processoCNJ?: string;
+    autorNome?: string;
+  };
+};
+
 export type Despesa = {
   id: string;
   categoria: string;

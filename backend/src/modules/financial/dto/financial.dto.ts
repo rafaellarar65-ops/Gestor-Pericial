@@ -5,6 +5,7 @@ import {
   IsArray,
   IsDateString,
   IsEnum,
+  IsIn,
   IsNumber,
   IsOptional,
   IsString,
@@ -88,4 +89,41 @@ export class ReconcileDto {
   @ApiProperty()
   @IsString()
   note!: string;
+}
+
+export class UpdateRecebimentoDto {
+  @ApiPropertyOptional({ enum: FontePagamento })
+  @IsOptional()
+  @IsEnum(FontePagamento)
+  origem?: FontePagamento;
+
+  @ApiPropertyOptional()
+  @IsOptional()
+  @IsDateString()
+  dataRecebimento?: string;
+
+  @ApiPropertyOptional()
+  @IsOptional()
+  @Type(() => Number)
+  @IsNumber({ maxDecimalPlaces: 2 })
+  valorLiquido?: number;
+
+  @ApiPropertyOptional()
+  @IsOptional()
+  @IsString()
+  descricao?: string;
+}
+
+export class BulkDeleteRecebimentosDto {
+  @ApiProperty({ type: [String] })
+  @IsArray()
+  @IsUUID('4', { each: true })
+  ids!: string[];
+}
+
+export class RevertBatchDto {
+  @ApiPropertyOptional({ enum: ['PROCESSING', 'DONE', 'PROCESSED', 'REVERTED'] })
+  @IsOptional()
+  @IsIn(['PROCESSING', 'DONE', 'PROCESSED', 'REVERTED'])
+  expectedStatus?: string;
 }

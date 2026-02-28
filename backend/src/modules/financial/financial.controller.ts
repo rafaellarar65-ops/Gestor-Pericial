@@ -1,7 +1,14 @@
-import { Body, Controller, Get, Post, Query } from '@nestjs/common';
+import { Body, Controller, Delete, Get, Param, Patch, Post, Query } from '@nestjs/common';
 import { ApiBearerAuth, ApiOperation, ApiTags } from '@nestjs/swagger';
 import { FinancialService } from './financial.service';
-import { CreateDespesaDto, CreateRecebimentoDto, ImportRecebimentosDto, ReconcileDto } from './dto/financial.dto';
+import {
+  BulkDeleteRecebimentosDto,
+  CreateDespesaDto,
+  CreateRecebimentoDto,
+  ImportRecebimentosDto,
+  ReconcileDto,
+  UpdateRecebimentoDto,
+} from './dto/financial.dto';
 
 @ApiTags('financial')
 @ApiBearerAuth()
@@ -16,8 +23,18 @@ export class FinancialController {
   }
 
   @Get('recebimentos')
-  listRecebimentos(@Query('periciaId') periciaId?: string) {
-    return this.service.listRecebimentos(periciaId);
+  listRecebimentos(@Query('periciaId') periciaId?: string, @Query('search') search?: string) {
+    return this.service.listRecebimentos(periciaId, search);
+  }
+
+  @Patch('recebimentos/:id')
+  updateRecebimento(@Param('id') id: string, @Body() dto: UpdateRecebimentoDto) {
+    return this.service.updateRecebimento(id, dto);
+  }
+
+  @Post('recebimentos/bulk-delete')
+  bulkDeleteRecebimentos(@Body() dto: BulkDeleteRecebimentosDto) {
+    return this.service.bulkDeleteRecebimentos(dto);
   }
 
   @Post('despesas')
@@ -34,6 +51,26 @@ export class FinancialController {
   @Post('import-batch')
   importBatch(@Body() dto: ImportRecebimentosDto) {
     return this.service.importBatch(dto);
+  }
+
+  @Get('import-batches')
+  listImportBatches() {
+    return this.service.listImportBatches();
+  }
+
+  @Post('import-batches/:id/revert')
+  revertBatch(@Param('id') id: string) {
+    return this.service.revertBatch(id);
+  }
+
+  @Delete('import-batches/:id')
+  deleteBatchAndRecebimentos(@Param('id') id: string) {
+    return this.service.deleteBatchAndRecebimentos(id);
+  }
+
+  @Post('clear-all-financial-data')
+  clearAllFinancialData() {
+    return this.service.clearAllFinancialData();
   }
 
   @Get('unmatched')

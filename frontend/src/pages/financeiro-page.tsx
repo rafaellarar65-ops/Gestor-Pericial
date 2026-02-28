@@ -71,7 +71,7 @@ export default function FinanceiroPage() {
 
   const { data: recebimentos = [], isLoading, isError, error } = useQuery<Recebimento[]>({
     queryKey: ['recebimentos'],
-    queryFn: financialService.listRecebimentos,
+    queryFn: () => financialService.listRecebimentos(),
   });
 
   const mutation = useMutation({

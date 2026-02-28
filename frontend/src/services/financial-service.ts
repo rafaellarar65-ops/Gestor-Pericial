@@ -1,5 +1,13 @@
 import { apiClient } from '@/lib/api-client';
-import type { ApiListResponse, Despesa, FinancialAnalytics, FinancialItem, Recebimento } from '@/types/api';
+import type {
+  ApiListResponse,
+  Despesa,
+  FinancialAnalytics,
+  FinancialItem,
+  ImportBatch,
+  Recebimento,
+  RecebimentoListItem,
+} from '@/types/api';
 
 type RecebimentoRaw = {
   id: string;
@@ -27,8 +35,10 @@ export const financialService = {
     return data;
   },
 
-  listRecebimentos: async (): Promise<Recebimento[]> => {
-    const { data } = await apiClient.get<Recebimento[]>('/financial/recebimentos');
+  listRecebimentos: async (search?: string): Promise<RecebimentoListItem[]> => {
+    const { data } = await apiClient.get<RecebimentoListItem[]>('/financial/recebimentos', {
+      params: search ? { search } : undefined,
+    });
     return Array.isArray(data) ? data : [];
   },
 
@@ -41,6 +51,43 @@ export const financialService = {
     descricao?: string;
   }): Promise<Recebimento> => {
     const { data } = await apiClient.post<Recebimento>('/financial/recebimentos', payload);
+    return data;
+  },
+
+  updateRecebimento: async (
+    id: string,
+    payload: { dataRecebimento: string; origem: string; valorLiquido?: number; descricao?: string },
+  ): Promise<Recebimento> => {
+    const { data } = await apiClient.patch<Recebimento>(`/financial/recebimentos/${id}`, payload);
+    return data;
+  },
+
+  bulkDeleteRecebimentos: async (ids: string[]): Promise<{ deleted: number }> => {
+    const { data } = await apiClient.post<{ deleted: number }>('/financial/recebimentos/bulk-delete', { ids });
+    return data;
+  },
+
+  listImportBatches: async (): Promise<ImportBatch[]> => {
+    const { data } = await apiClient.get<ImportBatch[]>('/financial/import-batches');
+    return Array.isArray(data) ? data : [];
+  },
+
+  revertImportBatch: async (id: string): Promise<{ reverted: boolean; deletedRecebimentos?: number }> => {
+    const { data } = await apiClient.post<{ reverted: boolean; deletedRecebimentos?: number }>(`/financial/import-batches/${id}/revert`);
+    return data;
+  },
+
+  deleteImportBatch: async (id: string): Promise<{ deletedBatchId: string; deletedRecebimentos: number }> => {
+    const { data } = await apiClient.delete<{ deletedBatchId: string; deletedRecebimentos: number }>(`/financial/import-batches/${id}`);
+    return data;
+  },
+
+  clearAllFinancialData: async (): Promise<{
+    deletedRecebimentos: number;
+    deletedUnmatchedPayments: number;
+    deletedImportBatches: number;
+  }> => {
+    const { data } = await apiClient.post('/financial/clear-all-financial-data');
     return data;
   },
 
