@@ -235,6 +235,57 @@ export class FinancialService {
     };
   }
 
+
+  async revenueForecast() {
+    const recebimentos = await this.prisma.recebimento.findMany({
+      orderBy: { dataRecebimento: 'asc' },
+      take: 90,
+    });
+
+    const points = recebimentos
+      .map((item) => ({
+        date: item.dataRecebimento.toISOString().slice(0, 10),
+        amount: Number(item.valorLiquido ?? item.valorBruto ?? 0),
+      }))
+      .filter((p) => p.amount > 0);
+
+    const avg = points.length ? points.reduce((sum, p) => sum + p.amount, 0) / points.length : 0;
+    const trend = points.length >= 2 ? points[points.length - 1].amount - points[0].amount : 0;
+    const projection = Math.max(0, avg + trend / Math.max(points.length, 1));
+
+    const forecastDays = Array.from({ length: 14 }).map((_, i) => {
+      const base = new Date();
+      base.setDate(base.getDate() + i + 1);
+      return {
+        date: base.toISOString().slice(0, 10),
+        amount: Number((projection * (0.85 + ((i % 4) * 0.07))).toFixed(2)),
+      };
+    });
+
+    const accumulated = [];
+    let running = 0;
+    for (const point of forecastDays) {
+      running += point.amount;
+      accumulated.push({ ...point, accumulated: Number(running.toFixed(2)) });
+    }
+
+    return {
+      forecast_total: Number(running.toFixed(2)),
+      confidence: points.length >= 20 ? 'alta' : points.length >= 8 ? 'media' : 'baixa',
+      signals: [
+        `Média histórica diária considerada: R$ ${avg.toFixed(2)}`,
+        `Tendência observada da série: ${trend >= 0 ? 'alta' : 'queda'} (${trend.toFixed(2)})`,
+        `Base histórica usada: ${points.length} lançamentos de recebimento`,
+      ],
+      assumptions: [
+        'Projeção linear de curto prazo (14 dias)',
+        'Sem ajuste de sazonalidade jurídica mensal',
+        'Sem eventos extraordinários de pagamentos retroativos',
+      ],
+      series: accumulated,
+    };
+  }
+
   chargeAutomation() {
     return { enqueued: true, queue: 'charge-dispatch', message: 'Cobranças automáticas enfileiradas.' };
   }

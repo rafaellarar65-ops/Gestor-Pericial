@@ -78,6 +78,11 @@ export class FinancialController {
     return this.service.analytics();
   }
 
+  @Get('revenue-forecast')
+  revenueForecast() {
+    return this.service.revenueForecast();
+  }
+
   @Post('charge-automation')
   chargeAutomation() {
     return this.service.chargeAutomation();

@@ -5,6 +5,7 @@ import {
   IsArray,
   IsDateString,
   IsEnum,
+  IsIn,
   IsInt,
   IsNotEmpty,
   IsOptional,
@@ -127,4 +128,43 @@ export class BatchScheduleDto {
   @ValidateNested({ each: true })
   @Type(() => BatchScheduleItemDto)
   items!: BatchScheduleItemDto[];
+}
+
+export class ExportWeeklyPdfDto {
+  @ApiPropertyOptional({ description: 'Data de referência da semana (YYYY-MM-DD)' })
+  @IsOptional()
+  @IsString()
+  startDate?: string;
+
+  @ApiPropertyOptional({ enum: ['compacto', 'detalhado'], default: 'compacto' })
+  @IsOptional()
+  @IsIn(['compacto', 'detalhado'])
+  mode?: 'compacto' | 'detalhado';
+}
+
+export class AiSuggestLaudoBlocksDto {
+  @ApiPropertyOptional({ description: 'Data de referência da semana (YYYY-MM-DD)' })
+  @IsOptional()
+  @IsString()
+  startDate?: string;
+
+  @ApiProperty({ example: 90 })
+  @IsInt()
+  @Min(15)
+  avg_minutes_per_laudo!: number;
+
+  @ApiProperty({ example: 8 })
+  @IsInt()
+  @Min(1)
+  backlog!: number;
+
+  @ApiProperty({ type: [String], example: ['09:00', '14:00'] })
+  @IsArray()
+  @IsString({ each: true })
+  preferred_windows!: string[];
+
+  @ApiProperty({ example: 45 })
+  @IsInt()
+  @Min(15)
+  min_buffer_minutes!: number;
 }

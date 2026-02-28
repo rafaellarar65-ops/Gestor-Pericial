@@ -146,6 +146,33 @@ export type AgendaEvent = {
   periciaId?: string;
 };
 
+
+export type WeeklyWorkloadDay = {
+  date: string;
+  allocated_minutes: number;
+  work_window_minutes: number;
+  utilization: number;
+  conflicts: number;
+};
+
+export type WeeklyWorkload = {
+  week_start: string;
+  week_end: string;
+  days: WeeklyWorkloadDay[];
+  allocated_minutes: number;
+  work_window_minutes: number;
+  utilization: number;
+  conflicts: number;
+};
+
+export type RevenueForecast = {
+  forecast_total: number;
+  confidence: string;
+  signals: string[];
+  assumptions: string[];
+  series: Array<{ date: string; amount: number; accumulated: number }>;
+};
+
 export type AgendaTask = {
   id: string;
   title: string;

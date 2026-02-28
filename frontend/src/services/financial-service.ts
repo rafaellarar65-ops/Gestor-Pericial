@@ -4,6 +4,7 @@ import type {
   Despesa,
   FinancialAnalytics,
   FinancialItem,
+  RevenueForecast,
   Recebimento,
   UnmatchedPayment,
   UnmatchedPaymentOrigin,
@@ -107,6 +108,11 @@ export const financialService = {
 
   analytics: async (): Promise<FinancialAnalytics> => {
     const { data } = await apiClient.get<FinancialAnalytics>('/financial/analytics');
+    return data;
+  },
+
+  revenueForecast: async (): Promise<RevenueForecast> => {
+    const { data } = await apiClient.get<RevenueForecast>('/financial/revenue-forecast');
     return data;
   },
 };
