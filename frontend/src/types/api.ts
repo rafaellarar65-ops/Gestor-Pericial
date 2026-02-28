@@ -24,6 +24,7 @@ export type ApiListResponse<T> = {
 };
 
 export type DashboardKpi = {
+  key?: string;
   label: string;
   value: string;
   trend?: string;
