@@ -1,5 +1,6 @@
 import { Injectable, NotFoundException } from '@nestjs/common';
 import { Prisma } from '@prisma/client';
+import { PericiaStageFilterService } from './pericia-stage-filter.service';
 import { RequestContextService } from '../../common/request-context.service';
 import { PrismaService } from '../../prisma/prisma.service';
 import {
@@ -16,6 +17,7 @@ export class PericiasService {
   constructor(
     private readonly prisma: PrismaService,
     private readonly context: RequestContextService,
+    private readonly stageFilter: PericiaStageFilterService,
   ) {}
 
   create(dto: CreatePericiasDto) {
@@ -173,30 +175,12 @@ export class PericiasService {
   }
 
   async dashboard() {
-    const [avaliarStatuses, enviarLaudoStatuses] = await this.prisma.$transaction([
-      this.prisma.status.findMany({
-        where: {
-          OR: [
-            { codigo: { in: ['AVALIAR', 'ST_AVALIAR', 'NOMEADA', 'ACEITA', 'NOVA_NOMEACAO'] } },
-            { nome: { contains: 'avaliar', mode: 'insensitive' } },
-          ],
-        },
-        select: { id: true },
-      }),
-      this.prisma.status.findMany({
-        where: {
-          OR: [
-            { codigo: { in: ['ENVIAR_LAUDO', 'EM_LAUDO'] } },
-            { nome: { contains: 'enviar laudo', mode: 'insensitive' } },
-            { nome: { contains: 'em laudo', mode: 'insensitive' } },
-          ],
-        },
-        select: { id: true },
-      }),
+    const [nomeacoesWhere, agendarWhere, proximasWhere, enviarLaudosWhere] = await Promise.all([
+      this.stageFilter.buildWhere('NOMEACOES'),
+      this.stageFilter.buildWhere('AGENDAR_DATA'),
+      this.stageFilter.buildWhere('PROXIMAS_PERICIAS'),
+      this.stageFilter.buildWhere('ENVIAR_LAUDOS'),
     ]);
-
-    const avaliarStatusIds = avaliarStatuses.map((status) => status.id);
-    const enviarLaudoStatusIds = enviarLaudoStatuses.map((status) => status.id);
 
     const [
       total,
@@ -214,32 +198,13 @@ export class PericiasService {
       this.prisma.pericia.count({ where: { isUrgent: true } }),
       this.prisma.pericia.count({ where: { finalizada: true } }),
       this.prisma.pericia.count({ where: { pagamentoStatus: 'PENDENTE' } }),
-      this.prisma.pericia.count({
-        where: avaliarStatusIds.length > 0 ? { statusId: { in: avaliarStatusIds } } : { agendada: false, finalizada: false },
-      }),
-      this.prisma.pericia.count({
-        where: {
-          dataAgendamento: null,
-          finalizada: false,
-          laudoEnviado: false,
-        },
-      }),
-      this.prisma.pericia.count({
-        where: {
-          dataAgendamento: { not: null },
-          finalizada: false,
-        },
-      }),
-      this.prisma.pericia.count({
-        where: enviarLaudoStatusIds.length > 0 ? { statusId: { in: enviarLaudoStatusIds } } : { agendada: true, laudoEnviado: false, finalizada: false },
-      }),
+      this.prisma.pericia.count({ where: nomeacoesWhere }),
+      this.prisma.pericia.count({ where: agendarWhere }),
+      this.prisma.pericia.count({ where: proximasWhere }),
+      this.prisma.pericia.count({ where: enviarLaudosWhere }),
       this.prisma.pericia.groupBy({
         by: ['cidadeId'],
-        where: {
-          dataAgendamento: null,
-          finalizada: false,
-          laudoEnviado: false,
-        },
+        where: agendarWhere,
         orderBy: { cidadeId: 'asc' },
         _count: { _all: true },
       }),
@@ -309,22 +274,84 @@ export class PericiasService {
   }
 
   async nomeacoes() {
+    const where = await this.stageFilter.buildWhere('NOMEACOES');
     const items = await this.prisma.pericia.findMany({
-      where: { agendada: false, finalizada: false },
+      where,
       include: { cidade: true, status: true },
       orderBy: { dataNomeacao: 'desc' },
       take: 50,
     });
 
+    const grouped = {
+      avaliar: items.filter((p) => {
+        const status = (p.status?.codigo ?? '').toUpperCase();
+        return status.includes('AVALIAR') || status.includes('NOVA_NOMEACAO') || status.includes('NOMEACAO');
+      }),
+      aguardandoAceite: items.filter((p) => (p.status?.codigo ?? '').toUpperCase().includes('ACEITE')),
+      majorar: items.filter((p) => (p.status?.codigo ?? '').toUpperCase().includes('MAJORAR')),
+      observacaoExtra: items.filter((p) => Boolean(p.extraObservation) || (p.status?.codigo ?? '').toUpperCase().includes('OBSERVACAO')),
+    };
+
+    const mapListItem = (p: (typeof items)[number]) => ({
+      id: p.id,
+      processoCNJ: p.processoCNJ,
+      autorNome: p.autorNome ?? '',
+      cidade: p.cidade?.nome ?? '',
+      dataNomeacao: p.dataNomeacao?.toISOString(),
+      status: p.status?.codigo ?? '',
+    });
+
     return {
-      items: items.map((p) => ({
-        id: p.id,
-        processoCNJ: p.processoCNJ,
-        autorNome: p.autorNome ?? '',
-        cidade: p.cidade?.nome ?? '',
-        dataNomeacao: p.dataNomeacao?.toISOString(),
-        status: p.status?.codigo ?? '',
-      })),
+      total: items.length,
+      groups: [
+        { key: 'avaliar', label: 'A AVALIAR (NOVAS)', items: grouped.avaliar.map(mapListItem), total: grouped.avaliar.length },
+        {
+          key: 'aguardando_aceite',
+          label: 'AGUARDANDO ACEITE HONORÁRIOS',
+          items: grouped.aguardandoAceite.map(mapListItem),
+          total: grouped.aguardandoAceite.length,
+        },
+        { key: 'majorar', label: 'A MAJORAR HONORÁRIOS', items: grouped.majorar.map(mapListItem), total: grouped.majorar.length },
+        {
+          key: 'observacao_extra',
+          label: 'COM OBSERVAÇÃO EXTRA',
+          items: grouped.observacaoExtra.map(mapListItem),
+          total: grouped.observacaoExtra.length,
+        },
+      ],
+    };
+  }
+
+  async filaAgendamentoPorCidade() {
+    const where = await this.stageFilter.buildWhere('AGENDAR_DATA');
+    const items = await this.prisma.pericia.findMany({
+      where,
+      include: { cidade: true, status: true },
+      orderBy: [{ cidade: { nome: 'asc' } }, { dataNomeacao: 'desc' }],
+      take: 500,
+    });
+
+    const grouped = items.reduce<Record<string, Array<{ id: string; processoCNJ: string; autorNome: string; cidade: string; status: string; dataNomeacao?: string }>>>((acc, item) => {
+      const cidade = item.cidade?.nome ?? 'Sem cidade';
+      if (!acc[cidade]) acc[cidade] = [];
+      acc[cidade].push({
+        id: item.id,
+        processoCNJ: item.processoCNJ,
+        autorNome: item.autorNome ?? '',
+        cidade,
+        status: item.status?.codigo ?? '',
+        dataNomeacao: item.dataNomeacao?.toISOString(),
+      });
+      return acc;
+    }, {});
+
+    const cities = Object.entries(grouped)
+      .map(([cidade, records]) => ({ cidade, total: records.length, items: records }))
+      .sort((a, b) => b.total - a.total || a.cidade.localeCompare(b.cidade));
+
+    return {
+      total: items.length,
+      cities,
     };
   }
 
