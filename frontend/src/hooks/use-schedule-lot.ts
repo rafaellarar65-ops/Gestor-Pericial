@@ -71,7 +71,7 @@ export const useScheduleLot = (items: PrepItem[], params: ScheduleParams, confir
 
     return {
       id: `draft-${lotSeed}`,
-      createdAt: new Date().toISOString(),
+      createdAt: new Date(`${params.date}T${params.startTime}:00`).toISOString(),
       cityNames: Array.from(new Set(items.map((item) => item.cidade))),
       date: params.date,
       startTime: params.startTime,
@@ -83,7 +83,17 @@ export const useScheduleLot = (items: PrepItem[], params: ScheduleParams, confir
       status: 'PENDENTE',
       items: generateScheduleRows(items, params),
     };
-  }, [items, lotSeed, params]);
+  }, [
+    items,
+    lotSeed,
+    params.date,
+    params.durationMinutes,
+    params.intervalMinutes,
+    params.location,
+    params.modalidade,
+    params.source,
+    params.startTime,
+  ]);
 
   const conflicts = useMemo(() => {
     if (!draftLot) return [];
