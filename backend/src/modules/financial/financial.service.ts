@@ -11,6 +11,39 @@ export class FinancialService {
     private readonly context: RequestContextService,
   ) {}
 
+  private serializeUnmatchedPayment(payment: {
+    id: string;
+    cnjRaw: string | null;
+    cnjNormalized: string | null;
+    source: string | null;
+    originType: string;
+    grossValue: Prisma.Decimal | null;
+    discountValue: Prisma.Decimal | null;
+    netValue: Prisma.Decimal | null;
+    receivedAt: Date | null;
+    description: string | null;
+    status: PaymentMatchStatus;
+    linkedPericiaId: string | null;
+    linkedAt: Date | null;
+    linkedBy: string | null;
+    notes: string | null;
+    rawData: Prisma.JsonValue;
+    importBatchId: string | null;
+    createdAt: Date;
+    updatedAt: Date;
+  }) {
+    return {
+      ...payment,
+      grossValue: payment.grossValue ? Number(payment.grossValue) : null,
+      discountValue: payment.discountValue ? Number(payment.discountValue) : null,
+      netValue: payment.netValue ? Number(payment.netValue) : null,
+      receivedAt: payment.receivedAt?.toISOString() ?? null,
+      linkedAt: payment.linkedAt?.toISOString() ?? null,
+      createdAt: payment.createdAt.toISOString(),
+      updatedAt: payment.updatedAt.toISOString(),
+    };
+  }
+
   createRecebimento(dto: CreateRecebimentoDto) {
     const tenantId = this.context.get('tenantId') ?? '';
     return this.prisma.recebimento.create({
@@ -87,14 +120,28 @@ export class FinancialService {
     return { batchId: batch.id, imported: dto.rows.length };
   }
 
-  unmatched() {
-    return this.prisma.unmatchedPayment.findMany({ where: { matchStatus: PaymentMatchStatus.UNMATCHED }, orderBy: { createdAt: 'desc' } });
+  async unmatched() {
+    const rows = await this.prisma.unmatchedPayment.findMany({
+      where: { status: PaymentMatchStatus.PENDING },
+      orderBy: { createdAt: 'desc' },
+    });
+
+    return rows.map((row) => this.serializeUnmatchedPayment(row));
   }
 
   async reconcile(dto: ReconcileDto) {
+    const status = dto.status ?? PaymentMatchStatus.LINKED;
+    const now = new Date();
+    const linkedBy = this.context.get('userId') ?? null;
     const result = await this.prisma.unmatchedPayment.updateMany({
       where: { id: { in: dto.unmatchedIds } },
-      data: { matchStatus: PaymentMatchStatus.MATCHED, ...(dto.note ? { notes: dto.note } : {}) },
+      data: {
+        status,
+        ...(dto.note ? { notes: dto.note } : {}),
+        ...(status === PaymentMatchStatus.LINKED
+          ? { linkedAt: now, linkedPericiaId: dto.linkedPericiaId ?? null, linkedBy }
+          : { linkedAt: null, linkedPericiaId: null, linkedBy: null }),
+      },
     });
 
     return { reconciled: result.count };
