@@ -341,18 +341,60 @@ export class PericiasService {
       return acc;
     }, {});
 
+    const mappedItems = items.map((p) => ({
+      id: p.id,
+      processoCNJ: p.processoCNJ,
+      autorNome: p.autorNome ?? '',
+      cidade: p.cidade?.nome ?? '',
+      dataNomeacao: p.dataNomeacao?.toISOString(),
+      status: p.status?.codigo ?? '',
+      extraObservation: p.extraObservation,
+    }));
+
+    const getGroupTotal = (codes: string[]) =>
+      Object.entries(statusTotals).reduce((acc, [status, value]) => {
+        if (codes.some((code) => status.includes(code))) return acc + value;
+        return acc;
+      }, 0);
+
+    const groups = [
+      {
+        key: 'avaliar',
+        label: 'A AVALIAR (NOVAS)',
+        items: mappedItems.filter((item) => {
+          const status = String(item.status ?? '').toUpperCase();
+          return status.includes('AVALIAR') || status.includes('NOVA_NOMEACAO') || status.includes('NOMEACAO');
+        }),
+        total: getGroupTotal(['AVALIAR', 'NOVA_NOMEACAO', 'NOMEACAO']),
+      },
+      {
+        key: 'aguardando_aceite',
+        label: 'AGUARDANDO ACEITE HONORÁRIOS',
+        items: mappedItems.filter((item) => String(item.status ?? '').toUpperCase().includes('ACEITE')),
+        total: getGroupTotal(['AGUARDANDO_ACEITE', 'ACEITE_HONORARIOS', 'ACEITE']),
+      },
+      {
+        key: 'majorar',
+        label: 'A MAJORAR HONORÁRIOS',
+        items: mappedItems.filter((item) => String(item.status ?? '').toUpperCase().includes('MAJORAR')),
+        total: getGroupTotal(['A_MAJORAR', 'MAJORAR_HONORARIOS', 'MAJORAR']),
+      },
+      {
+        key: 'observacao_extra',
+        label: 'COM OBSERVAÇÃO EXTRA',
+        items: mappedItems.filter(
+          (item) => Boolean(item.extraObservation) || String(item.status ?? '').toUpperCase().includes('OBSERVACAO'),
+        ),
+        total: getGroupTotal(['OBSERVACAO_EXTRA', 'COM_OBSERVACAO', 'OBSERVACAO']),
+      },
+    ];
+
     return {
-      items: items.map((p) => ({
-        id: p.id,
-        processoCNJ: p.processoCNJ,
-        autorNome: p.autorNome ?? '',
-        cidade: p.cidade?.nome ?? '',
-        dataNomeacao: p.dataNomeacao?.toISOString(),
-        status: p.status?.codigo ?? '',
-      })),
+      items: mappedItems,
       pagination: { page: query.page, limit: query.limit, total },
       total,
       statusTotals,
+      groups,
     };
   }
 
