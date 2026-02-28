@@ -45,6 +45,7 @@ export const sidebarSections: SidebarSection[] = [
       { label: 'Importações', href: '/importacoes' },
       { label: 'Análise Financeira', href: '/financeiro' },
       { label: 'Relatórios Financeiros', href: '/relatorios-financeiros' },
+      { label: 'Pagamentos não vinculados', href: '/pagamentos-nao-vinculados' },
     ],
   },
 ];

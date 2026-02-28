@@ -1,7 +1,13 @@
-import { Body, Controller, Get, Post, Query } from '@nestjs/common';
+import { Body, Controller, Delete, Get, Param, Patch, Post, Query } from '@nestjs/common';
 import { ApiBearerAuth, ApiOperation, ApiTags } from '@nestjs/swagger';
 import { FinancialService } from './financial.service';
-import { CreateDespesaDto, CreateRecebimentoDto, ImportRecebimentosDto, ReconcileDto } from './dto/financial.dto';
+import {
+  CreateDespesaDto,
+  CreateRecebimentoDto,
+  ImportRecebimentosDto,
+  ReconcileDto,
+  UpdateUnmatchedPaymentDto,
+} from './dto/financial.dto';
 
 @ApiTags('financial')
 @ApiBearerAuth()
@@ -44,6 +50,27 @@ export class FinancialController {
   @Post('reconcile')
   reconcile(@Body() dto: ReconcileDto) {
     return this.service.reconcile(dto);
+  }
+
+
+  @Patch('unmatched/:id')
+  updateUnmatched(@Param('id') id: string, @Body() dto: UpdateUnmatchedPaymentDto) {
+    return this.service.updateUnmatched(id, dto);
+  }
+
+  @Post('unmatched/:id/link')
+  linkUnmatched(@Param('id') id: string, @Body() body: { periciaId?: string; note?: string }) {
+    return this.service.linkUnmatched(id, body);
+  }
+
+  @Post('unmatched/:id/discard')
+  discardUnmatched(@Param('id') id: string, @Body() body: { note?: string }) {
+    return this.service.discardUnmatched(id, body.note);
+  }
+
+  @Delete('unmatched/:id')
+  deleteUnmatched(@Param('id') id: string, @Body() body: { reason?: string }) {
+    return this.service.deleteUnmatched(id, body.reason);
   }
 
   @Get('analytics')
