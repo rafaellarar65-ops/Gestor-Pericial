@@ -14,6 +14,12 @@ import type { Pericia } from '@/types/api';
 
 type Tab = 'fila' | 'preparacao' | 'historico';
 
+const TAB_OPTIONS: Array<{ value: Tab; label: string }> = [
+  { value: 'fila', label: 'Fila por Cidade' },
+  { value: 'preparacao', label: 'Lista de Preparação' },
+  { value: 'historico', label: 'Histórico de Lotes' },
+];
+
 type PrepItem = {
   id: string;
   processoCNJ: string;
@@ -48,6 +54,14 @@ type BatchLot = {
 const PREP_KEY = 'agendamento.preparacao';
 const HISTORY_KEY = 'agendamento.historico';
 const FINALIZED_KEY = 'agendamento.finalized';
+
+const readStorageArray = <T,>(key: string): T[] => {
+  const raw = localStorage.getItem(key);
+  if (!raw) return [];
+
+  const parsed = JSON.parse(raw) as unknown;
+  return Array.isArray(parsed) ? (parsed as T[]) : [];
+};
 
 const toCityName = (cidade: Pericia['cidade']) =>
   typeof cidade === 'string' ? cidade : (cidade as { nome?: string })?.nome ?? 'Sem cidade';
@@ -134,18 +148,11 @@ const FilaAgendamentoPage = () => {
   const [modalidade, setModalidade] = useState('Presencial');
   const [outputFormat, setOutputFormat] = useState<'CSV' | 'WORD'>('CSV');
 
-  const [prepList, setPrepList] = useState<PrepItem[]>(() => {
-    const prepRaw = localStorage.getItem(PREP_KEY);
-    return prepRaw ? (JSON.parse(prepRaw) as PrepItem[]) : [];
-  });
-  const [history, setHistory] = useState<BatchLot[]>(() => {
-    const histRaw = localStorage.getItem(HISTORY_KEY);
-    return histRaw ? (JSON.parse(histRaw) as BatchLot[]) : [];
-  });
-  const [finalizedPericiaIds, setFinalizedPericiaIds] = useState<Set<string>>(() => {
-    const finalizedRaw = localStorage.getItem(FINALIZED_KEY);
-    return finalizedRaw ? new Set(JSON.parse(finalizedRaw) as string[]) : new Set();
-  });
+  const [prepList, setPrepList] = useState<PrepItem[]>(() => readStorageArray<PrepItem>(PREP_KEY));
+  const [history, setHistory] = useState<BatchLot[]>(() => readStorageArray<BatchLot>(HISTORY_KEY));
+  const [finalizedPericiaIds, setFinalizedPericiaIds] = useState<Set<string>>(
+    () => new Set(readStorageArray<string>(FINALIZED_KEY)),
+  );
 
   useEffect(() => {
     localStorage.setItem(PREP_KEY, JSON.stringify(prepList));
@@ -340,7 +347,7 @@ const FilaAgendamentoPage = () => {
           <Tabs
             activeTab={activeTab}
             onChange={(tab) => setActiveTab(tab as Tab)}
-            tabs={['fila', 'preparacao', 'historico']}
+            tabs={TAB_OPTIONS}
           />
         </div>
       </Card>
@@ -503,7 +510,7 @@ const FilaAgendamentoPage = () => {
 
                 <div className="flex items-center gap-2 rounded-md bg-muted p-2 text-sm">
                   <span>Saída:</span>
-                  <Button className={outputFormat === 'CSV' ? '' : ''} onClick={() => setOutputFormat('CSV')} size="sm" variant={outputFormat === 'CSV' ? 'default' : 'outline'}>CSV</Button>
+                  <Button onClick={() => setOutputFormat('CSV')} size="sm" variant={outputFormat === 'CSV' ? 'default' : 'outline'}>CSV</Button>
                   <Button onClick={() => setOutputFormat('WORD')} size="sm" variant={outputFormat === 'WORD' ? 'default' : 'outline'}>ZIP Word</Button>
                 </div>
 
