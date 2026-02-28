@@ -23,6 +23,20 @@ const addDays = (date: Date, days: number) => {
   return next;
 };
 
+const toCsvValue = (value: string) => `"${value.replaceAll('"', '""')}"`;
+
+const buildAgendaCsv = (rows: AgendaRow[]) => {
+  const header = ['Título', 'Tipo', 'Início', 'Fim', 'Local', 'Status'];
+  const csvLines = [
+    header,
+    ...rows.map((row) => [row.titulo, row.tipo, row.inicio || '—', row.fim || '—', row.local, row.status]),
+  ].map((line) => line.map((value) => toCsvValue(value)).join(';'));
+
+  return `\uFEFF${csvLines.join('\n')}`;
+};
+
+const inferStatus = (item: Record<string, string | number | undefined>): AgendaRow['status'] => {
+  const raw = getValue(item, ['status', 'state']).toLowerCase();
 const inferStatus = (item: AgendaEvent): AgendaStatusFilter => {
   const raw = String((item as AgendaEvent & { status?: string }).status ?? '').toLowerCase();
   if (raw.includes('realiz')) return 'realizado';
@@ -82,6 +96,34 @@ const Page = () => {
   });
 
   const rows = useMemo(() => data.map(mapAgendaRow), [data]);
+
+  const filteredRows = useMemo(() => {
+    const searchTerm = busca.toLowerCase();
+
+    return rows.filter((row) => {
+      const matchesBusca =
+        !busca ||
+        [row.titulo, row.tipo, row.local].some((value) => value.toLowerCase().includes(searchTerm));
+      const matchesStatus = status === 'todos' || row.status === status;
+      const matchesPeriodo = !periodo || row.inicio.startsWith(periodo);
+
+      return matchesBusca && matchesStatus && matchesPeriodo;
+    });
+  }, [rows, busca, status, periodo]);
+
+  const handleExportAgenda = () => {
+    const csvContent = buildAgendaCsv(filteredRows);
+    const blob = new Blob([csvContent], { type: 'text/csv;charset=utf-8;' });
+    const url = URL.createObjectURL(blob);
+    const link = document.createElement('a');
+
+    link.href = url;
+    link.setAttribute('download', `agenda-${periodo || new Date().toISOString().slice(0, 10)}.csv`);
+    document.body.appendChild(link);
+    link.click();
+    document.body.removeChild(link);
+    URL.revokeObjectURL(url);
+  };
   const filteredRows = useMemo(
     () =>
       rows.filter((row) => {
@@ -134,6 +176,35 @@ const Page = () => {
 
   return (
     <div className="space-y-4">
+      <header className="flex flex-wrap items-start justify-between gap-3">
+        <div>
+          <h1 className="text-2xl font-semibold">Agenda</h1>
+          <p className="text-sm text-muted-foreground">Gerencie eventos, horários e compromissos operacionais.</p>
+        </div>
+        <div className="flex gap-2">
+          <Button disabled={filteredRows.length === 0} onClick={handleExportAgenda} variant="outline">
+            Exportar agenda
+          </Button>
+          <Button>Criar evento</Button>
+        </div>
+      </header>
+
+      <Card className="space-y-3">
+        <div className="grid gap-3 md:grid-cols-3">
+          <Input onChange={(event) => setBusca(event.target.value)} placeholder="Buscar por título, tipo ou local" value={busca} />
+          <Input onChange={(event) => setPeriodo(event.target.value)} type="date" value={periodo} />
+          <select
+            className="h-10 rounded-md border border-input bg-background px-3 text-sm"
+            onChange={(event) => setStatus(event.target.value as AgendaStatus)}
+            value={status}
+          >
+            <option value="todos">Todos os status</option>
+            <option value="agendado">Agendado</option>
+            <option value="realizado">Realizado</option>
+            <option value="cancelado">Cancelado</option>
+          </select>
+        </div>
+      </Card>
       <AgendaHeader
         currentDateLabel={currentDateLabel}
         onGoToToday={() => setCurrentDate(new Date())}
