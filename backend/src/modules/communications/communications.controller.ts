@@ -1,13 +1,20 @@
-import { Body, Controller, Get, Post, Query } from '@nestjs/common';
+import { Body, Controller, Delete, Get, Param, Patch, Post, Query } from '@nestjs/common';
 import { ApiBearerAuth, ApiOperation, ApiTags } from '@nestjs/swagger';
 import { CommunicationsService } from './communications.service';
 import {
   AutomaticVaraChargeDto,
+  BulkGrantOptInDto,
+  BulkLinkInboundDto,
+  BulkResendTemplateDto,
   CreateEmailTemplateDto,
   CreateLawyerDto,
+  CreateMessageTemplateDto,
   GenerateHubEmailDto,
+  InboxFilterDto,
+  PreviewTemplateDto,
   SendEmailDto,
   SendWhatsappMessageDto,
+  UpdateMessageTemplateDto,
   UpsertUolhostEmailConfigDto,
 } from './dto/communications.dto';
 
@@ -36,6 +43,51 @@ export class CommunicationsController {
   @Get('templates')
   listTemplates() {
     return this.service.listTemplates();
+  }
+
+  @Post('message-templates')
+  createMessageTemplate(@Body() dto: CreateMessageTemplateDto) {
+    return this.service.createMessageTemplate(dto);
+  }
+
+  @Get('message-templates')
+  listMessageTemplates(@Query('channel') channel?: 'whatsapp_template' | 'whatsapp_freeform' | 'clipboard' | 'wa_me_prefill') {
+    return this.service.listMessageTemplates(channel);
+  }
+
+  @Patch('message-templates/:id')
+  updateMessageTemplate(@Param('id') id: string, @Body() dto: UpdateMessageTemplateDto) {
+    return this.service.updateMessageTemplate(id, dto);
+  }
+
+  @Delete('message-templates/:id')
+  deleteMessageTemplate(@Param('id') id: string) {
+    return this.service.deleteMessageTemplate(id);
+  }
+
+  @Post('templates/:id/preview')
+  previewMessageTemplate(@Param('id') id: string, @Body() dto: PreviewTemplateDto) {
+    return this.service.previewMessageTemplate(id, dto);
+  }
+
+  @Get('inbox')
+  listInbox(@Query() query: InboxFilterDto) {
+    return this.service.listInbox(query);
+  }
+
+  @Post('inbox/actions/resend-template')
+  resendTemplate(@Body() dto: BulkResendTemplateDto) {
+    return this.service.bulkResendTemplate(dto);
+  }
+
+  @Post('inbox/actions/grant-optin')
+  grantOptin(@Body() dto: BulkGrantOptInDto) {
+    return this.service.bulkGrantOptIn(dto);
+  }
+
+  @Post('inbox/actions/link-inbound')
+  linkInbound(@Body() dto: BulkLinkInboundDto) {
+    return this.service.bulkLinkInbound(dto);
   }
 
   @Post('lawyers')

@@ -1,424 +1,141 @@
-import { useState } from 'react';
-import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
-import { Mail, Plus, Send, FileText, CheckCircle, Circle } from 'lucide-react';
+import { useMemo, useState } from 'react';
+import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 import { toast } from 'sonner';
-import { templatesService } from '@/services/lawyers-service';
-import { Dialog } from '@/components/ui/dialog';
 import { Button } from '@/components/ui/button';
+import { Card } from '@/components/ui/card';
 import { Input } from '@/components/ui/input';
-import { LoadingState, EmptyState, ErrorState } from '@/components/ui/state';
-import type { EmailTemplate } from '@/types/api';
+import { EmptyState, ErrorState, LoadingState } from '@/components/ui/state';
+import { messageTemplatesService } from '@/services/lawyers-service';
+import type { MessageTemplateChannel } from '@/types/api';
 
-type ActiveTab = 'templates' | 'email';
+const channels: Array<{ value: MessageTemplateChannel; label: string }> = [
+  { value: 'whatsapp_template', label: 'WhatsApp Template (Meta)' },
+  { value: 'whatsapp_freeform', label: 'WhatsApp Livre' },
+  { value: 'clipboard', label: 'Clipboard' },
+  { value: 'wa_me_prefill', label: 'wa.me prefill' },
+];
 
-type TemplateForm = {
-  key: string;
-  subject: string;
-  bodyHtml: string;
-};
-
-type SendEmailForm = {
-  to: string;
-  subject: string;
-  html: string;
-};
-
-const EMPTY_TEMPLATE_FORM: TemplateForm = { key: '', subject: '', bodyHtml: '' };
-const EMPTY_SEND_FORM: SendEmailForm = { to: '', subject: '', html: '' };
+const placeholders = [
+  'tenant.nome',
+  'pericia.processoCNJ',
+  'pericia.autorNome',
+  'pericia.reuNome',
+  'pericia.periciadoNome',
+  'pericia.dataAgendamento',
+  'pericia.horaAgendamento',
+  'contact.nome',
+  'contact.telefone',
+  'contact.email',
+];
 
 export default function ComunicacaoPage() {
   const queryClient = useQueryClient();
-  const [activeTab, setActiveTab] = useState<ActiveTab>('templates');
-  const [dialogOpen, setDialogOpen] = useState(false);
-  const [templateForm, setTemplateForm] = useState<TemplateForm>(EMPTY_TEMPLATE_FORM);
-  const [sendForm, setSendForm] = useState<SendEmailForm>(EMPTY_SEND_FORM);
+  const [channel, setChannel] = useState<MessageTemplateChannel>('whatsapp_template');
+  const [name, setName] = useState('');
+  const [body, setBody] = useState('Olá {{contact.nome}}, sua perícia {{pericia.processoCNJ}} foi confirmada.');
+  const [mapping, setMapping] = useState<Record<string, string>>({ '1': 'contact.nome' });
 
-  const { data: templates = [], isLoading, isError, error } = useQuery<EmailTemplate[]>({
-    queryKey: ['templates'],
-    queryFn: templatesService.list,
+  const { data: templates = [], isLoading, isError } = useQuery({
+    queryKey: ['message-templates', channel],
+    queryFn: () => messageTemplatesService.list(channel),
   });
 
-  const createTemplateMutation = useMutation({
-    mutationFn: templatesService.create,
+  const previewText = useMemo(() => {
+    let current = body;
+    if (channel === 'whatsapp_template') {
+      Object.entries(mapping).forEach(([key, value]) => {
+        current = current.replace(new RegExp(`\\{\\{${key}\\}\\}`, 'g'), `[${value}]`);
+      });
+      return current;
+    }
+    return current.replace(/\{\{\s*([a-zA-Z0-9_.]+)\s*\}\}/g, (_, token) => `[${token}]`);
+  }, [body, channel, mapping]);
+
+  const createMutation = useMutation({
+    mutationFn: () =>
+      messageTemplatesService.create({
+        channel,
+        name,
+        body,
+        placeholdersUsed: channel === 'whatsapp_template' ? Object.keys(mapping) : placeholders.filter((p) => body.includes(`{{${p}}}`)),
+        variablesMapping: channel === 'whatsapp_template' ? mapping : {},
+      }),
     onSuccess: () => {
-      queryClient.invalidateQueries({ queryKey: ['templates'] });
-      toast.success('Template criado com sucesso!');
-      setDialogOpen(false);
-      setTemplateForm(EMPTY_TEMPLATE_FORM);
+      toast.success('Template salvo');
+      queryClient.invalidateQueries({ queryKey: ['message-templates', channel] });
+      setName('');
     },
-    onError: () => {
-      toast.error('Erro ao criar template. Tente novamente.');
-    },
+    onError: () => toast.error('Falha ao salvar template'),
   });
 
-  const sendEmailMutation = useMutation({
-    mutationFn: templatesService.sendEmail,
-    onSuccess: () => {
-      toast.success('Email enviado!');
-      setSendForm(EMPTY_SEND_FORM);
-    },
-    onError: () => {
-      toast.error('Erro ao enviar email. Tente novamente.');
-    },
-  });
-
-  function handleTemplateChange(
-    e: React.ChangeEvent<HTMLInputElement | HTMLTextAreaElement>,
-  ) {
-    const { name, value } = e.target;
-    setTemplateForm((prev) => ({ ...prev, [name]: value }));
-  }
-
-  function handleSendChange(
-    e: React.ChangeEvent<HTMLInputElement | HTMLTextAreaElement>,
-  ) {
-    const { name, value } = e.target;
-    setSendForm((prev) => ({ ...prev, [name]: value }));
-  }
-
-  function handleTemplateSubmit(e: React.FormEvent) {
-    e.preventDefault();
-    if (!templateForm.key.trim()) {
-      toast.error('O campo Chave (key) é obrigatório.');
-      return;
-    }
-    if (!templateForm.subject.trim()) {
-      toast.error('O campo Assunto é obrigatório.');
-      return;
-    }
-    if (!templateForm.bodyHtml.trim()) {
-      toast.error('O campo Corpo HTML é obrigatório.');
-      return;
-    }
-    createTemplateMutation.mutate({
-      key: templateForm.key.trim(),
-      subject: templateForm.subject.trim(),
-      bodyHtml: templateForm.bodyHtml,
-    });
-  }
-
-  function handleSendSubmit(e: React.FormEvent) {
-    e.preventDefault();
-    if (!sendForm.to.trim()) {
-      toast.error('O campo Destinatário é obrigatório.');
-      return;
-    }
-    if (!sendForm.subject.trim()) {
-      toast.error('O campo Assunto é obrigatório.');
-      return;
-    }
-    if (!sendForm.html.trim()) {
-      toast.error('O campo Corpo HTML é obrigatório.');
-      return;
-    }
-    sendEmailMutation.mutate({
-      to: sendForm.to.trim(),
-      subject: sendForm.subject.trim(),
-      html: sendForm.html,
-    });
+  function insertPlaceholder(token: string) {
+    setBody((prev) => `${prev}${prev.endsWith(' ') ? '' : ' '}{{${token}}}`);
   }
 
   return (
-    <div className="min-h-screen bg-gray-50">
-      {/* Header */}
-      <div className="bg-blue-600 px-6 py-5 shadow-lg">
-        <div className="mx-auto max-w-7xl">
-          <div className="flex items-center gap-3">
-            <div className="flex h-10 w-10 items-center justify-center rounded-lg bg-blue-500">
-              <Mail size={22} className="text-white" />
-            </div>
-            <div>
-              <h1 className="text-xl font-bold tracking-wide text-white">
-                COMUNICAÇÃO E TEMPLATES
-              </h1>
-              <p className="text-sm text-blue-200">
-                Gerenciamento de templates de e-mail e envio de mensagens
-              </p>
-            </div>
-          </div>
-
-          {/* Tabs */}
-          <div className="mt-5 flex gap-1">
-            <TabButton
-              active={activeTab === 'templates'}
-              onClick={() => setActiveTab('templates')}
-              icon={<FileText size={15} />}
-              label="Templates"
-            />
-            <TabButton
-              active={activeTab === 'email'}
-              onClick={() => setActiveTab('email')}
-              icon={<Send size={15} />}
-              label="Enviar Email"
-            />
-          </div>
-        </div>
-      </div>
-
-      {/* Body */}
-      <div className="mx-auto max-w-7xl px-6 py-6">
-        {activeTab === 'templates' && (
-          <section>
-            {/* Section header */}
-            <div className="mb-5 flex items-center justify-between">
-              <div>
-                <h2 className="text-lg font-semibold text-gray-800">
-                  Templates de E-mail
-                </h2>
-                <p className="text-sm text-gray-500">
-                  {templates.length} template{templates.length !== 1 ? 's' : ''} cadastrado{templates.length !== 1 ? 's' : ''}
-                </p>
-              </div>
-              <Button
-                variant="default"
-                size="md"
-                className="flex items-center gap-2 bg-blue-600 text-white hover:bg-blue-700"
-                onClick={() => {
-                  setTemplateForm(EMPTY_TEMPLATE_FORM);
-                  setDialogOpen(true);
-                }}
-              >
-                <Plus size={16} />
-                Novo Template
-              </Button>
-            </div>
-
-            {isLoading && <LoadingState />}
-            {isError && (
-              <ErrorState
-                message={
-                  error instanceof Error
-                    ? error.message
-                    : 'Erro ao carregar templates.'
-                }
-              />
-            )}
-            {!isLoading && !isError && templates.length === 0 && (
-              <EmptyState title="Nenhum template cadastrado ainda." />
-            )}
-
-            {!isLoading && !isError && templates.length > 0 && (
-              <div className="space-y-3">
-                {templates.map((tpl) => (
-                  <TemplateCard key={tpl.id} template={tpl} />
-                ))}
-              </div>
-            )}
-          </section>
-        )}
-
-        {activeTab === 'email' && (
-          <section>
-            <div className="mb-5">
-              <h2 className="text-lg font-semibold text-gray-800">
-                Enviar E-mail
-              </h2>
-              <p className="text-sm text-gray-500">
-                Compose e envie um e-mail diretamente pelo sistema.
-              </p>
-            </div>
-
-            <div className="max-w-2xl rounded-xl border border-gray-200 bg-white p-6 shadow-sm">
-              <form onSubmit={handleSendSubmit} className="space-y-4">
-                {/* To */}
-                <div>
-                  <label className="mb-1 block text-sm font-medium text-gray-700">
-                    Destinatário <span className="text-red-500">*</span>
-                  </label>
-                  <Input
-                    name="to"
-                    type="email"
-                    value={sendForm.to}
-                    onChange={handleSendChange}
-                    placeholder="destinatario@exemplo.com"
-                    required
-                  />
-                </div>
-
-                {/* Subject */}
-                <div>
-                  <label className="mb-1 block text-sm font-medium text-gray-700">
-                    Assunto <span className="text-red-500">*</span>
-                  </label>
-                  <Input
-                    name="subject"
-                    value={sendForm.subject}
-                    onChange={handleSendChange}
-                    placeholder="Assunto do e-mail"
-                    required
-                  />
-                </div>
-
-                {/* Body HTML */}
-                <div>
-                  <label className="mb-1 block text-sm font-medium text-gray-700">
-                    Corpo HTML <span className="text-red-500">*</span>
-                  </label>
-                  <textarea
-                    name="html"
-                    value={sendForm.html}
-                    onChange={handleSendChange}
-                    rows={10}
-                    placeholder="<p>Conteúdo do e-mail em HTML...</p>"
-                    className="flex w-full rounded-md border border-input bg-background px-3 py-2 font-mono text-sm outline-none ring-offset-background placeholder:text-muted-foreground focus-visible:ring-2 focus-visible:ring-ring resize-y"
-                    required
-                  />
-                </div>
-
-                <div className="flex justify-end pt-1">
-                  <Button
-                    type="submit"
-                    variant="default"
-                    size="md"
-                    disabled={sendEmailMutation.isPending}
-                    className="flex items-center gap-2 bg-blue-600 text-white hover:bg-blue-700"
-                  >
-                    <Send size={15} />
-                    {sendEmailMutation.isPending ? 'Enviando...' : 'Enviar E-mail'}
-                  </Button>
-                </div>
-              </form>
-            </div>
-          </section>
-        )}
-      </div>
-
-      {/* Dialog - New Template */}
-      <Dialog
-        open={dialogOpen}
-        onClose={() => setDialogOpen(false)}
-        title="Criar Novo Template"
-        className="max-w-xl"
-      >
-        <form onSubmit={handleTemplateSubmit} className="space-y-4">
-          {/* Key */}
-          <div>
-            <label className="mb-1 block text-sm font-medium text-gray-700">
-              Chave (key) <span className="text-red-500">*</span>
-            </label>
-            <Input
-              name="key"
-              value={templateForm.key}
-              onChange={handleTemplateChange}
-              placeholder="Ex: NOMEACAO_PERITO"
-              required
-            />
-            <p className="mt-1 text-xs text-gray-500">
-              Identificador único do template, sem espaços.
-            </p>
-          </div>
-
-          {/* Subject */}
-          <div>
-            <label className="mb-1 block text-sm font-medium text-gray-700">
-              Assunto <span className="text-red-500">*</span>
-            </label>
-            <Input
-              name="subject"
-              value={templateForm.subject}
-              onChange={handleTemplateChange}
-              placeholder="Assunto padrão do e-mail"
-              required
-            />
-          </div>
-
-          {/* Body HTML */}
-          <div>
-            <label className="mb-1 block text-sm font-medium text-gray-700">
-              Corpo HTML <span className="text-red-500">*</span>
-            </label>
-            <textarea
-              name="bodyHtml"
-              value={templateForm.bodyHtml}
-              onChange={handleTemplateChange}
-              rows={8}
-              placeholder="<p>Corpo do e-mail em HTML. Use {{variavel}} para variáveis dinâmicas.</p>"
-              className="flex w-full rounded-md border border-input bg-background px-3 py-2 font-mono text-sm outline-none ring-offset-background placeholder:text-muted-foreground focus-visible:ring-2 focus-visible:ring-ring resize-y"
-              required
-            />
-          </div>
-
-          {/* Actions */}
-          <div className="flex justify-end gap-3 pt-2">
-            <Button
-              type="button"
-              variant="outline"
-              size="md"
-              onClick={() => setDialogOpen(false)}
-            >
-              Cancelar
+    <div className="grid gap-4 lg:grid-cols-12">
+      <div className="lg:col-span-3 space-y-3">
+        <Card className="p-3 space-y-2">
+          <h2 className="font-semibold">Canal</h2>
+          {channels.map((c) => (
+            <Button key={c.value} variant={channel === c.value ? 'default' : 'outline'} className="w-full justify-start" onClick={() => setChannel(c.value)}>
+              {c.label}
             </Button>
-            <Button
-              type="submit"
-              variant="default"
-              size="md"
-              disabled={createTemplateMutation.isPending}
-              className="bg-blue-600 text-white hover:bg-blue-700"
-            >
-              {createTemplateMutation.isPending ? 'Salvando...' : 'Criar Template'}
-            </Button>
-          </div>
-        </form>
-      </Dialog>
-    </div>
-  );
-}
-
-function TabButton({
-  active,
-  onClick,
-  icon,
-  label,
-}: {
-  active: boolean;
-  onClick: () => void;
-  icon: React.ReactNode;
-  label: string;
-}) {
-  return (
-    <button
-      onClick={onClick}
-      className={`flex items-center gap-2 rounded-t-lg px-5 py-2.5 text-sm font-medium transition-colors ${
-        active
-          ? 'bg-white text-blue-700'
-          : 'text-blue-200 hover:bg-blue-500 hover:text-white'
-      }`}
-    >
-      {icon}
-      {label}
-    </button>
-  );
-}
-
-function TemplateCard({ template }: { template: EmailTemplate }) {
-  return (
-    <div className="flex items-start gap-4 rounded-xl border border-gray-200 bg-white p-4 shadow-sm transition-shadow hover:shadow-md">
-      <div className="flex h-10 w-10 flex-shrink-0 items-center justify-center rounded-lg bg-blue-50">
-        <FileText size={18} className="text-blue-600" />
+          ))}
+        </Card>
+        <Card className="p-3 space-y-2">
+          <h2 className="font-semibold">Placeholders</h2>
+          {placeholders.map((token) => (
+            <button key={token} className="text-left text-sm rounded border px-2 py-1 w-full hover:bg-slate-50" onClick={() => insertPlaceholder(token)} type="button">
+              {`{{${token}}}`}
+            </button>
+          ))}
+          <p className="text-xs text-muted-foreground">Clique para inserir no corpo.</p>
+        </Card>
       </div>
-      <div className="min-w-0 flex-1">
-        <div className="mb-1 flex items-center gap-3">
-          <span className="rounded-full bg-blue-100 px-2.5 py-0.5 text-xs font-bold uppercase tracking-wide text-blue-700">
-            {template.key}
-          </span>
-          {template.active !== false ? (
-            <span className="flex items-center gap-1 text-xs font-medium text-green-600">
-              <CheckCircle size={12} />
-              Ativo
-            </span>
-          ) : (
-            <span className="flex items-center gap-1 text-xs font-medium text-gray-400">
-              <Circle size={12} />
-              Inativo
-            </span>
+
+      <div className="lg:col-span-5 space-y-3">
+        <Card className="p-4 space-y-3">
+          <h1 className="text-xl font-semibold">Templates</h1>
+          <Input placeholder="Nome do template" value={name} onChange={(e) => setName(e.target.value)} />
+          <textarea className="min-h-40 w-full rounded-md border px-3 py-2 text-sm" value={body} onChange={(e) => setBody(e.target.value)} />
+          {channel === 'whatsapp_template' && (
+            <div className="space-y-2">
+              <p className="text-sm font-medium">Mapeamento Meta ({"{{1..n}}"})</p>
+              {[1, 2, 3].map((n) => (
+                <div key={n} className="flex items-center gap-2">
+                  <span className="text-sm w-14">{`{{${n}}}`}</span>
+                  <Input value={mapping[String(n)] ?? ''} onChange={(e) => setMapping((prev) => ({ ...prev, [String(n)]: e.target.value }))} placeholder="ex: contact.nome" />
+                </div>
+              ))}
+            </div>
           )}
-        </div>
-        <p className="truncate font-medium text-gray-800">{template.subject}</p>
-        {template.variables && template.variables.length > 0 && (
-          <p className="mt-1 text-xs text-gray-400">
-            Variáveis: {template.variables.join(', ')}
-          </p>
-        )}
+          <Button onClick={() => createMutation.mutate()} disabled={createMutation.isPending || !name || !body}>
+            {createMutation.isPending ? 'Salvando...' : 'Salvar template'}
+          </Button>
+        </Card>
+
+        <Card className="p-4">
+          <h2 className="font-semibold mb-2">Templates cadastrados ({templates.length})</h2>
+          {isLoading && <LoadingState />}
+          {isError && <ErrorState message="Erro ao carregar templates" />}
+          {!isLoading && !isError && templates.length === 0 && <EmptyState title="Nenhum template neste canal" />}
+          <div className="space-y-2">
+            {templates.map((tpl) => (
+              <div key={tpl.id} className="rounded border p-2 text-sm">
+                <p className="font-medium">{tpl.name}</p>
+                <p className="text-muted-foreground line-clamp-2">{tpl.body}</p>
+              </div>
+            ))}
+          </div>
+        </Card>
+      </div>
+
+      <div className="lg:col-span-4">
+        <Card className="p-4">
+          <h2 className="font-semibold">Preview em tempo real</h2>
+          <pre className="mt-2 whitespace-pre-wrap rounded bg-slate-50 p-3 text-sm">{previewText}</pre>
+        </Card>
       </div>
     </div>
   );

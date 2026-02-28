@@ -148,6 +148,7 @@ model Tenant {
   dailyUsage          DailyUsage[]
   emailConfigs        EmailConfig[]
   emailTemplates      EmailTemplate[]
+  messageTemplates    MessageTemplate[]
   integrationSettings IntegrationSettings[]
   notificationConfigs NotificationConfig[]
   teleSlots           TeleSlot[]
@@ -946,6 +947,25 @@ model EmailTemplate {
   tenant Tenant @relation(fields: [tenantId], references: [id], onDelete: Cascade)
 
   @@unique([tenantId, key])
+}
+
+
+model MessageTemplate {
+  id               String   @id @default(uuid()) @db.Uuid
+  tenantId         String   @db.Uuid
+  channel          String
+  name             String
+  body             String
+  placeholdersUsed Json?
+  variablesMapping Json?
+  createdAt        DateTime @default(now())
+  updatedAt        DateTime @updatedAt
+  createdBy        String?  @db.Uuid
+  updatedBy        String?  @db.Uuid
+
+  tenant Tenant @relation(fields: [tenantId], references: [id], onDelete: Cascade)
+
+  @@index([tenantId, channel, createdAt])
 }
 
 model IntegrationSettings {

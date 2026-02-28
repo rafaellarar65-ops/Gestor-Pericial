@@ -246,3 +246,35 @@ export type ApiError = {
   message: string | string[];
   statusCode?: number;
 };
+
+
+export type MessageTemplateChannel = 'whatsapp_template' | 'whatsapp_freeform' | 'clipboard' | 'wa_me_prefill';
+
+export type MessageTemplate = {
+  id: string;
+  channel: MessageTemplateChannel;
+  name: string;
+  body: string;
+  placeholdersUsed?: string[];
+  variablesMapping?: Record<string, string>;
+  createdAt?: string;
+};
+
+export type TemplatePreview = {
+  id: string;
+  channel: MessageTemplateChannel;
+  preview: string;
+  context: Record<string, string>;
+};
+
+export type InboxItem = {
+  id: string;
+  entityId: string;
+  action: string;
+  to: string;
+  message: string;
+  status: string;
+  tags: string[];
+  linkedPericiaId?: string | null;
+  createdAt: string;
+};
