@@ -14,21 +14,21 @@ type StatusGroup = {
 };
 
 const STATUS_GROUPS: StatusGroup[] = [
-  { label: 'A AVALIAR (NOVAS)', tone: 'bg-primary text-primary-foreground', statuses: ['AVALIAR'] },
+  { label: 'A AVALIAR (NOVAS)', tone: 'bg-primary text-primary-foreground', statuses: ['AVALIAR', 'NOVA_NOMEACAO', 'NOMEACAO'] },
   {
     label: 'AGUARDANDO ACEITE HONORÁRIOS',
     tone: 'bg-warning text-warning-foreground',
-    statuses: ['AGUARDANDO_ACEITE', 'ACEITE_HONORARIOS'],
+    statuses: ['AGUARDANDO_ACEITE', 'ACEITE_HONORARIOS', 'ACEITE'],
   },
   {
     label: 'A MAJORAR HONORÁRIOS',
     tone: 'bg-warning text-warning-foreground',
-    statuses: ['A_MAJORAR', 'MAJORAR_HONORARIOS'],
+    statuses: ['A_MAJORAR', 'MAJORAR_HONORARIOS', 'MAJORAR'],
   },
   {
     label: 'COM OBSERVAÇÃO EXTRA',
     tone: 'bg-info text-info-foreground',
-    statuses: ['OBSERVACAO_EXTRA', 'COM_OBSERVACAO'],
+    statuses: ['OBSERVACAO_EXTRA', 'COM_OBSERVACAO', 'OBSERVACAO'],
   },
 ];
 
