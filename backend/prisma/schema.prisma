@@ -82,6 +82,20 @@ enum TelepericiaSlotType {
   CUSTOM
 }
 
+enum WhatsAppJobType {
+  APPOINTMENT_REMINDER
+  REPORT_READY
+  CUSTOM
+}
+
+enum WhatsAppJobStatus {
+  QUEUED
+  PROCESSING
+  SENT
+  FAILED
+  CANCELED
+}
+
 enum CnjSyncStatus {
   PENDING
   SUCCESS
@@ -197,7 +211,12 @@ model Tenant {
   automationRules     AutomationRule[]
   logStatuses         LogStatus[]
   activityLogs        ActivityLog[]
+  whatsappAccounts    WhatsappAccount[]
+  whatsappContacts    WhatsappContact[]
+  whatsappTemplates   WhatsappTemplate[]
   whatsappMessages    WhatsappMessage[]
+  whatsappJobs        WhatsappJob[]
+  whatsappUnlinkedInbounds WhatsappUnlinkedInbound[]
   dailyUsage          DailyUsage[]
   emailConfigs        EmailConfig[]
   emailTemplates      EmailTemplate[]
@@ -461,9 +480,12 @@ model Pericia {
   despesas         Despesa[]
   logStatuses      LogStatus[]
   bankTransactions BankTransaction[]
-  teleSlots        TelepericiaSlotItem[]
-  cnjSyncs         CnjSync[]
-  whatsappMessages WhatsappMessage[]
+  teleSlots                 TelepericiaSlotItem[]
+  cnjSyncs                  CnjSync[]
+  whatsappMessages          WhatsappMessage[]
+  whatsappJobs             WhatsappJob[]
+  whatsAppJobs             WhatsAppJob[]
+  whatsappUnlinkedInbounds WhatsappUnlinkedInbound[]
 
   @@unique([tenantId, processoCNJ])
   @@index([tenantId, processoCNJ])
@@ -879,9 +901,7 @@ model AgendaEvent {
   metadata     Json?
   externalId   String?
   externalCalendarId String?
-  externalLastModifiedAt DateTime?
   lastSyncAt   DateTime?
-  syncStatus   CalendarSyncStatus @default(PENDING)
   createdAt    DateTime       @default(now())
   updatedAt    DateTime       @updatedAt
   createdBy    String?        @db.Uuid
@@ -911,9 +931,7 @@ model AgendaTask {
   metadata     Json?
   externalId   String?
   externalCalendarId String?
-  externalLastModifiedAt DateTime?
   lastSyncAt   DateTime?
-  syncStatus   CalendarSyncStatus @default(PENDING)
   createdAt    DateTime        @default(now())
   updatedAt    DateTime        @updatedAt
   createdBy    String?         @db.Uuid
@@ -1190,35 +1208,6 @@ model ActivityLog {
   @@index([tenantId, entityType, entityId, createdAt])
 }
 
-model WhatsappMessage {
-  id               String   @id @default(uuid()) @db.Uuid
-  tenantId         String   @db.Uuid
-  periciaId        String?  @db.Uuid
-  provider         String   @default("whatsapp-cloud-api")
-  eventType        String
-  direction        String
-  status           String?
-  waMessageId      String?
-  fromPhone        String?
-  toPhone          String?
-  messageBody      String?
-  errorCode        String?
-  errorMessage     String?
-  payloadJson      Json?
-  providerResponse Json?
-  createdAt        DateTime @default(now())
-  updatedAt        DateTime @updatedAt
-  createdBy        String?  @db.Uuid
-  updatedBy        String?  @db.Uuid
-
-  tenant  Tenant  @relation(fields: [tenantId], references: [id], onDelete: Cascade)
-  pericia Pericia? @relation(fields: [periciaId], references: [id], onDelete: SetNull)
-
-  @@index([tenantId, periciaId, createdAt])
-  @@index([tenantId, waMessageId])
-  @@index([tenantId, status, createdAt])
-}
-
 model DailyUsage {
   id          String   @id @default(uuid()) @db.Uuid
   tenantId    String   @db.Uuid
@@ -1274,24 +1263,6 @@ model EmailTemplate {
   @@unique([tenantId, key])
 }
 
-
-model MessageTemplate {
-  id               String   @id @default(uuid()) @db.Uuid
-  tenantId         String   @db.Uuid
-  channel          String
-  name             String
-  body             String
-  placeholdersUsed Json?
-  variablesMapping Json?
-  createdAt        DateTime @default(now())
-  updatedAt        DateTime @updatedAt
-  createdBy        String?  @db.Uuid
-  updatedBy        String?  @db.Uuid
-
-  tenant Tenant @relation(fields: [tenantId], references: [id], onDelete: Cascade)
-
-  @@index([tenantId, channel, createdAt])
-}
 
 model IntegrationSettings {
   id            String   @id @default(uuid()) @db.Uuid
@@ -1374,52 +1345,6 @@ model NotificationConfig {
   tenant Tenant @relation(fields: [tenantId], references: [id], onDelete: Cascade)
 
   @@unique([tenantId, channel])
-}
-
-model TelepericiaSlot {
-  id                         String              @id @default(uuid()) @db.Uuid
-  tenantId                   String              @db.Uuid
-  date                       DateTime            @db.Date
-  startTime                  String              @map("start_time") @db.VarChar(5)
-  durationMinutes            Int                 @map("duration_minutes")
-  slotType                   TelepericiaSlotType @default(SEQUENTIAL) @map("slot_type")
-  appointmentDurationMinutes Int                 @map("appointment_duration_minutes")
-  gapMinutes                 Int                 @default(0) @map("gap_minutes")
-  capacity                   Int                 @default(1)
-  timezone                   String              @default("America/Sao_Paulo")
-  metadata                   Json?
-  createdAt                  DateTime            @default(now())
-  updatedAt                  DateTime            @updatedAt
-  createdBy                  String?             @db.Uuid
-  updatedBy                  String?             @db.Uuid
-
-  tenant Tenant                @relation(fields: [tenantId], references: [id], onDelete: Cascade)
-  items  TelepericiaSlotItem[]
-
-  @@map("telepericia_slots")
-  @@index([tenantId, date])
-}
-
-model TelepericiaSlotItem {
-  id         String   @id @default(uuid()) @db.Uuid
-  tenantId   String   @db.Uuid
-  slotId     String   @db.Uuid
-  periciaId  String   @db.Uuid
-  orderIndex Int      @map("order_index")
-  metadata   Json?
-  createdAt  DateTime @default(now())
-  updatedAt  DateTime @updatedAt
-  createdBy  String?  @db.Uuid
-  updatedBy  String?  @db.Uuid
-
-  tenant  Tenant         @relation(fields: [tenantId], references: [id], onDelete: Cascade)
-  slot    TelepericiaSlot @relation(fields: [slotId], references: [id], onDelete: Cascade)
-  pericia Pericia        @relation(fields: [periciaId], references: [id], onDelete: Cascade)
-
-  @@unique([slotId, periciaId])
-  @@unique([slotId, orderIndex])
-  @@map("telepericia_slot_items")
-  @@index([tenantId, slotId])
 }
 
 model SchedulingBatch {
