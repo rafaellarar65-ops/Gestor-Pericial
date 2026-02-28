@@ -48,6 +48,11 @@ services:
 
   redis:
     restart: always
+    healthcheck:
+      test: ['CMD', 'redis-cli', 'ping']
+      interval: 5s
+      timeout: 3s
+      retries: 5
     deploy:
       resources:
         limits:

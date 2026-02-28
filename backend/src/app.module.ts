@@ -38,7 +38,15 @@ import { HealthController } from './health.controller';
     ]),
     ...(process.env.REDIS_URL
       ? [
-          BullModule.forRoot({ connection: { url: process.env.REDIS_URL } }),
+          BullModule.forRoot({
+            connection: {
+              url: process.env.REDIS_URL,
+              maxRetriesPerRequest: null,
+              retryStrategy(times: number) {
+                return Math.min(times * 500, 5000);
+              },
+            },
+          }),
           BullModule.registerQueue(
             { name: 'pdf-generation' },
             { name: 'datajud-sync' },
