@@ -9,6 +9,7 @@ import {
   ImportPericiasDto,
   ListPericiasDto,
   RegisterTelepericiaAttemptDto,
+  SetUrgenciaPericiaDto,
   TelepericiaQueueQueryDto,
   ToggleUrgentPericiaDto,
   UpdatePericiasDto,

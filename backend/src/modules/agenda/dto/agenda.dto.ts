@@ -299,45 +299,6 @@ export class BatchScheduleItemDto {
   @IsDateString()
   externalLastModifiedAt?: string;
 
-  @ApiPropertyOptional({ enum: AgendaEventStatus })
-  @IsOptional()
-  @IsEnum(AgendaEventStatus)
-  status?: AgendaEventStatus;
-
-  @ApiPropertyOptional({ enum: AgendaEventSource })
-  @IsOptional()
-  @IsEnum(AgendaEventSource)
-  source?: AgendaEventSource;
-
-  @ApiPropertyOptional()
-  @IsOptional()
-  @IsBoolean()
-  aiSuggested?: boolean;
-
-  @ApiPropertyOptional({ enum: ExternalSyncStatus })
-  @IsOptional()
-  @IsEnum(ExternalSyncStatus)
-  syncStatus?: ExternalSyncStatus;
-
-  @ApiPropertyOptional()
-  @IsOptional()
-  @IsString()
-  externalProvider?: string;
-
-  @ApiPropertyOptional()
-  @IsOptional()
-  @IsString()
-  externalEventId?: string;
-
-  @ApiPropertyOptional()
-  @IsOptional()
-  @IsString()
-  externalEtag?: string;
-
-  @ApiPropertyOptional()
-  @IsOptional()
-  @IsDateString()
-  externalLastModifiedAt?: string;
 
   @ApiProperty()
   @IsDateString()

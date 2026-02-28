@@ -156,10 +156,11 @@ export class IntegrationsService {
 
     for (const event of events) {
       const status = this.calculateSyncStatus(event.updatedAt, event.externalLastModifiedAt, event.lastSyncAt);
+      const eventSyncStatus = status === CalendarSyncStatus.CONFLICT ? "CONFLICT" : status === CalendarSyncStatus.SYNCED ? "SYNCED" : "ERROR";
       await this.prisma.agendaEvent.update({
         where: { id: event.id },
         data: {
-          syncStatus: status,
+          syncStatus: eventSyncStatus,
           lastSyncAt: status === CalendarSyncStatus.CONFLICT ? event.lastSyncAt : new Date(),
           externalLastModifiedAt: direction === CalendarSyncDirection.PULL ? new Date() : event.externalLastModifiedAt,
         },
@@ -185,13 +186,11 @@ export class IntegrationsService {
     }
 
     for (const task of tasks) {
-      const status = this.calculateSyncStatus(task.updatedAt, task.externalLastModifiedAt, task.lastSyncAt);
+      const status = this.calculateSyncStatus(task.updatedAt, null, task.lastSyncAt);
       await this.prisma.agendaTask.update({
         where: { id: task.id },
         data: {
-          syncStatus: status,
           lastSyncAt: status === CalendarSyncStatus.CONFLICT ? task.lastSyncAt : new Date(),
-          externalLastModifiedAt: direction === CalendarSyncDirection.PULL ? new Date() : task.externalLastModifiedAt,
         },
       });
       await this.prisma.syncAuditLog.create({
@@ -206,7 +205,7 @@ export class IntegrationsService {
           status,
           message: status === CalendarSyncStatus.CONFLICT ? 'Conflito detectado entre alterações locais e externas.' : 'Task sincronizada.',
           localUpdatedAt: task.updatedAt,
-          externalUpdatedAt: task.externalLastModifiedAt,
+          externalUpdatedAt: null,
           syncedAt: status === CalendarSyncStatus.CONFLICT ? null : new Date(),
         },
       });
@@ -241,14 +240,14 @@ export class IntegrationsService {
     if (log.localEntity === 'AgendaEvent') {
       await this.prisma.agendaEvent.update({
         where: { id: log.localEntityId },
-        data: { syncStatus: resolvedStatus, lastSyncAt: new Date(), externalLastModifiedAt: new Date() },
+        data: { lastSyncAt: new Date() },
       });
     }
 
     if (log.localEntity === 'AgendaTask') {
       await this.prisma.agendaTask.update({
         where: { id: log.localEntityId },
-        data: { syncStatus: resolvedStatus, lastSyncAt: new Date(), externalLastModifiedAt: new Date() },
+        data: { lastSyncAt: new Date() },
       });
     }
 

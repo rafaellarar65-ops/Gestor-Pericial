@@ -26,24 +26,33 @@ export class TelepericiaService {
 
   async createSlot(dto: CreateTeleSlotDto) {
     const tenantId = this.context.get('tenantId') ?? '';
-    const slot = await this.prisma.teleSlot.create({
+    const startsAt = this.buildBaseDate(new Date(dto.date), dto.startTime);
+    const endsAt = new Date(startsAt.getTime() + dto.durationMinutes * 60_000);
+
+    const slot = await this.prisma.telepericiaSlot.create({
       data: {
         tenantId,
-        date: new Date(dto.date),
-        startTime: dto.startTime,
-        durationMinutes: dto.durationMinutes,
-        slotType: dto.slotType,
-        appointmentDurationMinutes: dto.appointmentDurationMinutes,
-        gapMinutes: dto.gapMinutes ?? 0,
+        startsAt,
+        endsAt,
         capacity: dto.capacity ?? this.computeAvailableCapacity(dto.durationMinutes, dto.appointmentDurationMinutes, dto.gapMinutes ?? 0),
-        timezone: dto.timezone ?? 'America/Sao_Paulo',
+        metadata: {
+          slotType: dto.slotType,
+          appointmentDurationMinutes: dto.appointmentDurationMinutes,
+          gapMinutes: dto.gapMinutes ?? 0,
+          timezone: dto.timezone ?? 'America/Sao_Paulo',
+        },
       },
       include: { items: { orderBy: { orderIndex: 'asc' } } },
     });
+
+    return this.toSlotResponse(slot);
   }
 
   async listSlots() {
-    const slots = await this.prisma.telepericiaSlot.findMany({ include: { items: { orderBy: { orderIndex: 'asc' } } }, orderBy: [{ date: 'asc' }, { startTime: 'asc' }] });
+    const slots = await this.prisma.telepericiaSlot.findMany({
+      include: { items: { orderBy: { orderIndex: 'asc' } } },
+      orderBy: [{ startsAt: 'asc' }],
+    });
     return slots.map((slot) => this.toSlotResponse(slot));
   }
 
@@ -53,28 +62,31 @@ export class TelepericiaService {
   }
 
   async updateSlot(slotId: string, dto: UpdateTeleSlotDto) {
-    await this.ensureSlot(slotId);
-    this.validateSlotDurations(dto.durationMinutes, dto.appointmentDurationMinutes);
-    this.validateCapacity(dto.capacity, dto.durationMinutes, dto.appointmentDurationMinutes, dto.gapMinutes ?? 0);
+    const slot = await this.ensureSlot(slotId);
+    const startsAt = this.buildBaseDate(new Date(dto.date), dto.startTime);
+    const endsAt = new Date(startsAt.getTime() + dto.durationMinutes * 60_000);
+
+    const currentCount = slot.items.length;
+    const nextCapacity = dto.capacity ?? this.computeAvailableCapacity(dto.durationMinutes, dto.appointmentDurationMinutes, dto.gapMinutes ?? 0);
+    if (currentCount > nextCapacity) {
+      throw new BadRequestException('Capacidade não pode ser menor que a quantidade de perícias atribuídas.');
+    }
 
     const updated = await this.prisma.telepericiaSlot.update({
       where: { id: slotId },
       data: {
-        date: new Date(dto.date),
-        startTime: dto.startTime,
-        durationMinutes: dto.durationMinutes,
-        slotType: dto.slotType,
-        appointmentDurationMinutes: dto.appointmentDurationMinutes,
-        gapMinutes: dto.gapMinutes ?? 0,
-        capacity: dto.capacity ?? this.computeAvailableCapacity(dto.durationMinutes, dto.appointmentDurationMinutes, dto.gapMinutes ?? 0),
-        timezone: dto.timezone ?? 'America/Sao_Paulo',
+        startsAt,
+        endsAt,
+        capacity: nextCapacity,
+        metadata: {
+          slotType: dto.slotType,
+          appointmentDurationMinutes: dto.appointmentDurationMinutes,
+          gapMinutes: dto.gapMinutes ?? 0,
+          timezone: dto.timezone ?? 'America/Sao_Paulo',
+        },
       },
       include: { items: { orderBy: { orderIndex: 'asc' } } },
     });
-
-    if (updated.items.length > updated.capacity) {
-      throw new BadRequestException('Capacidade não pode ser menor que a quantidade de perícias atribuídas.');
-    }
 
     await this.syncPericiasForSlot(updated.id);
     return this.toSlotResponse(updated);
@@ -86,8 +98,6 @@ export class TelepericiaService {
 
   async assign(slotId: string, dto: AssignTelepericiaItemDto) {
     const slot = await this.ensureSlot(slotId);
-    const maxAllowed = Math.min(slot.capacity, this.computeAvailableCapacity(slot.durationMinutes, slot.appointmentDurationMinutes, slot.gapMinutes));
-
     const [pericia, currentItems] = await Promise.all([
       this.prisma.pericia.findFirst({ where: { id: dto.periciaId, tenantId: slot.tenantId } }),
       this.prisma.telepericiaSlotItem.findMany({ where: { slotId }, orderBy: { orderIndex: 'asc' } }),
@@ -97,11 +107,11 @@ export class TelepericiaService {
     if (currentItems.some((item) => item.periciaId === dto.periciaId)) {
       throw new BadRequestException('Perícia já atribuída a este slot.');
     }
-    if (currentItems.length >= maxAllowed) {
+    if (currentItems.length >= slot.capacity) {
       throw new BadRequestException('Capacidade do slot atingida para atribuições.');
     }
 
-    const item = await this.prisma.telepericiaSlotItem.create({
+    await this.prisma.telepericiaSlotItem.create({
       data: {
         tenantId: slot.tenantId,
         slotId,
@@ -110,45 +120,30 @@ export class TelepericiaService {
       },
     });
 
-    if (slot.periciaId) {
-      await this.whatsappScheduler.syncPericiaJobs({
-        tenantId,
-        periciaId: slot.periciaId,
-        scheduledAt: slot.startAt,
-        shouldSchedule: true,
-      });
-    }
-
-    return slot;
+    await this.syncPericiasForSlot(slotId);
+    return this.getSlot(slotId);
   }
 
-  listSlots() {
-    return this.prisma.teleSlot.findMany({ orderBy: { startAt: 'asc' } });
+  async reorder(slotId: string, dto: ReorderTelepericiaItemsDto) {
+    await this.ensureSlot(slotId);
+    await this.prisma.$transaction(
+      dto.items.map((item) =>
+        this.prisma.telepericiaSlotItem.update({
+          where: { id: item.itemId },
+          data: { orderIndex: item.orderIndex },
+        }),
+      ),
+    );
+
+    await this.syncPericiasForSlot(slotId);
+    return this.getSlot(slotId);
   }
 
-  async booking(dto: BookTeleSlotDto) {
-    const slot = await this.ensureSlot(dto.slotId);
-    const updatedSlot = await this.prisma.teleSlot.update({
-      where: { id: dto.slotId },
-      data: { periciaId: dto.periciaId, ...(dto.meetingUrl ? { meetingUrl: dto.meetingUrl } : {}), status: TeleSlotStatus.BOOKED },
-    });
-
-    if (slot.periciaId && slot.periciaId !== dto.periciaId) {
-      await this.whatsappScheduler.syncPericiaJobs({
-        tenantId: updatedSlot.tenantId,
-        periciaId: slot.periciaId,
-        shouldSchedule: false,
-      });
-    }
-
-    await this.whatsappScheduler.syncPericiaJobs({
-      tenantId: updatedSlot.tenantId,
-      periciaId: dto.periciaId,
-      scheduledAt: updatedSlot.startAt,
-      shouldSchedule: true,
-    });
-
-    return updatedSlot;
+  async deleteItem(slotId: string, itemId: string) {
+    await this.ensureSlot(slotId);
+    await this.prisma.telepericiaSlotItem.delete({ where: { id: itemId } });
+    await this.syncPericiasForSlot(slotId);
+    return this.getSlot(slotId);
   }
 
   async whatsappContact(dto: WhatsappContactDto) {
@@ -159,20 +154,17 @@ export class TelepericiaService {
   async uploadSessions(dto: UploadSessionDto) {
     const slot = await this.ensureSlot(dto.slotId);
     const expiresAt = new Date(Date.now() + dto.expiresInMinutes * 60 * 1000).toISOString();
-
     return { slotId: slot.id, qrCodeToken: randomUUID(), publicUrl: `https://telepericia.fake.local/session/${slot.id}`, expiresAt };
   }
 
   async startRealtimeSession(dto: StartRealtimeSessionDto) {
     const slot = await this.ensureSlot(dto.slotId);
     const roomName = dto.roomName ?? `telepericia-${slot.id}`;
-    const sessionId = randomUUID();
-
     return {
       slotId: slot.id,
       provider: 'webrtc-signaling',
       roomName,
-      sessionId,
+      sessionId: randomUUID(),
       wsUrl: `wss://telepericia.fake.local/webrtc/${roomName}`,
       iceServers: [{ urls: 'stun:stun.l.google.com:19302' }],
       token: randomUUID(),
@@ -181,26 +173,13 @@ export class TelepericiaService {
 
   async createVirtualRoom(dto: CreateVirtualRoomDto) {
     const slot = await this.ensureSlot(dto.slotId);
-    const title = dto.title ?? `Sala de Perícia ${slot.date.toISOString()} ${slot.startTime}`;
-
-    return {
-      slotId: slot.id,
-      title,
-      chatEnabled: true,
-      participants: ['perito', 'periciado'],
-      roomId: randomUUID(),
-    };
+    const title = dto.title ?? `Sala de Perícia ${slot.startsAt.toISOString()}`;
+    return { slotId: slot.id, title, chatEnabled: true, participants: ['perito', 'periciado'], roomId: randomUUID() };
   }
 
   async sendRoomMessage(dto: SendRoomMessageDto) {
     const slot = await this.ensureSlot(dto.slotId);
-    return {
-      slotId: slot.id,
-      sender: dto.sender,
-      message: dto.message,
-      sentAt: new Date().toISOString(),
-      messageId: randomUUID(),
-    };
+    return { slotId: slot.id, sender: dto.sender, message: dto.message, sentAt: new Date().toISOString(), messageId: randomUUID() };
   }
 
   async secureUploadQr(dto: SecureUploadQrDto) {
@@ -229,31 +208,44 @@ export class TelepericiaService {
     if (!slot) throw new NotFoundException('Slot não encontrado.');
 
     await this.prisma.$transaction(
-      slot.items.map((item) => {
-        const schedule = this.computeItemSchedule(slot, item.orderIndex);
-        return this.prisma.pericia.update({
-          where: { id: item.periciaId },
-          data: { dataAgendamento: schedule.startAt, horaAgendamento: this.toHHmm(schedule.startAt), agendada: true },
-        });
-      }),
+      slot.items
+        .filter((item) => !!item.periciaId)
+        .map((item) => {
+          const schedule = this.computeItemSchedule(slot.startsAt, this.getMeta(slot, 'appointmentDurationMinutes', 30), this.getMeta(slot, 'gapMinutes', 0), item.orderIndex);
+          return this.prisma.pericia.update({
+            where: { id: item.periciaId! },
+            data: { dataAgendamento: schedule.startAt, horaAgendamento: this.toHHmm(schedule.startAt), agendada: true },
+          });
+        }),
     );
+
+    const firstItem = slot.items.find((item) => !!item.periciaId);
+    if (firstItem?.periciaId) {
+      await this.whatsappScheduler.syncPericiaJobs({
+        tenantId: slot.tenantId,
+        periciaId: firstItem.periciaId,
+        scheduledAt: slot.startsAt,
+        shouldSchedule: true,
+      });
+    }
   }
 
-  private toSlotResponse(slot: { date: Date; startTime: string; appointmentDurationMinutes: number; gapMinutes: number; items: Array<{ orderIndex: number }>; [key: string]: unknown }) {
+  private toSlotResponse(slot: { startsAt: Date; endsAt: Date; metadata: unknown; items: Array<{ orderIndex: number }>; [key: string]: unknown }) {
+    const appointmentDurationMinutes = this.getMeta(slot, 'appointmentDurationMinutes', 30);
+    const gapMinutes = this.getMeta(slot, 'gapMinutes', 0);
     return {
       ...slot,
       items: slot.items.map((item) => ({
         ...item,
-        ...this.computeItemSchedule(slot, item.orderIndex),
+        ...this.computeItemSchedule(slot.startsAt, appointmentDurationMinutes, gapMinutes, item.orderIndex),
       })),
     };
   }
 
-  private computeItemSchedule(slot: { date: Date; startTime: string; appointmentDurationMinutes: number; gapMinutes: number }, orderIndex: number) {
-    const base = this.buildBaseDate(slot.date, slot.startTime);
-    const offsetMinutes = orderIndex * (slot.appointmentDurationMinutes + slot.gapMinutes);
-    const startAt = new Date(base.getTime() + offsetMinutes * 60_000);
-    const endAt = new Date(startAt.getTime() + slot.appointmentDurationMinutes * 60_000);
+  private computeItemSchedule(startsAt: Date, appointmentDurationMinutes: number, gapMinutes: number, orderIndex: number) {
+    const offsetMinutes = orderIndex * (appointmentDurationMinutes + gapMinutes);
+    const startAt = new Date(startsAt.getTime() + offsetMinutes * 60_000);
+    const endAt = new Date(startAt.getTime() + appointmentDurationMinutes * 60_000);
     return { startAt, endAt };
   }
 
@@ -270,22 +262,14 @@ export class TelepericiaService {
     return Math.floor((durationMinutes + gapMinutes) / step);
   }
 
-  private validateSlotDurations(durationMinutes: number, appointmentDurationMinutes: number) {
-    if (appointmentDurationMinutes > durationMinutes) {
-      throw new BadRequestException('Duração de atendimento não pode ser maior que a duração total do slot.');
-    }
-  }
-
-  private validateCapacity(capacity: number | undefined, durationMinutes: number, appointmentDurationMinutes: number, gapMinutes: number) {
-    const max = this.computeAvailableCapacity(durationMinutes, appointmentDurationMinutes, gapMinutes);
-    if (max < 1) throw new BadRequestException('Configuração de duração/gap não permite nenhum atendimento no slot.');
-    if (capacity && capacity > max) {
-      throw new BadRequestException(`Capacidade informada (${capacity}) excede o máximo possível (${max}) para a janela do slot.`);
-    }
-  }
-
   private toHHmm(date: Date) {
     return date.toISOString().slice(11, 16);
+  }
+
+  private getMeta(slot: { metadata: unknown }, key: string, fallback: number) {
+    const metadata = (slot.metadata ?? {}) as Record<string, unknown>;
+    const value = metadata[key];
+    return typeof value === 'number' ? value : fallback;
   }
 
   private async ensureSlot(id: string) {
