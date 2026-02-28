@@ -1,9 +1,49 @@
--- Campos de priorização/fila da teleperícia
+-- Consolidated WhatsApp + Telepericia infrastructure migration
+-- Creates all enums, tables, indexes, and foreign keys for:
+--   WhatsApp messaging (accounts, contacts, templates, messages, jobs)
+--   Telepericia scheduling (slots, slot items)
+--   Pericia queue prioritization fields
+
+-- ============================================================
+-- 1. Enums (guarded against duplicates)
+-- ============================================================
+
+DO $$
+BEGIN
+  CREATE TYPE "WhatsAppJobType" AS ENUM ('APPOINTMENT_REMINDER', 'REPORT_READY', 'CUSTOM');
+EXCEPTION
+  WHEN duplicate_object THEN null;
+END
+$$;
+
+DO $$
+BEGIN
+  CREATE TYPE "WhatsAppJobStatus" AS ENUM ('QUEUED', 'PROCESSING', 'SENT', 'FAILED', 'CANCELED');
+EXCEPTION
+  WHEN duplicate_object THEN null;
+END
+$$;
+
+DO $$
+BEGIN
+  CREATE TYPE "TelepericiaSlotType" AS ENUM ('SEQUENTIAL', 'CUSTOM');
+EXCEPTION
+  WHEN duplicate_object THEN null;
+END
+$$;
+
+-- ============================================================
+-- 2. Pericia queue columns
+-- ============================================================
+
 ALTER TABLE "Pericia"
   ADD COLUMN IF NOT EXISTS "urgentCheckedAt" TIMESTAMP(3),
   ADD COLUMN IF NOT EXISTS "telepericiaStatusChangedAt" TIMESTAMP(3);
 
--- Domínio de WhatsApp
+-- ============================================================
+-- 3. WhatsApp domain tables
+-- ============================================================
+
 CREATE TABLE IF NOT EXISTS "WhatsappAccount" (
   "id" UUID NOT NULL,
   "tenantId" UUID NOT NULL,
@@ -81,9 +121,9 @@ CREATE TABLE IF NOT EXISTS "whatsapp_jobs" (
   "tenantId" UUID NOT NULL,
   "periciaId" UUID,
   "appointmentId" TEXT,
-  "jobType" TEXT NOT NULL,
+  "jobType" "WhatsAppJobType" NOT NULL,
   "scheduledFor" TIMESTAMP(3),
-  "status" TEXT NOT NULL,
+  "status" "WhatsAppJobStatus" NOT NULL DEFAULT 'QUEUED',
   "attempts" INTEGER NOT NULL DEFAULT 0,
   "lastError" TEXT,
   "idempotency_key" TEXT NOT NULL,
@@ -129,7 +169,10 @@ CREATE TABLE IF NOT EXISTS "MessageTemplate" (
   CONSTRAINT "MessageTemplate_pkey" PRIMARY KEY ("id")
 );
 
--- Tele-fila e composição de slots
+-- ============================================================
+-- 4. Telepericia scheduling tables
+-- ============================================================
+
 CREATE TABLE IF NOT EXISTS "TelepericiaSlot" (
   "id" UUID NOT NULL,
   "tenantId" UUID NOT NULL,
@@ -161,7 +204,10 @@ CREATE TABLE IF NOT EXISTS "TelepericiaSlotItem" (
   CONSTRAINT "TelepericiaSlotItem_pkey" PRIMARY KEY ("id")
 );
 
--- Uniques e índices críticos
+-- ============================================================
+-- 5. Unique indexes
+-- ============================================================
+
 CREATE UNIQUE INDEX IF NOT EXISTS "WhatsappAccount_tenantId_wabaId_phoneNumberId_key" ON "WhatsappAccount"("tenantId", "wabaId", "phoneNumberId");
 CREATE UNIQUE INDEX IF NOT EXISTS "WhatsappContact_tenantId_phoneE164_key" ON "WhatsappContact"("tenantId", "phoneE164");
 CREATE UNIQUE INDEX IF NOT EXISTS "WhatsappTemplate_tenantId_name_language_key" ON "WhatsappTemplate"("tenantId", "name", "language");
@@ -170,10 +216,14 @@ CREATE UNIQUE INDEX IF NOT EXISTS "whatsapp_jobs_idempotency_key_key" ON "whatsa
 CREATE UNIQUE INDEX IF NOT EXISTS "TelepericiaSlotItem_slotId_periciaId_key" ON "TelepericiaSlotItem"("slotId", "periciaId");
 CREATE UNIQUE INDEX IF NOT EXISTS "TelepericiaSlotItem_slotId_appointmentId_key" ON "TelepericiaSlotItem"("slotId", "appointmentId");
 
-CREATE INDEX IF NOT EXISTS "WhatsappMessage_providerMessageId_idx" ON "WhatsappMessage"("providerMessageId");
+-- ============================================================
+-- 6. Regular indexes
+-- ============================================================
+
 CREATE INDEX IF NOT EXISTS "WhatsappAccount_tenantId_status_idx" ON "WhatsappAccount"("tenantId", "status");
 CREATE INDEX IF NOT EXISTS "WhatsappContact_tenantId_consentStatus_idx" ON "WhatsappContact"("tenantId", "consentStatus");
 CREATE INDEX IF NOT EXISTS "WhatsappMessage_tenantId_contactId_createdAt_idx" ON "WhatsappMessage"("tenantId", "contactId", "createdAt");
+CREATE INDEX IF NOT EXISTS "WhatsappMessage_providerMessageId_idx" ON "WhatsappMessage"("providerMessageId");
 CREATE INDEX IF NOT EXISTS "whatsapp_jobs_tenantId_status_scheduledFor_idx" ON "whatsapp_jobs"("tenantId", "status", "scheduledFor");
 CREATE INDEX IF NOT EXISTS "WhatsappUnlinkedInbound_tenantId_fromPhone_receivedAt_idx" ON "WhatsappUnlinkedInbound"("tenantId", "fromPhone", "receivedAt");
 CREATE INDEX IF NOT EXISTS "WhatsappUnlinkedInbound_providerMessageId_idx" ON "WhatsappUnlinkedInbound"("providerMessageId");
@@ -182,38 +232,108 @@ CREATE INDEX IF NOT EXISTS "TelepericiaSlot_tenantId_startsAt_status_idx" ON "Te
 CREATE INDEX IF NOT EXISTS "TelepericiaSlotItem_tenantId_slotId_orderIndex_idx" ON "TelepericiaSlotItem"("tenantId", "slotId", "orderIndex");
 CREATE INDEX IF NOT EXISTS "Pericia_tele_queue_order_idx" ON "Pericia"("tenantId", "isUrgent", "urgentCheckedAt", "telepericiaStatusChangedAt", "dataAgendamento", "createdAt");
 
--- Chaves estrangeiras
-ALTER TABLE "WhatsappAccount"
-  ADD CONSTRAINT "WhatsappAccount_tenantId_fkey" FOREIGN KEY ("tenantId") REFERENCES "Tenant"("id") ON DELETE CASCADE ON UPDATE CASCADE;
+-- ============================================================
+-- 7. Foreign keys (guarded against duplicates)
+-- ============================================================
 
-ALTER TABLE "WhatsappContact"
-  ADD CONSTRAINT "WhatsappContact_tenantId_fkey" FOREIGN KEY ("tenantId") REFERENCES "Tenant"("id") ON DELETE CASCADE ON UPDATE CASCADE;
+DO $$ BEGIN
+  ALTER TABLE "WhatsappAccount"
+    ADD CONSTRAINT "WhatsappAccount_tenantId_fkey" FOREIGN KEY ("tenantId") REFERENCES "Tenant"("id") ON DELETE CASCADE ON UPDATE CASCADE;
+EXCEPTION WHEN duplicate_object THEN null;
+END $$;
 
-ALTER TABLE "WhatsappTemplate"
-  ADD CONSTRAINT "WhatsappTemplate_tenantId_fkey" FOREIGN KEY ("tenantId") REFERENCES "Tenant"("id") ON DELETE CASCADE ON UPDATE CASCADE;
+DO $$ BEGIN
+  ALTER TABLE "WhatsappContact"
+    ADD CONSTRAINT "WhatsappContact_tenantId_fkey" FOREIGN KEY ("tenantId") REFERENCES "Tenant"("id") ON DELETE CASCADE ON UPDATE CASCADE;
+EXCEPTION WHEN duplicate_object THEN null;
+END $$;
 
-ALTER TABLE "WhatsappMessage"
-  ADD CONSTRAINT "WhatsappMessage_tenantId_fkey" FOREIGN KEY ("tenantId") REFERENCES "Tenant"("id") ON DELETE CASCADE ON UPDATE CASCADE,
-  ADD CONSTRAINT "WhatsappMessage_contactId_fkey" FOREIGN KEY ("contactId") REFERENCES "WhatsappContact"("id") ON DELETE SET NULL ON UPDATE CASCADE,
-  ADD CONSTRAINT "WhatsappMessage_periciaId_fkey" FOREIGN KEY ("periciaId") REFERENCES "Pericia"("id") ON DELETE SET NULL ON UPDATE CASCADE,
-  ADD CONSTRAINT "WhatsappMessage_templateId_fkey" FOREIGN KEY ("templateId") REFERENCES "WhatsappTemplate"("id") ON DELETE SET NULL ON UPDATE CASCADE;
+DO $$ BEGIN
+  ALTER TABLE "WhatsappTemplate"
+    ADD CONSTRAINT "WhatsappTemplate_tenantId_fkey" FOREIGN KEY ("tenantId") REFERENCES "Tenant"("id") ON DELETE CASCADE ON UPDATE CASCADE;
+EXCEPTION WHEN duplicate_object THEN null;
+END $$;
 
-ALTER TABLE "whatsapp_jobs"
-  ADD CONSTRAINT "whatsapp_jobs_tenantId_fkey" FOREIGN KEY ("tenantId") REFERENCES "Tenant"("id") ON DELETE CASCADE ON UPDATE CASCADE,
-  ADD CONSTRAINT "whatsapp_jobs_periciaId_fkey" FOREIGN KEY ("periciaId") REFERENCES "Pericia"("id") ON DELETE SET NULL ON UPDATE CASCADE;
+DO $$ BEGIN
+  ALTER TABLE "WhatsappMessage"
+    ADD CONSTRAINT "WhatsappMessage_tenantId_fkey" FOREIGN KEY ("tenantId") REFERENCES "Tenant"("id") ON DELETE CASCADE ON UPDATE CASCADE;
+EXCEPTION WHEN duplicate_object THEN null;
+END $$;
 
-ALTER TABLE "WhatsappUnlinkedInbound"
-  ADD CONSTRAINT "WhatsappUnlinkedInbound_tenantId_fkey" FOREIGN KEY ("tenantId") REFERENCES "Tenant"("id") ON DELETE CASCADE ON UPDATE CASCADE,
-  ADD CONSTRAINT "WhatsappUnlinkedInbound_contactId_fkey" FOREIGN KEY ("contactId") REFERENCES "WhatsappContact"("id") ON DELETE SET NULL ON UPDATE CASCADE,
-  ADD CONSTRAINT "WhatsappUnlinkedInbound_periciaId_fkey" FOREIGN KEY ("periciaId") REFERENCES "Pericia"("id") ON DELETE SET NULL ON UPDATE CASCADE;
+DO $$ BEGIN
+  ALTER TABLE "WhatsappMessage"
+    ADD CONSTRAINT "WhatsappMessage_contactId_fkey" FOREIGN KEY ("contactId") REFERENCES "WhatsappContact"("id") ON DELETE SET NULL ON UPDATE CASCADE;
+EXCEPTION WHEN duplicate_object THEN null;
+END $$;
 
-ALTER TABLE "MessageTemplate"
-  ADD CONSTRAINT "MessageTemplate_tenantId_fkey" FOREIGN KEY ("tenantId") REFERENCES "Tenant"("id") ON DELETE CASCADE ON UPDATE CASCADE;
+DO $$ BEGIN
+  ALTER TABLE "WhatsappMessage"
+    ADD CONSTRAINT "WhatsappMessage_periciaId_fkey" FOREIGN KEY ("periciaId") REFERENCES "Pericia"("id") ON DELETE SET NULL ON UPDATE CASCADE;
+EXCEPTION WHEN duplicate_object THEN null;
+END $$;
 
-ALTER TABLE "TelepericiaSlot"
-  ADD CONSTRAINT "TelepericiaSlot_tenantId_fkey" FOREIGN KEY ("tenantId") REFERENCES "Tenant"("id") ON DELETE CASCADE ON UPDATE CASCADE;
+DO $$ BEGIN
+  ALTER TABLE "WhatsappMessage"
+    ADD CONSTRAINT "WhatsappMessage_templateId_fkey" FOREIGN KEY ("templateId") REFERENCES "WhatsappTemplate"("id") ON DELETE SET NULL ON UPDATE CASCADE;
+EXCEPTION WHEN duplicate_object THEN null;
+END $$;
 
-ALTER TABLE "TelepericiaSlotItem"
-  ADD CONSTRAINT "TelepericiaSlotItem_tenantId_fkey" FOREIGN KEY ("tenantId") REFERENCES "Tenant"("id") ON DELETE CASCADE ON UPDATE CASCADE,
-  ADD CONSTRAINT "TelepericiaSlotItem_slotId_fkey" FOREIGN KEY ("slotId") REFERENCES "TelepericiaSlot"("id") ON DELETE CASCADE ON UPDATE CASCADE,
-  ADD CONSTRAINT "TelepericiaSlotItem_periciaId_fkey" FOREIGN KEY ("periciaId") REFERENCES "Pericia"("id") ON DELETE SET NULL ON UPDATE CASCADE;
+DO $$ BEGIN
+  ALTER TABLE "whatsapp_jobs"
+    ADD CONSTRAINT "whatsapp_jobs_tenantId_fkey" FOREIGN KEY ("tenantId") REFERENCES "Tenant"("id") ON DELETE CASCADE ON UPDATE CASCADE;
+EXCEPTION WHEN duplicate_object THEN null;
+END $$;
+
+DO $$ BEGIN
+  ALTER TABLE "whatsapp_jobs"
+    ADD CONSTRAINT "whatsapp_jobs_periciaId_fkey" FOREIGN KEY ("periciaId") REFERENCES "Pericia"("id") ON DELETE SET NULL ON UPDATE CASCADE;
+EXCEPTION WHEN duplicate_object THEN null;
+END $$;
+
+DO $$ BEGIN
+  ALTER TABLE "WhatsappUnlinkedInbound"
+    ADD CONSTRAINT "WhatsappUnlinkedInbound_tenantId_fkey" FOREIGN KEY ("tenantId") REFERENCES "Tenant"("id") ON DELETE CASCADE ON UPDATE CASCADE;
+EXCEPTION WHEN duplicate_object THEN null;
+END $$;
+
+DO $$ BEGIN
+  ALTER TABLE "WhatsappUnlinkedInbound"
+    ADD CONSTRAINT "WhatsappUnlinkedInbound_contactId_fkey" FOREIGN KEY ("contactId") REFERENCES "WhatsappContact"("id") ON DELETE SET NULL ON UPDATE CASCADE;
+EXCEPTION WHEN duplicate_object THEN null;
+END $$;
+
+DO $$ BEGIN
+  ALTER TABLE "WhatsappUnlinkedInbound"
+    ADD CONSTRAINT "WhatsappUnlinkedInbound_periciaId_fkey" FOREIGN KEY ("periciaId") REFERENCES "Pericia"("id") ON DELETE SET NULL ON UPDATE CASCADE;
+EXCEPTION WHEN duplicate_object THEN null;
+END $$;
+
+DO $$ BEGIN
+  ALTER TABLE "MessageTemplate"
+    ADD CONSTRAINT "MessageTemplate_tenantId_fkey" FOREIGN KEY ("tenantId") REFERENCES "Tenant"("id") ON DELETE CASCADE ON UPDATE CASCADE;
+EXCEPTION WHEN duplicate_object THEN null;
+END $$;
+
+DO $$ BEGIN
+  ALTER TABLE "TelepericiaSlot"
+    ADD CONSTRAINT "TelepericiaSlot_tenantId_fkey" FOREIGN KEY ("tenantId") REFERENCES "Tenant"("id") ON DELETE CASCADE ON UPDATE CASCADE;
+EXCEPTION WHEN duplicate_object THEN null;
+END $$;
+
+DO $$ BEGIN
+  ALTER TABLE "TelepericiaSlotItem"
+    ADD CONSTRAINT "TelepericiaSlotItem_tenantId_fkey" FOREIGN KEY ("tenantId") REFERENCES "Tenant"("id") ON DELETE CASCADE ON UPDATE CASCADE;
+EXCEPTION WHEN duplicate_object THEN null;
+END $$;
+
+DO $$ BEGIN
+  ALTER TABLE "TelepericiaSlotItem"
+    ADD CONSTRAINT "TelepericiaSlotItem_slotId_fkey" FOREIGN KEY ("slotId") REFERENCES "TelepericiaSlot"("id") ON DELETE CASCADE ON UPDATE CASCADE;
+EXCEPTION WHEN duplicate_object THEN null;
+END $$;
+
+DO $$ BEGIN
+  ALTER TABLE "TelepericiaSlotItem"
+    ADD CONSTRAINT "TelepericiaSlotItem_periciaId_fkey" FOREIGN KEY ("periciaId") REFERENCES "Pericia"("id") ON DELETE SET NULL ON UPDATE CASCADE;
+EXCEPTION WHEN duplicate_object THEN null;
+END $$;

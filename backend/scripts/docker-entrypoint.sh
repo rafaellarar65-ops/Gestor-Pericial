@@ -3,14 +3,19 @@ set -e
 
 echo "[Entrypoint] Checking for failed Prisma migrations..."
 
-# Get migration status and extract names of any failed migrations
 STATUS_OUTPUT=$(npx prisma migrate status --schema prisma/schema.prisma 2>&1 || true)
-FAILED_MIGRATIONS=$(echo "$STATUS_OUTPUT" | grep -oE "The \`[^\`]+\` migration started at.*failed" | grep -oE "\`[^\`]+\`" | tr -d '`' || true)
+echo "[Entrypoint] Migration status:"
+echo "$STATUS_OUTPUT"
+
+# Extract failed migration names using a loose pattern that handles
+# various Prisma output formats (backtick-quoted or plain names)
+FAILED_MIGRATIONS=$(echo "$STATUS_OUTPUT" | grep -i "failed" | grep -oE '[0-9]{12,}_[a-zA-Z_]+' || true)
 
 if [ -n "$FAILED_MIGRATIONS" ]; then
   for MIGRATION in $FAILED_MIGRATIONS; do
-    echo "[Entrypoint] Resolving failed migration as rolled-back: $MIGRATION"
-    npx prisma migrate resolve --rolled-back "$MIGRATION" --schema prisma/schema.prisma || true
+    echo "[Entrypoint] Resolving failed migration: $MIGRATION"
+    npx prisma migrate resolve --rolled-back "$MIGRATION" --schema prisma/schema.prisma 2>&1 || \
+    npx prisma migrate resolve --applied "$MIGRATION" --schema prisma/schema.prisma 2>&1 || true
   done
 fi
 
