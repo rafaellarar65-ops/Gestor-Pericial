@@ -8,6 +8,7 @@ import {
   CreatePericiasDto,
   ImportPericiasDto,
   ListPericiasDto,
+  ListNomeacoesDto,
   UpdatePericiasDto,
 } from './dto/pericias.dto';
 
@@ -308,13 +309,37 @@ export class PericiasService {
     };
   }
 
-  async nomeacoes() {
-    const items = await this.prisma.pericia.findMany({
-      where: { agendada: false, finalizada: false },
-      include: { cidade: true, status: true },
-      orderBy: { dataNomeacao: 'desc' },
-      take: 50,
-    });
+  async nomeacoes(query: ListNomeacoesDto) {
+    const where: Prisma.PericiaWhereInput = { agendada: false, finalizada: false };
+
+    const [items, total, periciasStatus] = await this.prisma.$transaction([
+      this.prisma.pericia.findMany({
+        where,
+        include: { cidade: true, status: true },
+        orderBy: { dataNomeacao: 'desc' },
+        skip: (query.page - 1) * query.limit,
+        take: query.limit,
+      }),
+      this.prisma.pericia.count({ where }),
+      this.prisma.pericia.findMany({ where, select: { statusId: true } }),
+    ]);
+
+    const statusIds = periciasStatus
+      .map((pericia) => pericia.statusId)
+      .filter((statusId): statusId is string => Boolean(statusId));
+
+    const statuses = statusIds.length
+      ? await this.prisma.status.findMany({ where: { id: { in: statusIds } }, select: { id: true, codigo: true, nome: true } })
+      : [];
+
+    const statusLookup = new Map(statuses.map((status) => [status.id, (status.codigo || status.nome || '').toUpperCase()]));
+
+    const statusTotals = periciasStatus.reduce<Record<string, number>>((acc, current) => {
+      const key = current.statusId ? statusLookup.get(current.statusId) ?? '' : '';
+      if (!key) return acc;
+      acc[key] = (acc[key] ?? 0) + 1;
+      return acc;
+    }, {});
 
     return {
       items: items.map((p) => ({
@@ -325,6 +350,9 @@ export class PericiasService {
         dataNomeacao: p.dataNomeacao?.toISOString(),
         status: p.status?.codigo ?? '',
       })),
+      pagination: { page: query.page, limit: query.limit, total },
+      total,
+      statusTotals,
     };
   }
 
