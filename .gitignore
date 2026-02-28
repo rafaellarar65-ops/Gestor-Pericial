@@ -147,3 +147,7 @@ backend/prisma/*.d.ts
 **/serviceAccountKey.json
 **/serviceAccountKey*.json
 **/*-credentials.json
+-e 
+# Environment files
+*.env
+*.env.*
