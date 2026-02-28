@@ -1,7 +1,13 @@
 import { Body, Controller, Get, Post, Query } from '@nestjs/common';
 import { ApiBearerAuth, ApiOperation, ApiTags } from '@nestjs/swagger';
 import { FinancialService } from './financial.service';
-import { CreateDespesaDto, CreateRecebimentoDto, ImportRecebimentosDto, ReconcileDto } from './dto/financial.dto';
+import {
+  CreateDespesaDto,
+  CreateRecebimentoDto,
+  FinancialTimelineQueryDto,
+  ImportRecebimentosDto,
+  ReconcileDto,
+} from './dto/financial.dto';
 
 @ApiTags('financial')
 @ApiBearerAuth()
@@ -49,6 +55,11 @@ export class FinancialController {
   @Get('analytics')
   analytics() {
     return this.service.analytics();
+  }
+
+  @Get('analytics/timeline')
+  timeline(@Query() query: FinancialTimelineQueryDto) {
+    return this.service.analyticsTimeline(query);
   }
 
   @Post('charge-automation')

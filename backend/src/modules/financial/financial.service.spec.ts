@@ -23,6 +23,10 @@ describe('FinancialService', () => {
     },
     pericia: {
       count: jest.fn(),
+      findMany: jest.fn(),
+    },
+    logStatus: {
+      findMany: jest.fn(),
     },
     $transaction: jest.fn(),
   } as any;
@@ -58,5 +62,45 @@ describe('FinancialService', () => {
 
     const result = await service.analytics();
     expect(result.financialScore).toBe(0);
+  });
+
+  it('returns timeline including separated unlinked revenue when enabled', async () => {
+    prisma.$transaction.mockResolvedValue([
+      [
+        {
+          id: 'p-1',
+          dataNomeacao: new Date('2026-01-10T10:00:00Z'),
+          dataEnvioLaudo: new Date('2026-01-20T10:00:00Z'),
+          honorariosPrevistosJG: 200,
+          honorariosPrevistosPartes: 50,
+        },
+      ],
+      [
+        { periciaId: 'p-1', dataRecebimento: new Date('2026-01-15T10:00:00Z'), valorBruto: 100 },
+        { periciaId: null, dataRecebimento: new Date('2026-01-15T11:00:00Z'), valorBruto: 30 },
+      ],
+      [{ periciaId: 'p-1', dataCompetencia: new Date('2026-01-16T10:00:00Z'), valor: 40 }],
+      [
+        { statusNovo: 'PEDIDO_ESCLARECIMENTO', createdAt: new Date('2026-01-17T10:00:00Z') },
+        { statusNovo: 'RESPOSTA_ESCLARECIMENTO', createdAt: new Date('2026-01-18T10:00:00Z') },
+      ],
+    ]);
+
+    const result = await service.analyticsTimeline({
+      period: 'CUSTOM' as any,
+      startDate: '2026-01-01',
+      endDate: '2026-01-31',
+      granularity: 'MONTH' as any,
+      includeUnlinked: true,
+    });
+
+    expect(result.series).toHaveLength(1);
+    expect(result.series[0].finance.grossRevenue).toBe(100);
+    expect(result.series[0].finance.unlinkedRevenue).toBe(30);
+    expect(result.series[0].finance.expenses).toBe(40);
+    expect(result.series[0].production.entries).toBe(1);
+    expect(result.series[0].production.exits).toBe(1);
+    expect(result.series[0].workflow.clarificationRequests).toBe(1);
+    expect(result.series[0].workflow.clarificationResponses).toBe(1);
   });
 });

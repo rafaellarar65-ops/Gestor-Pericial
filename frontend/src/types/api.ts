@@ -84,6 +84,53 @@ export type Despesa = {
   createdAt?: string;
 };
 
+
+export type AnalyticsViewMode = 'FINANCE' | 'PRODUCTION' | 'WORKFLOW';
+export type AnalyticsPeriod = 'YEAR' | 'CUSTOM' | 'LAST_30' | 'LAST_90';
+export type AnalyticsGranularity = 'DAY' | 'WEEK' | 'MONTH';
+
+export type FinancialTimelinePoint = {
+  bucketStart: string;
+  label: string;
+  finance: {
+    grossRevenue: number;
+    expenses: number;
+    forecastByEntry: number;
+    unlinkedRevenue: number;
+  };
+  production: {
+    entries: number;
+    exits: number;
+  };
+  workflow: {
+    clarificationRequests: number;
+    clarificationResponses: number;
+  };
+};
+
+export type FinancialTimelineResponse = {
+  filtersApplied: {
+    viewMode: AnalyticsViewMode;
+    period: AnalyticsPeriod;
+    granularity: AnalyticsGranularity;
+    includeUnlinked: boolean;
+    cidadeIds: string[];
+    statusIds: string[];
+    startDate: string;
+    endDate: string;
+  };
+  series: FinancialTimelinePoint[];
+  totals: {
+    grossRevenue: number;
+    expenses: number;
+    forecastByEntry: number;
+    unlinkedRevenue: number;
+    entries: number;
+    exits: number;
+    clarificationRequests: number;
+    clarificationResponses: number;
+  };
+};
 export type FinancialAnalytics = {
   totals: {
     recebido: number;

@@ -1,5 +1,15 @@
 import { apiClient } from '@/lib/api-client';
-import type { ApiListResponse, Despesa, FinancialAnalytics, FinancialItem, Recebimento } from '@/types/api';
+import type {
+  AnalyticsGranularity,
+  AnalyticsPeriod,
+  AnalyticsViewMode,
+  ApiListResponse,
+  Despesa,
+  FinancialAnalytics,
+  FinancialItem,
+  FinancialTimelineResponse,
+  Recebimento,
+} from '@/types/api';
 
 type RecebimentoRaw = {
   id: string;
@@ -62,6 +72,31 @@ export const financialService = {
 
   analytics: async (): Promise<FinancialAnalytics> => {
     const { data } = await apiClient.get<FinancialAnalytics>('/financial/analytics');
+    return data;
+  },
+
+  analyticsTimeline: async (query: {
+    viewMode: AnalyticsViewMode;
+    period: AnalyticsPeriod;
+    granularity: AnalyticsGranularity;
+    cidadeIds?: string[];
+    statusIds?: string[];
+    startDate?: string;
+    endDate?: string;
+    includeUnlinked?: boolean;
+  }): Promise<FinancialTimelineResponse> => {
+    const { data } = await apiClient.get<FinancialTimelineResponse>('/financial/analytics/timeline', {
+      params: {
+        viewMode: query.viewMode,
+        period: query.period,
+        granularity: query.granularity,
+        cidadeIds: query.cidadeIds,
+        statusIds: query.statusIds,
+        startDate: query.startDate,
+        endDate: query.endDate,
+        includeUnlinked: query.includeUnlinked,
+      },
+    });
     return data;
   },
 };

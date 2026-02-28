@@ -3,6 +3,7 @@ import { FontePagamento } from '@prisma/client';
 import { Type } from 'class-transformer';
 import {
   IsArray,
+  IsBoolean,
   IsDateString,
   IsEnum,
   IsNumber,
@@ -88,4 +89,68 @@ export class ReconcileDto {
   @ApiProperty()
   @IsString()
   note!: string;
+}
+
+export enum AnalyticsViewMode {
+  FINANCE = 'FINANCE',
+  PRODUCTION = 'PRODUCTION',
+  WORKFLOW = 'WORKFLOW',
+}
+
+export enum AnalyticsPeriod {
+  YEAR = 'YEAR',
+  CUSTOM = 'CUSTOM',
+  LAST_30 = 'LAST_30',
+  LAST_90 = 'LAST_90',
+}
+
+export enum AnalyticsGranularity {
+  DAY = 'DAY',
+  WEEK = 'WEEK',
+  MONTH = 'MONTH',
+}
+
+export class FinancialTimelineQueryDto {
+  @ApiPropertyOptional({ enum: AnalyticsViewMode })
+  @IsOptional()
+  @IsEnum(AnalyticsViewMode)
+  viewMode?: AnalyticsViewMode;
+
+  @ApiPropertyOptional({ enum: AnalyticsPeriod, default: AnalyticsPeriod.YEAR })
+  @IsOptional()
+  @IsEnum(AnalyticsPeriod)
+  period?: AnalyticsPeriod;
+
+  @ApiPropertyOptional({ enum: AnalyticsGranularity, default: AnalyticsGranularity.MONTH })
+  @IsOptional()
+  @IsEnum(AnalyticsGranularity)
+  granularity?: AnalyticsGranularity;
+
+  @ApiPropertyOptional({ type: [String], description: 'IDs de cidade' })
+  @IsOptional()
+  @IsArray()
+  @IsUUID('4', { each: true })
+  cidadeIds?: string[];
+
+  @ApiPropertyOptional({ type: [String], description: 'IDs de status' })
+  @IsOptional()
+  @IsArray()
+  @IsUUID('4', { each: true })
+  statusIds?: string[];
+
+  @ApiPropertyOptional({ description: 'Data inicial para period=CUSTOM' })
+  @IsOptional()
+  @IsDateString()
+  startDate?: string;
+
+  @ApiPropertyOptional({ description: 'Data final para period=CUSTOM' })
+  @IsOptional()
+  @IsDateString()
+  endDate?: string;
+
+  @ApiPropertyOptional({ default: false })
+  @IsOptional()
+  @Type(() => Boolean)
+  @IsBoolean()
+  includeUnlinked?: boolean;
 }
