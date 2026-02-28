@@ -2,7 +2,7 @@ import { useMemo } from 'react';
 import { useQuery } from '@tanstack/react-query';
 import { Link } from 'react-router-dom';
 import { FileText, MapPin, FileEdit, AlertTriangle, CheckCircle2, ClipboardList } from 'lucide-react';
-import { EmptyState, ErrorState, LoadingState } from '@/components/ui/state';
+import { ErrorState, LoadingState } from '@/components/ui/state';
 import { useDomainData } from '@/hooks/use-domain-data';
 import { configService } from '@/services/config-service';
 
@@ -41,6 +41,7 @@ const LaudoCard = ({ item, index, urgentTerms }: { item: LaudoItem; index: numbe
   const urgent = isItemUrgent(item, urgentTerms);
   const itemId = item.id ?? index;
   const detailHref = `/pericias/${itemId}`;
+  const laudoInteligenteHref = `/laudo-inteligente/${itemId}`;
 
   return (
     <div
@@ -98,7 +99,7 @@ const LaudoCard = ({ item, index, urgentTerms }: { item: LaudoItem; index: numbe
         {/* Action buttons */}
         <div className="flex items-center gap-2">
           <Link
-            to={detailHref}
+            to={laudoInteligenteHref}
             className="flex flex-1 items-center justify-center gap-1.5 rounded-lg bg-orange-600 px-3 py-2 text-xs font-bold uppercase tracking-wide text-white transition-colors hover:bg-orange-700"
           >
             <FileEdit size={14} />
