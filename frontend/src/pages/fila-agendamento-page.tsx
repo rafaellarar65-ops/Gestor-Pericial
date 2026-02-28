@@ -50,6 +50,21 @@ const FilaAgendamentoPage = () => {
     );
   }, [data, search]);
 
+  const periciasPorCidade = useMemo<Record<string, Pericia[]>>(() => {
+    return pericias.reduce<Record<string, Pericia[]>>((acc, pericia) => {
+      const cidade =
+        (typeof pericia.cidade === 'string'
+          ? pericia.cidade
+          : (pericia.cidade as { nome?: string })?.nome ?? '') || 'Cidade não informada';
+
+      if (!acc[cidade]) acc[cidade] = [];
+      acc[cidade].push(pericia);
+      return acc;
+    }, {});
+  }, [pericias]);
+
+  const cidades = useMemo(() => Object.keys(periciasPorCidade), [periciasPorCidade]);
+
   const allSelected = pericias.length > 0 && pericias.every((p) => selected.has(p.id));
 
   function toggleAll() {
@@ -58,6 +73,24 @@ const FilaAgendamentoPage = () => {
     } else {
       setSelected(new Set(pericias.map((p) => p.id)));
     }
+  }
+
+  function toggleGroup(cidade: string) {
+    const group = periciasPorCidade[cidade] ?? [];
+    const groupIds = group.map((p) => p.id);
+    const groupSelected = groupIds.length > 0 && groupIds.every((id) => selected.has(id));
+
+    setSelected((prev) => {
+      const next = new Set(prev);
+
+      if (groupSelected) {
+        groupIds.forEach((id) => next.delete(id));
+      } else {
+        groupIds.forEach((id) => next.add(id));
+      }
+
+      return next;
+    });
   }
 
   function toggleOne(id: string) {
@@ -129,60 +162,84 @@ const FilaAgendamentoPage = () => {
         <EmptyState title="Nenhuma perícia aguardando agendamento." />
       ) : (
         <Card>
-          <div className="overflow-x-auto">
-            <table className="w-full text-sm">
-              <thead>
-                <tr className="border-b bg-slate-50">
-                  <th className="w-10 px-3 py-2">
-                    <button onClick={toggleAll} type="button">
-                      {allSelected ? (
+          <div className="border-b bg-slate-50 px-4 py-2 text-sm font-medium text-slate-700">
+            <button onClick={toggleAll} type="button" className="inline-flex items-center gap-2">
+              {allSelected ? (
+                <CheckSquare className="h-4 w-4 text-blue-600" />
+              ) : (
+                <Square className="h-4 w-4 text-slate-400" />
+              )}
+              Selecionar todas as perícias exibidas
+            </button>
+          </div>
+
+          <div className="divide-y">
+            {cidades.map((cidade) => {
+              const group = periciasPorCidade[cidade] ?? [];
+              const groupIds = group.map((p) => p.id);
+              const groupSelected = groupIds.length > 0 && groupIds.every((id) => selected.has(id));
+
+              return (
+                <section key={cidade} className="p-4">
+                  <header className="mb-3 flex items-center justify-between gap-3 rounded-md bg-slate-50 px-3 py-2">
+                    <div>
+                      <h2 className="text-sm font-semibold text-slate-800">{cidade}</h2>
+                      <p className="text-xs text-muted-foreground">{group.length} perícia(s) pendente(s)</p>
+                    </div>
+                    <button
+                      onClick={() => toggleGroup(cidade)}
+                      type="button"
+                      className="inline-flex items-center gap-2 text-xs font-medium text-slate-700"
+                    >
+                      {groupSelected ? (
                         <CheckSquare className="h-4 w-4 text-blue-600" />
                       ) : (
                         <Square className="h-4 w-4 text-slate-400" />
                       )}
+                      {groupSelected ? 'Desselecionar grupo' : 'Selecionar grupo'}
                     </button>
-                  </th>
-                  <th className="px-3 py-2 text-left font-semibold">Processo CNJ</th>
-                  <th className="px-3 py-2 text-left font-semibold">Autor</th>
-                  <th className="px-3 py-2 text-left font-semibold">Cidade</th>
-                  <th className="px-3 py-2 text-left font-semibold">Status</th>
-                  <th className="px-3 py-2 text-left font-semibold">Agendamento atual</th>
-                </tr>
-              </thead>
-              <tbody>
-                {pericias.map((p) => {
-                  const isChecked = selected.has(p.id);
-                  const cidade = typeof p.cidade === 'string' ? p.cidade : (p.cidade as { nome?: string })?.nome ?? '—';
-                  const statusLabel = typeof p.status === 'string' ? p.status : (p.status as { nome?: string })?.nome ?? '—';
-                  return (
-                    <tr
-                      key={p.id}
-                      className={`border-b cursor-pointer transition-colors ${isChecked ? 'bg-blue-50' : 'hover:bg-slate-50'}`}
-                      onClick={() => toggleOne(p.id)}
-                    >
-                      <td className="px-3 py-2">
-                        {isChecked ? (
-                          <CheckSquare className="h-4 w-4 text-blue-600" />
-                        ) : (
-                          <Square className="h-4 w-4 text-slate-400" />
-                        )}
-                      </td>
-                      <td className="px-3 py-2 font-mono text-xs">{p.processoCNJ}</td>
-                      <td className="px-3 py-2">{p.autorNome ?? '—'}</td>
-                      <td className="px-3 py-2">{cidade}</td>
-                      <td className="px-3 py-2">
-                        <span className="rounded-full bg-blue-100 px-2 py-0.5 text-xs font-medium text-blue-700">
-                          {statusLabel}
-                        </span>
-                      </td>
-                      <td className="px-3 py-2 text-muted-foreground">
-                        {p.dataAgendamento ? new Date(p.dataAgendamento).toLocaleDateString('pt-BR') : '—'}
-                      </td>
-                    </tr>
-                  );
-                })}
-              </tbody>
-            </table>
+                  </header>
+
+                  <div className="space-y-2">
+                    {group.map((p) => {
+                      const isChecked = selected.has(p.id);
+                      const statusLabel = typeof p.status === 'string' ? p.status : (p.status as { nome?: string })?.nome ?? '—';
+
+                      return (
+                        <article
+                          key={p.id}
+                          className={`cursor-pointer rounded-md border px-3 py-2 transition-colors ${isChecked ? 'border-blue-200 bg-blue-50' : 'hover:bg-slate-50'}`}
+                          onClick={() => toggleOne(p.id)}
+                        >
+                          <div className="mb-1 flex items-center justify-between gap-2">
+                            <div className="inline-flex items-center gap-2">
+                              {isChecked ? (
+                                <CheckSquare className="h-4 w-4 text-blue-600" />
+                              ) : (
+                                <Square className="h-4 w-4 text-slate-400" />
+                              )}
+                              <span className="font-mono text-xs">{p.processoCNJ}</span>
+                            </div>
+                            <span className="rounded-full bg-blue-100 px-2 py-0.5 text-xs font-medium text-blue-700">
+                              {statusLabel}
+                            </span>
+                          </div>
+                          <div className="grid gap-1 text-xs text-muted-foreground md:grid-cols-2">
+                            <p>
+                              <span className="font-medium text-slate-700">Autor:</span> {p.autorNome ?? '—'}
+                            </p>
+                            <p>
+                              <span className="font-medium text-slate-700">Agendamento atual:</span>{' '}
+                              {p.dataAgendamento ? new Date(p.dataAgendamento).toLocaleDateString('pt-BR') : '—'}
+                            </p>
+                          </div>
+                        </article>
+                      );
+                    })}
+                  </div>
+                </section>
+              );
+            })}
           </div>
         </Card>
       )}
