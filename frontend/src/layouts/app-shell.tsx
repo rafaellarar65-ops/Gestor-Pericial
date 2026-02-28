@@ -1,6 +1,6 @@
 import { useState } from 'react';
 import { Link, Outlet, useLocation, useNavigate } from 'react-router-dom';
-import { Bell, ChevronDown, ChevronLeft, ChevronRight, LayoutDashboard, CalendarClock, ClipboardList, MapPin, Scale, Calendar, Video, MessageSquareWarning, BookOpen, FileEdit, Dumbbell, Wallet, Upload, BarChart3, LogOut } from 'lucide-react';
+import { Bell, ChevronDown, ChevronLeft, ChevronRight, LayoutDashboard, CalendarClock, ClipboardList, MapPin, Scale, Calendar, Video, MessageSquareWarning, BookOpen, FileEdit, Dumbbell, Wallet, Upload, BarChart3, Settings, LogOut } from 'lucide-react';
 import { CommandPalette } from '@/components/domain/command-palette';
 import { sidebarSections } from '@/config/sidebar-config';
 import { useAuthStore } from '@/stores/auth-store';
@@ -23,6 +23,7 @@ const ICON_MAP: Record<string, React.ComponentType<{ size?: number; className?: 
   'Central de Cobrança': Wallet,
   Importações: Upload,
   'Análise Financeira': BarChart3,
+  Configurações: Settings,
 };
 
 const TODAY = new Intl.DateTimeFormat('pt-BR', {

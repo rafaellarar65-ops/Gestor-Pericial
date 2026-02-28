@@ -1,7 +1,7 @@
 import { ApiProperty, ApiPropertyOptional } from '@nestjs/swagger';
 import { PericiaPaymentStatus } from '@prisma/client';
 import { Type } from 'class-transformer';
-import { IsArray, IsBoolean, IsDateString, IsEnum, IsInt, IsNotEmpty, IsNumber, IsOptional, IsString, IsUUID, Max, Min, ValidateNested } from 'class-validator';
+import { IsArray, IsBoolean, IsDateString, IsEnum, IsIn, IsInt, IsNotEmpty, IsNumber, IsOptional, IsString, IsUUID, Max, Min, ValidateNested } from 'class-validator';
 
 export class CreatePericiasDto {
   @ApiProperty()
@@ -23,6 +23,11 @@ export class CreatePericiasDto {
   @IsOptional()
   @IsUUID()
   tipoPericiaId?: string;
+
+  @ApiPropertyOptional({ description: 'Código da modalidade (ex.: telepericia)' })
+  @IsOptional()
+  @IsString()
+  modalidadeCodigo?: string;
 
   @ApiPropertyOptional()
   @IsOptional()
@@ -59,7 +64,6 @@ export class CreatePericiasDto {
   @IsDateString()
   dataNomeacao?: string;
 
-
   @ApiPropertyOptional()
   @IsOptional()
   @IsString()
@@ -86,7 +90,6 @@ export class CreatePericiasDto {
   @Type(() => Number)
   @IsNumber()
   honorariosPrevistosPartes?: number;
-
 }
 
 export class UpdatePericiasDto {
@@ -115,7 +118,6 @@ export class UpdatePericiasDto {
   @IsDateString()
   dataNomeacao?: string;
 
-
   @ApiPropertyOptional()
   @IsOptional()
   @IsString()
@@ -143,7 +145,6 @@ export class UpdatePericiasDto {
   @IsNumber()
   honorariosPrevistosPartes?: number;
 
-
   @ApiPropertyOptional()
   @IsOptional()
   @IsDateString()
@@ -166,6 +167,11 @@ export class ListPericiasDto {
   @IsUUID()
   statusId?: string;
 
+  @ApiPropertyOptional({ description: 'Filtra por código de status (ex.: ENVIAR_LAUDO)' })
+  @IsOptional()
+  @IsString()
+  statusCodigo?: string;
+
   @ApiPropertyOptional()
   @IsOptional()
   @IsUUID()
@@ -175,6 +181,11 @@ export class ListPericiasDto {
   @IsOptional()
   @IsUUID()
   tipoPericiaId?: string;
+
+  @ApiPropertyOptional({ description: 'Código da modalidade (ex.: telepericia)' })
+  @IsOptional()
+  @IsString()
+  modalidadeCodigo?: string;
 
   @ApiPropertyOptional()
   @IsOptional()
@@ -191,6 +202,23 @@ export class ListPericiasDto {
   @IsString()
   search?: string;
 
+  @ApiPropertyOptional({ default: 1 })
+  @Type(() => Number)
+  @IsOptional()
+  @IsInt()
+  @Min(1)
+  page = 1;
+
+  @ApiPropertyOptional({ default: 20 })
+  @Type(() => Number)
+  @IsOptional()
+  @IsInt()
+  @Min(1)
+  @Max(100)
+  limit = 20;
+}
+
+export class ListNomeacoesDto {
   @ApiPropertyOptional({ default: 1 })
   @Type(() => Number)
   @IsOptional()
@@ -232,6 +260,78 @@ export class ChangeStatusPericiaDto {
   @IsOptional()
   @IsString()
   motivo?: string;
+
+  @ApiPropertyOptional()
+  @IsOptional()
+  @IsDateString()
+  dataAgendamento?: string;
+
+  @ApiPropertyOptional()
+  @IsOptional()
+  @IsString()
+  horaAgendamento?: string;
+
+  @ApiPropertyOptional()
+  @IsOptional()
+  @IsDateString()
+  dataRealizacao?: string;
+
+  @ApiPropertyOptional()
+  @IsOptional()
+  @IsDateString()
+  dataEnvioLaudo?: string;
+}
+
+export class SetUrgenciaPericiaDto {
+  @ApiProperty()
+  @IsUUID()
+  periciaId!: string;
+
+  @ApiProperty()
+  @IsBoolean()
+  isUrgent!: boolean;
+}
+
+
+
+export class ToggleUrgentPericiaDto {
+  @ApiProperty()
+  @IsBoolean()
+  isUrgent!: boolean;
+}
+
+export class TelepericiaQueueQueryDto {
+  @ApiPropertyOptional({ default: 1 })
+  @Type(() => Number)
+  @IsOptional()
+  @IsInt()
+  @Min(1)
+  page = 1;
+
+  @ApiPropertyOptional({ default: 50 })
+  @Type(() => Number)
+  @IsOptional()
+  @IsInt()
+  @Min(1)
+  @Max(200)
+  limit = 50;
+
+  @ApiPropertyOptional({ enum: ['PENDENTE', 'ENVIADA', 'ENTREGUE', 'RESPONDIDA', 'ERRO'] })
+  @IsOptional()
+  @IsIn(['PENDENTE', 'ENVIADA', 'ENTREGUE', 'RESPONDIDA', 'ERRO'])
+  whatsappStatus?: 'PENDENTE' | 'ENVIADA' | 'ENTREGUE' | 'RESPONDIDA' | 'ERRO';
+
+  @ApiPropertyOptional()
+  @IsOptional()
+  @IsString()
+  search?: string;
+}
+
+export class RegisterTelepericiaAttemptDto {
+  @ApiPropertyOptional()
+  @IsOptional()
+  @IsString()
+  whatsappStatus?: string;
 }
 
 export class ImportPericiasDto {

@@ -24,6 +24,7 @@ import { AiModule } from './modules/ai/ai.module';
 import { TelepericiaModule } from './modules/telepericia/telepericia.module';
 import { NotificationsModule } from './modules/notifications/notifications.module';
 import { DocumentsModule } from './modules/documents/documents.module';
+import { AnalyticsCalendarModule } from './modules/analytics-calendar/analytics-calendar.module';
 import { HealthController } from './health.controller';
 
 @Module({
@@ -60,6 +61,7 @@ import { HealthController } from './health.controller';
     TelepericiaModule,
     NotificationsModule,
     DocumentsModule,
+    AnalyticsCalendarModule,
   ],
   providers: [
     { provide: APP_GUARD, useClass: ThrottlerGuard },

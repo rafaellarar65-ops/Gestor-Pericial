@@ -1,17 +1,16 @@
-import { useMemo, useState } from 'react';
-import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
+import { useEffect, useMemo, useState } from 'react';
+import { useQuery } from '@tanstack/react-query';
+import { CalendarClock, List, MapPin, Plus, Trash2 } from 'lucide-react';
 import { toast } from 'sonner';
 import { Card } from '@/components/ui/card';
+import { Input } from '@/components/ui/input';
 import { EmptyState, ErrorState, LoadingState } from '@/components/ui/state';
-import { useScheduleLot, type ScheduleParams, type PrepItem } from '@/hooks/use-schedule-lot';
-import { StepConfirm } from '@/pages/fila-agendamento/step-confirm';
-import { StepReview } from '@/pages/fila-agendamento/step-review';
-import { StepSchedule } from '@/pages/fila-agendamento/step-schedule';
-import { StepSelect } from '@/pages/fila-agendamento/step-select';
-import { agendaService } from '@/services/agenda-service';
 import { periciaService } from '@/services/pericia-service';
-import { configService } from '@/services/config-service';
-import type { Pericia } from '@/types/api';
+import type { StageListItem } from '@/types/api';
+
+type Tab = 'fila' | 'preparacao';
+
+const PREP_KEY = 'agendamento.preparacao';
 
 const toCityName = (cidade: Pericia['cidade']) =>
   typeof cidade === 'string' ? cidade : (cidade as { nome?: string })?.nome ?? 'Sem cidade';
@@ -29,143 +28,160 @@ const isPendingScheduling = (p: Pericia, blockedStatusTerms: string[]) => {
 };
 
 const FilaAgendamentoPage = () => {
-  const queryClient = useQueryClient();
-  const [step, setStep] = useState(1);
-  const [search, setSearch] = useState('');
+  const [activeTab, setActiveTab] = useState<Tab>('fila');
   const [selectedCities, setSelectedCities] = useState<Set<string>>(new Set());
-  const [prepList, setPrepList] = useState<PrepItem[]>([]);
-  const [params, setParams] = useState<ScheduleParams>({
-    date: '',
-    startTime: '08:00',
-    durationMinutes: 30,
-    intervalMinutes: 0,
-    location: '',
-    modalidade: 'Presencial',
-    source: 'CSV',
-  });
+  const [search, setSearch] = useState('');
+  const [prepList, setPrepList] = useState<StageListItem[]>([]);
 
   const { data, isLoading, isError } = useQuery({
-    queryKey: ['pericias-agendar'],
-    queryFn: () => periciaService.list(1, { limit: 100, search: '' }),
+    queryKey: ['fila-agendamento-cidades'],
+    queryFn: () => periciaService.filaAgendamentoPorCidade(),
   });
 
-  const { data: history = [] } = useQuery({
-    queryKey: ['scheduling-batches-history'],
-    queryFn: () => agendaService.listSchedulingBatches(),
-  });
+  useEffect(() => {
+    const prepRaw = localStorage.getItem(PREP_KEY);
+    if (prepRaw) setPrepList(JSON.parse(prepRaw) as StageListItem[]);
+  }, []);
 
-  const { data: dashboardSettings } = useQuery({
-    queryKey: ['system-dashboard-settings'],
-    queryFn: () => configService.getDashboardSettings(),
-  });
-
-  const pendingPericias = useMemo(() => {
-    const items = (data?.items ?? []) as Pericia[];
-    const blockedTerms = dashboardSettings?.filas.agendamentoBloqueiaTermosStatus ?? ['FINALIZ', 'LAUDO', 'ESCLAR', 'ARQUIV'];
-    return items.filter((p) => isPendingScheduling(p, blockedTerms));
-  }, [data, dashboardSettings]);
+  useEffect(() => {
+    localStorage.setItem(PREP_KEY, JSON.stringify(prepList));
+  }, [prepList]);
 
   const cityGroups = useMemo(() => {
     const q = search.trim().toLowerCase();
-    const byCity = new Map<string, PrepItem[]>();
+    const groups = data?.cities ?? [];
+    if (!q) return groups;
 
-    pendingPericias.forEach((p) => {
-      const city = toCityName(p.cidade);
-      const row: PrepItem = { id: p.id, processoCNJ: p.processoCNJ, autorNome: p.autorNome, cidade: city };
-      if (!q || city.toLowerCase().includes(q) || (p.autorNome ?? '').toLowerCase().includes(q) || p.processoCNJ.toLowerCase().includes(q)) {
-        byCity.set(city, [...(byCity.get(city) ?? []), row]);
-      }
-    });
-
-    return Array.from(byCity.entries())
-      .map(([city, items]) => ({ city, items }))
-      .sort((a, b) => b.items.length - a.items.length);
-  }, [pendingPericias, search]);
+    return groups
+      .map((group) => ({
+        ...group,
+        items: group.items.filter(
+          (item) =>
+            item.processoCNJ.toLowerCase().includes(q) ||
+            item.autorNome.toLowerCase().includes(q) ||
+            group.cidade.toLowerCase().includes(q),
+        ),
+      }))
+      .filter((group) => group.items.length > 0)
+      .map((group) => ({ ...group, total: group.items.length }));
+  }, [data, search]);
 
   const selectedCityItems = useMemo(
-    () => cityGroups.filter((group) => selectedCities.has(group.city)).flatMap((group) => group.items),
+    () => cityGroups.filter((group) => selectedCities.has(group.cidade)).flatMap((group) => group.items),
     [cityGroups, selectedCities],
   );
-
-  const confirmedPericiaIds = useMemo(() => new Set(history.flatMap((lot) => lot.items.map((item) => item.periciaId))), [history]);
-
-  const { draftLot, conflicts, isValid } = useScheduleLot(prepList, params, confirmedPericiaIds);
-
-  const confirmLotMutation = useMutation({
-    mutationFn: async () => {
-      if (!draftLot) return;
-
-      await agendaService.scheduleLot({
-        items: draftLot.items.map((item) => ({ periciaId: item.periciaId, startAt: item.scheduledAt })),
-        metadata: {
-          cityNames: draftLot.cityNames,
-          date: draftLot.date,
-          startTime: draftLot.startTime,
-          durationMinutes: draftLot.durationMinutes,
-          intervalMinutes: draftLot.intervalMinutes,
-          location: draftLot.location,
-          modalidade: draftLot.modalidade,
-          source: draftLot.source,
-        },
-      });
-
-      await Promise.all(
-        draftLot.items.map((item) =>
-          periciaService.updateDates(item.periciaId, {
-            dataAgendamento: item.scheduledAt,
-          }),
-        ),
-      );
-    },
-    onSuccess: () => {
-      void queryClient.invalidateQueries({ queryKey: ['pericias-agendar'] });
-      void queryClient.invalidateQueries({ queryKey: ['pericias'] });
-      void queryClient.invalidateQueries({ queryKey: ['dashboard'] });
-      void queryClient.invalidateQueries({ queryKey: ['scheduling-batches-history'] });
-      setStep(1);
-      setSelectedCities(new Set());
-      setPrepList([]);
-      toast.success('Lote confirmado e persistido no backend.');
-    },
-    onError: () => {
-      toast.error('Não foi possível persistir o lote.');
-    },
-  });
 
   const toggleCity = (city: string) => {
     setSelectedCities((prev) => {
       const next = new Set(prev);
-      if (next.has(city)) next.delete(city);
-      else next.add(city);
+      next.has(city) ? next.delete(city) : next.add(city);
       return next;
     });
   };
 
-  const goToStep2 = () => {
-    if (selectedCityItems.length === 0) return;
-    setPrepList(selectedCityItems);
-    setStep(2);
+  const addToPreparation = () => {
+    if (selectedCityItems.length === 0) {
+      toast.error('Selecione ao menos uma cidade.');
+      return;
+    }
+
+    setPrepList((prev) => {
+      const merged = new Map(prev.map((item) => [item.id, item]));
+      selectedCityItems.forEach((item) => merged.set(item.id, item));
+      return Array.from(merged.values());
+    });
+
+    setSelectedCities(new Set());
+    setActiveTab('preparacao');
+    toast.success('Perícias adicionadas à lista de preparação.');
+  };
+
+  const removePrepItem = (id: string) => {
+    setPrepList((prev) => prev.filter((item) => item.id !== id));
   };
 
   if (isLoading) return <LoadingState />;
-  if (isError) return <ErrorState message="Erro ao carregar central de agendamento." />;
+  if (isError) return <ErrorState message="Falha ao carregar a fila por cidade" />;
 
   return (
     <div className="space-y-4">
-      <header className="rounded-xl border bg-white p-4 shadow-sm">
-        <h1 className="text-2xl font-semibold">Central de Agendamento (Wizard 4 etapas)</h1>
-        <p className="text-sm text-muted-foreground">Seleção, parâmetros, revisão e confirmação com persistência no backend.</p>
-      </header>
+      <div className="rounded-xl bg-yellow-500 px-6 py-5 text-white shadow">
+        <div className="flex items-center justify-between gap-3">
+          <div className="flex items-center gap-3">
+            <CalendarClock size={22} />
+            <div>
+              <p className="text-lg font-bold">FILA DE AGENDAMENTO POR CIDADE</p>
+              <p className="text-sm text-white/80">Segmentação entregue pelo backend (sem filtro duplicado no cliente).</p>
+            </div>
+          </div>
+          <span className="rounded-full bg-white/20 px-3 py-1 text-sm font-semibold">{data?.total ?? 0} pendentes</span>
+        </div>
+      </div>
 
-      {step === 1 && (
-        <StepSelect
-          cityGroups={cityGroups}
-          search={search}
-          onSearchChange={setSearch}
-          selectedCities={selectedCities}
-          onToggleCity={toggleCity}
-          onNext={goToStep2}
-        />
+      <div className="flex items-center gap-2">
+        <Button variant={activeTab === 'fila' ? 'default' : 'outline'} onClick={() => setActiveTab('fila')}><List className="mr-2" size={14} />Fila</Button>
+        <Button variant={activeTab === 'preparacao' ? 'default' : 'outline'} onClick={() => setActiveTab('preparacao')}>
+          <Plus className="mr-2" size={14} />Preparação ({prepList.length})
+        </Button>
+      </div>
+
+      {activeTab === 'fila' ? (
+        <>
+          <Card className="p-4">
+            <Input placeholder="Buscar por processo, autor ou cidade" value={search} onChange={(e) => setSearch(e.target.value)} />
+          </Card>
+
+          <div className="space-y-3">
+            {cityGroups.length === 0 ? (
+              <EmptyState title="Sem perícias na fila" />
+            ) : (
+              cityGroups.map((group) => (
+                <Card className="p-4" key={group.cidade}>
+                  <div className="mb-3 flex items-center justify-between">
+                    <button className="flex items-center gap-2 text-left" onClick={() => toggleCity(group.cidade)}>
+                      <input type="checkbox" checked={selectedCities.has(group.cidade)} readOnly />
+                      <MapPin size={14} />
+                      <span className="font-semibold">{group.cidade}</span>
+                    </button>
+                    <span className="rounded-full bg-yellow-100 px-2 py-1 text-xs font-semibold text-yellow-800">{group.total}</span>
+                  </div>
+                  <ul className="space-y-2">
+                    {group.items.slice(0, 6).map((item) => (
+                      <li className="rounded border px-3 py-2 text-sm" key={item.id}>
+                        <p className="font-mono text-xs text-gray-500">{item.processoCNJ}</p>
+                        <p>{item.autorNome || '—'}</p>
+                      </li>
+                    ))}
+                  </ul>
+                </Card>
+              ))
+            )}
+          </div>
+
+          <div className="flex justify-end">
+            <Button onClick={addToPreparation}>Adicionar cidades selecionadas</Button>
+          </div>
+        </>
+      ) : (
+        <Card className="p-4">
+          {prepList.length === 0 ? (
+            <EmptyState title="Lista de preparação vazia" />
+          ) : (
+            <ul className="space-y-2">
+              {prepList.map((item) => (
+                <li className="flex items-center justify-between rounded border px-3 py-2" key={item.id}>
+                  <div>
+                    <p className="font-mono text-xs text-gray-500">{item.processoCNJ}</p>
+                    <p className="text-sm">{item.autorNome || '—'} · {item.cidade}</p>
+                  </div>
+                  <Button variant="ghost" size="sm" onClick={() => removePrepItem(item.id)}>
+                    <Trash2 size={14} />
+                  </Button>
+                </li>
+              ))}
+            </ul>
+          )}
+        </Card>
       )}
 
       {step === 2 && (

@@ -9,11 +9,24 @@ import type {
   PericiaDetail,
   PericiaTimelineResponse,
   Recebimento,
+  NomeacoesResponse,
+  FilaAgendamentoCityResponse,
 } from '@/types/api';
 
 export const periciaService = {
   dashboard: async (): Promise<DashboardResponse> => {
     const { data } = await apiClient.get<DashboardResponse>('/pericias/dashboard');
+    return data;
+  },
+
+
+  nomeacoes: async (): Promise<NomeacoesResponse> => {
+    const { data } = await apiClient.get<NomeacoesResponse>('/nomeacoes');
+    return data;
+  },
+
+  filaAgendamentoPorCidade: async (): Promise<FilaAgendamentoCityResponse> => {
+    const { data } = await apiClient.get<FilaAgendamentoCityResponse>('/fila-agendamento-cidades');
     return data;
   },
 
@@ -23,6 +36,13 @@ export const periciaService = {
         page,
         limit: filters?.limit ?? 25,
         ...(filters?.search ? { search: filters.search } : {}),
+        ...(filters?.statusId ? { statusId: filters.statusId } : {}),
+        ...(filters?.cidadeId ? { cidadeId: filters.cidadeId } : {}),
+        ...(filters?.dateFrom ? { dateFrom: filters.dateFrom } : {}),
+        ...(filters?.dateTo ? { dateTo: filters.dateTo } : {}),
+        ...(filters?.varaId ? { varaId: filters.varaId } : {}),
+        ...(filters?.valorMin !== undefined ? { valorMin: filters.valorMin } : {}),
+        ...(filters?.valorMax !== undefined ? { valorMax: filters.valorMax } : {}),
       },
     });
 
@@ -84,6 +104,24 @@ export const periciaService = {
     },
   ): Promise<PericiaDetail> => {
     const { data } = await apiClient.patch<PericiaDetail>(`/pericias/${id}`, payload);
+    return data;
+  },
+
+
+  telepericiaQueue: async (): Promise<TelepericiaQueueResponse> => {
+    const { data } = await apiClient.get<TelepericiaQueueResponse>('/pericias/telepericia/queue');
+    return data;
+  },
+
+  updateUrgent: async (id: string, isUrgent: boolean): Promise<PericiaDetail> => {
+    const { data } = await apiClient.patch<PericiaDetail>(`/pericias/${id}/urgent`, { isUrgent });
+    return data;
+  },
+
+  registerTelepericiaAttempt: async (id: string, whatsappStatus?: string): Promise<PericiaDetail> => {
+    const { data } = await apiClient.patch<PericiaDetail>(`/pericias/${id}/telepericia-attempt`, {
+      ...(whatsappStatus ? { whatsappStatus } : {}),
+    });
     return data;
   },
 

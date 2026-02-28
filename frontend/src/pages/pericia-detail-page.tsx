@@ -152,6 +152,9 @@ const PericiaDetailPage = () => {
             >
               Editar Datas
             </button>
+            <Link className="rounded-md border px-3 py-2 text-sm" to={`/laudo-inteligente/${id}`}>
+              Laudo Inteligente
+            </Link>
             <Link className="rounded-md border px-3 py-2 text-sm" to="/laudo-v2">
               CNJ
             </Link>

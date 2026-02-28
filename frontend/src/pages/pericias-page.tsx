@@ -1,23 +1,13 @@
 import { useMemo, useState } from 'react';
-import { Link, useNavigate, useSearchParams } from 'react-router-dom';
+import { Link, useNavigate } from 'react-router-dom';
+import { useQuery } from '@tanstack/react-query';
 import { Bot, Filter, Plus, RotateCw, Upload } from 'lucide-react';
-import { EmptyState, ErrorState, LoadingState } from '@/components/ui/state';
+import { ErrorState, LoadingState } from '@/components/ui/state';
 import { usePericiasQuery } from '@/hooks/use-pericias';
+import { configService } from '@/services/config-service';
+import type { ConfigItem } from '@/types/api';
 
-type StatusFilter = 'todos' | 'avaliar' | 'agendada' | 'laudo enviado' | 'finalizada';
-
-const statusFromQuery = (value: string | null): StatusFilter => {
-  if (!value) return 'todos';
-  const normalized = value.toLowerCase();
-  if (normalized.includes('avaliar') || normalized.includes('st_avaliar')) return 'avaliar';
-  if (normalized.includes('agendada') || normalized.includes('agendar')) return 'agendada';
-  if (normalized.includes('laudo')) return 'laudo enviado';
-  if (normalized.includes('finalizada')) return 'finalizada';
-  return 'todos';
-};
-
-const toMoney = (value?: number | string) =>
-  Number(value ?? 0).toLocaleString('pt-BR', { style: 'currency', currency: 'BRL' });
+const toMoney = (value?: number | string) => Number(value ?? 0).toLocaleString('pt-BR', { style: 'currency', currency: 'BRL' });
 
 const statusLabel = (status: unknown) => {
   if (typeof status === 'string') return status;
@@ -37,92 +27,131 @@ const cityLabel = (cidade: unknown) => {
   return '—';
 };
 
-const authorLabel = (item: Record<string, unknown>) =>
-  String(item.autorNome ?? item.periciadoNome ?? 'Sem autor');
+const authorLabel = (item: Record<string, unknown>) => String(item.autorNome ?? item.periciadoNome ?? 'Sem autor');
+
+const parseCurrency = (value: string): number | undefined => {
+  if (!value.trim()) return undefined;
+  const normalized = Number(value.replace(',', '.'));
+  return Number.isFinite(normalized) ? normalized : undefined;
+};
 
 export const PericiasPage = () => {
   const navigate = useNavigate();
-  const [searchParams, setSearchParams] = useSearchParams();
   const [page] = useState(1);
 
-  const initialSearch = searchParams.get('q') ?? '';
-  const [search, setSearch] = useState(initialSearch);
-  const [statusFilter, setStatusFilter] = useState<StatusFilter>(statusFromQuery(searchParams.get('status')));
-  const [cityFilter, setCityFilter] = useState(searchParams.get('cidade') ?? 'todas');
+  const [search, setSearch] = useState('');
+  const [statusId, setStatusId] = useState('all');
+  const [cidadeId, setCidadeId] = useState('all');
+  const [varaId, setVaraId] = useState('all');
+  const [valorMin, setValorMin] = useState('');
+  const [valorMax, setValorMax] = useState('');
+  const [dataNomeacaoInicio, setDataNomeacaoInicio] = useState('');
+  const [dataNomeacaoFim, setDataNomeacaoFim] = useState('');
 
-  const { data, isLoading, isError } = usePericiasQuery(page, {
+  const {
+    data,
+    isLoading,
+    isError,
+    isFetching,
+    refetch,
+  } = usePericiasQuery(page, {
     limit: 100,
     search: search.trim().length >= 3 ? search : undefined,
   });
 
+  const hasActiveFilters = Boolean(search.trim()) || statusFilter !== 'todos' || cityFilter !== 'todas';
+
+  const handleRefresh = () => {
+    if (hasActiveFilters) {
+      setSearch('');
+      setStatusFilter('todos');
+      setCityFilter('todas');
+      setSearchParams(new URLSearchParams(), { replace: true });
+      return;
+    }
+
+    void refetch();
+  };
+
   const rows = useMemo(() => {
     const source = (data?.items ?? []) as Array<Record<string, unknown>>;
 
-    return source.filter((item) => {
-      const cnj = String(item.processoCNJ ?? '').toLowerCase();
-      const autor = authorLabel(item).toLowerCase();
-      const cidade = cityLabel(item.cidade).toLowerCase();
-      const status = statusLabel(item.status).toLowerCase();
+  const parsedMin = parseCurrency(valorMin);
+  const parsedMax = parseCurrency(valorMax);
 
-      const textMatch = !search.trim() || `${cnj} ${autor} ${cidade}`.includes(search.toLowerCase());
-      const statusMatch = statusFilter === 'todos' || status.includes(statusFilter);
-      const cityMatch = cityFilter === 'todas' || cidade === cityFilter.toLowerCase();
+  const { data, isLoading, isError } = usePericiasQuery(
+    page,
+    {
+      limit: 100,
+      search: search.trim().length >= 3 ? search.trim() : undefined,
+      statusId: statusId !== 'all' ? statusId : undefined,
+      cidadeId: cidadeId !== 'all' ? cidadeId : undefined,
+      varaId: varaId !== 'all' ? varaId : undefined,
+      valorMin: parsedMin,
+      valorMax: parsedMax,
+      dateFrom: dataNomeacaoInicio || undefined,
+      dateTo: dataNomeacaoFim || undefined,
+    },
+    hasActiveSearch,
+  );
 
-      return textMatch && statusMatch && cityMatch;
-    });
-  }, [data?.items, search, statusFilter, cityFilter]);
+  const cidades = useMemo(
+    () =>
+      [...(cidadesQuery.data ?? [])].sort((a, b) =>
+        a.nome.localeCompare(b.nome, 'pt-BR', { sensitivity: 'base' }),
+      ),
+    [cidadesQuery.data],
+  );
 
-  const cities = useMemo(() => {
-    const unique = new Set(
-      ((data?.items ?? []) as Array<Record<string, unknown>>)
-        .map((item) => cityLabel(item.cidade))
-        .filter(Boolean),
-    );
+  const varas = useMemo(
+    () => [...(varasQuery.data ?? [])].sort((a, b) => a.nome.localeCompare(b.nome, 'pt-BR', { sensitivity: 'base' })),
+    [varasQuery.data],
+  );
 
-    return ['todas', ...Array.from(unique)];
-  }, [data?.items]);
+  const statuses = useMemo(
+    () => [...(statusQuery.data ?? [])].sort((a, b) => a.nome.localeCompare(b.nome, 'pt-BR', { sensitivity: 'base' })),
+    [statusQuery.data],
+  );
 
-  const syncQueryString = (next: { q?: string; status?: string; cidade?: string }) => {
-    const params = new URLSearchParams(searchParams);
+  const rows = useMemo(() => (hasActiveSearch ? ((data?.items ?? []) as Array<Record<string, unknown>>) : []), [data?.items, hasActiveSearch]);
 
-    if (next.q !== undefined) {
-      if (next.q) params.set('q', next.q);
-      else params.delete('q');
-    }
-
-    if (next.status !== undefined) {
-      if (next.status !== 'todos') params.set('status', next.status);
-      else params.delete('status');
-    }
-
-    if (next.cidade !== undefined) {
-      if (next.cidade !== 'todas') params.set('cidade', next.cidade);
-      else params.delete('cidade');
-    }
-
-    setSearchParams(params, { replace: true });
+  const clearFilters = () => {
+    setSearch('');
+    setStatusId('all');
+    setCidadeId('all');
+    setVaraId('all');
+    setValorMin('');
+    setValorMax('');
+    setDataNomeacaoInicio('');
+    setDataNomeacaoFim('');
   };
 
-  if (isLoading) return <LoadingState />;
-  if (isError) return <ErrorState message="Erro ao carregar perícias" />;
-  if (!data) return <EmptyState title="Sem perícias encontradas" />;
+  if (cidadesQuery.isError || varasQuery.isError || statusQuery.isError) return <ErrorState message="Erro ao carregar filtros" />;
 
   return (
     <div className="space-y-4">
       <div className="flex flex-wrap items-center justify-between gap-3">
         <h1 className="text-3xl font-semibold text-slate-800">
-          Listagem de Perícias{' '}
-          <span className="rounded-full bg-slate-100 px-3 py-1 text-base text-slate-600">{rows.length}</span>
+          Listagem de Perícias <span className="rounded-full bg-slate-100 px-3 py-1 text-base text-slate-600">{rows.length}</span>
         </h1>
 
         <div className="flex flex-wrap gap-2">
-          <button className="inline-flex items-center gap-2 rounded-md border px-3 py-2 text-sm font-semibold" type="button">
-            <RotateCw size={14} />
+          <button
+            className="inline-flex items-center gap-2 rounded-md border px-3 py-2 text-sm font-semibold disabled:cursor-not-allowed disabled:opacity-70"
+            disabled={isFetching}
+            onClick={handleRefresh}
+            type="button"
+          >
+            <RotateCw className={isFetching ? 'animate-spin' : ''} size={14} />
           </button>
           <button className="inline-flex items-center gap-2 rounded-md border px-3 py-2 text-sm font-semibold text-purple-700" type="button">
             <Bot size={14} /> IA
           </button>
-          <button className="inline-flex items-center gap-2 rounded-md border px-3 py-2 text-sm font-semibold" type="button">
+          <button
+            className="inline-flex items-center gap-2 rounded-md border px-3 py-2 text-sm font-semibold"
+            onClick={() => navigate('/importacoes')}
+            type="button"
+          >
             <Upload size={14} /> Importar
           </button>
           <button
@@ -140,12 +169,11 @@ export const PericiasPage = () => {
           <Filter size={15} /> Filtros e Busca
         </p>
 
-        <div className="grid gap-3 md:grid-cols-2 xl:grid-cols-4">
-          <label className="text-xs font-semibold uppercase text-slate-500">
+        <div className="grid gap-3 md:grid-cols-2 xl:grid-cols-6">
+          <label className="text-xs font-semibold uppercase text-slate-500 xl:col-span-2">
             Busca (CNJ, autor, réu)
             <input
               className="mt-1 w-full rounded-md border px-3 py-2 text-sm"
-              onBlur={() => syncQueryString({ q: search })}
               onChange={(event) => setSearch(event.target.value)}
               placeholder="Digite ao menos 3 caracteres..."
               value={search}
@@ -154,53 +182,86 @@ export const PericiasPage = () => {
 
           <label className="text-xs font-semibold uppercase text-slate-500">
             Status
-            <select
-              className="mt-1 w-full rounded-md border px-3 py-2 text-sm"
-              onChange={(event) => {
-                const next = event.target.value as StatusFilter;
-                setStatusFilter(next);
-                syncQueryString({ status: next });
-              }}
-              value={statusFilter}
-            >
-              <option value="todos">Todos</option>
-              <option value="avaliar">Avaliar</option>
-              <option value="agendada">Agendada</option>
-              <option value="laudo enviado">Laudo Enviado</option>
-              <option value="finalizada">Finalizada</option>
-            </select>
-          </label>
-
-          <label className="text-xs font-semibold uppercase text-slate-500">
-            Cidade
-            <select
-              className="mt-1 w-full rounded-md border px-3 py-2 text-sm"
-              onChange={(event) => {
-                const next = event.target.value;
-                setCityFilter(next);
-                syncQueryString({ cidade: next });
-              }}
-              value={cityFilter}
-            >
-              {cities.map((city) => (
-                <option key={city} value={city}>
-                  {city === 'todas' ? 'Todas' : city}
+            <select className="mt-1 w-full rounded-md border px-3 py-2 text-sm" onChange={(event) => setStatusId(event.target.value)} value={statusId}>
+              <option value="all">Todos</option>
+              {statuses.map((status: ConfigItem) => (
+                <option key={status.id} value={status.id}>
+                  {status.nome}
                 </option>
               ))}
             </select>
           </label>
 
+          <label className="text-xs font-semibold uppercase text-slate-500">
+            Cidade
+            <select className="mt-1 w-full rounded-md border px-3 py-2 text-sm" onChange={(event) => setCidadeId(event.target.value)} value={cidadeId}>
+              <option value="all">Todas</option>
+              {cidades.map((city: ConfigItem) => (
+                <option key={city.id} value={city.id}>
+                  {city.nome}
+                </option>
+              ))}
+            </select>
+          </label>
+
+          <label className="text-xs font-semibold uppercase text-slate-500">
+            Vara
+            <select className="mt-1 w-full rounded-md border px-3 py-2 text-sm" onChange={(event) => setVaraId(event.target.value)} value={varaId}>
+              <option value="all">Todas</option>
+              {varas.map((vara: ConfigItem) => (
+                <option key={vara.id} value={vara.id}>
+                  {vara.nome}
+                </option>
+              ))}
+            </select>
+          </label>
+
+          <label className="text-xs font-semibold uppercase text-slate-500">
+            Valor mín
+            <input
+              className="mt-1 w-full rounded-md border px-3 py-2 text-sm"
+              inputMode="decimal"
+              onChange={(event) => setValorMin(event.target.value)}
+              placeholder="R$"
+              value={valorMin}
+            />
+          </label>
+
+          <label className="text-xs font-semibold uppercase text-slate-500">
+            Valor máx
+            <input
+              className="mt-1 w-full rounded-md border px-3 py-2 text-sm"
+              inputMode="decimal"
+              onChange={(event) => setValorMax(event.target.value)}
+              placeholder="R$"
+              value={valorMax}
+            />
+          </label>
+
+          <label className="text-xs font-semibold uppercase text-slate-500">
+            Nomeação de
+            <input
+              className="mt-1 w-full rounded-md border px-3 py-2 text-sm"
+              onChange={(event) => setDataNomeacaoInicio(event.target.value)}
+              placeholder="dd/mm/aaaa"
+              type="date"
+              value={dataNomeacaoInicio}
+            />
+          </label>
+
+          <label className="text-xs font-semibold uppercase text-slate-500">
+            Até
+            <input
+              className="mt-1 w-full rounded-md border px-3 py-2 text-sm"
+              onChange={(event) => setDataNomeacaoFim(event.target.value)}
+              placeholder="dd/mm/aaaa"
+              type="date"
+              value={dataNomeacaoFim}
+            />
+          </label>
+
           <div className="flex items-end">
-            <button
-              className="w-full rounded-md border px-3 py-2 text-sm font-semibold"
-              onClick={() => {
-                setSearch('');
-                setStatusFilter('todos');
-                setCityFilter('todas');
-                setSearchParams(new URLSearchParams(), { replace: true });
-              }}
-              type="button"
-            >
+            <button className="w-full rounded-md border px-3 py-2 text-sm font-semibold" onClick={clearFilters} type="button">
               Limpar Filtros
             </button>
           </div>
@@ -216,32 +277,48 @@ export const PericiasPage = () => {
           <span className="text-right">Valor</span>
         </div>
 
-        {rows.length === 0 && <EmptyState title="Use os filtros acima para encontrar processos" />}
+        {!hasActiveSearch && (
+          <div className="flex min-h-[280px] items-center justify-center px-4 py-10 text-center text-slate-500">
+            Use os filtros acima ou a busca para encontrar processos.
+          </div>
+        )}
 
-        {rows.map((row) => {
-          const rowData = row as Record<string, unknown>;
-          const status = statusLabel(rowData.status);
+        {hasActiveSearch && isLoading && <LoadingState />}
+        {hasActiveSearch && isError && <ErrorState message="Erro ao carregar perícias" />}
 
-          return (
-            <div className="grid grid-cols-[2fr_2fr_1fr_1fr_1fr] gap-2 border-b px-4 py-3 text-sm" key={String(rowData.id)}>
-              <div>
-                <Link className="font-semibold text-slate-800 underline" to={`/pericias/${rowData.id}`}>
-                  {String(rowData.processoCNJ ?? '—')}
-                </Link>
-                <p className="text-xs text-slate-500">{rowData.dataNomeacao ? new Date(String(rowData.dataNomeacao)).toLocaleDateString('pt-BR') : '—'}</p>
+        {hasActiveSearch && !isLoading && !isError && rows.length === 0 && (
+          <div className="flex min-h-[280px] items-center justify-center px-4 py-10 text-center text-slate-500">
+            Use os filtros acima ou a busca para encontrar processos.
+          </div>
+        )}
+
+        {hasActiveSearch &&
+          !isLoading &&
+          !isError &&
+          rows.map((row) => {
+            const rowData = row as Record<string, unknown>;
+            const status = statusLabel(rowData.status);
+
+            return (
+              <div className="grid grid-cols-[2fr_2fr_1fr_1fr_1fr] gap-2 border-b px-4 py-3 text-sm" key={String(rowData.id)}>
+                <div>
+                  <Link className="font-semibold text-slate-800 underline" to={`/pericias/${rowData.id}`}>
+                    {String(rowData.processoCNJ ?? '—')}
+                  </Link>
+                  <p className="text-xs text-slate-500">{rowData.dataNomeacao ? new Date(String(rowData.dataNomeacao)).toLocaleDateString('pt-BR') : '—'}</p>
+                </div>
+                <div>
+                  <p className="font-semibold text-slate-800">{authorLabel(rowData)}</p>
+                  <p className="truncate text-xs text-slate-500">{String(rowData.reuNome ?? '—')}</p>
+                </div>
+                <div className="text-slate-700">{cityLabel(rowData.cidade)}</div>
+                <div>
+                  <span className="rounded-full bg-slate-100 px-2 py-1 text-xs font-semibold text-slate-700">{status}</span>
+                </div>
+                <div className="text-right font-semibold text-slate-700">{toMoney(rowData.honorariosPrevistosJG as number | string)}</div>
               </div>
-              <div>
-                <p className="font-semibold text-slate-800">{authorLabel(rowData)}</p>
-                <p className="truncate text-xs text-slate-500">{String(rowData.reuNome ?? '—')}</p>
-              </div>
-              <div className="text-slate-700">{cityLabel(rowData.cidade)}</div>
-              <div>
-                <span className="rounded-full bg-slate-100 px-2 py-1 text-xs font-semibold text-slate-700">{status}</span>
-              </div>
-              <div className="text-right font-semibold text-slate-700">{toMoney(rowData.honorariosPrevistosJG as number | string)}</div>
-            </div>
-          );
-        })}
+            );
+          })}
       </section>
     </div>
   );

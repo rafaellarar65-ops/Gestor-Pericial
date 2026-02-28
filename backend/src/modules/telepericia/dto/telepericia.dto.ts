@@ -1,41 +1,81 @@
 import { ApiProperty, ApiPropertyOptional } from '@nestjs/swagger';
-import { TeleSlotStatus } from '@prisma/client';
+import { TelepericiaSlotType } from '@prisma/client';
 import { Type } from 'class-transformer';
-import { IsDateString, IsEnum, IsInt, IsOptional, IsString, IsUUID, Min } from 'class-validator';
+import { IsArray, IsDateString, IsEnum, IsInt, IsOptional, IsString, IsUUID, Matches, Max, Min, ValidateNested } from 'class-validator';
 
 export class CreateTeleSlotDto {
-  @ApiProperty()
+  @ApiProperty({ description: 'Data base do slot (YYYY-MM-DD)' })
   @IsDateString()
-  startAt!: string;
+  date!: string;
 
-  @ApiProperty()
-  @IsDateString()
-  endAt!: string;
+  @ApiProperty({ example: '08:30' })
+  @Matches(/^([01]\d|2[0-3]):([0-5]\d)$/)
+  startTime!: string;
 
-  @ApiPropertyOptional({ enum: TeleSlotStatus })
+  @ApiProperty({ minimum: 15 })
+  @Type(() => Number)
+  @IsInt()
+  @Min(15)
+  durationMinutes!: number;
+
+  @ApiPropertyOptional({ enum: TelepericiaSlotType, default: TelepericiaSlotType.SEQUENTIAL })
   @IsOptional()
-  @IsEnum(TeleSlotStatus)
-  status?: TeleSlotStatus;
+  @IsEnum(TelepericiaSlotType)
+  slotType?: TelepericiaSlotType;
 
-  @ApiPropertyOptional()
+  @ApiProperty({ minimum: 5, description: 'Duração de cada atendimento dentro do slot' })
+  @Type(() => Number)
+  @IsInt()
+  @Min(5)
+  appointmentDurationMinutes!: number;
+
+  @ApiPropertyOptional({ minimum: 0, default: 0 })
+  @Type(() => Number)
+  @IsInt()
+  @Min(0)
+  @IsOptional()
+  gapMinutes?: number;
+
+  @ApiPropertyOptional({ minimum: 1, maximum: 200 })
+  @Type(() => Number)
+  @IsInt()
+  @Min(1)
+  @Max(200)
+  @IsOptional()
+  capacity?: number;
+
+  @ApiPropertyOptional({ default: 'America/Sao_Paulo' })
   @IsOptional()
   @IsString()
-  platform?: string;
+  timezone?: string;
 }
 
-export class BookTeleSlotDto {
-  @ApiProperty()
-  @IsUUID()
-  slotId!: string;
+export class UpdateTeleSlotDto extends CreateTeleSlotDto {}
 
+export class AssignTelepericiaItemDto {
   @ApiProperty()
   @IsUUID()
   periciaId!: string;
+}
 
-  @ApiPropertyOptional()
-  @IsOptional()
-  @IsString()
-  meetingUrl?: string;
+export class ReorderTelepericiaItemInputDto {
+  @ApiProperty()
+  @IsUUID()
+  itemId!: string;
+
+  @ApiProperty({ minimum: 0 })
+  @Type(() => Number)
+  @IsInt()
+  @Min(0)
+  orderIndex!: number;
+}
+
+export class ReorderTelepericiaItemsDto {
+  @ApiProperty({ type: [ReorderTelepericiaItemInputDto] })
+  @IsArray()
+  @ValidateNested({ each: true })
+  @Type(() => ReorderTelepericiaItemInputDto)
+  items!: ReorderTelepericiaItemInputDto[];
 }
 
 export class WhatsappContactDto {
