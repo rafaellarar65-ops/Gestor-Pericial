@@ -1,5 +1,5 @@
 import { apiClient } from '@/lib/api-client';
-import type { ConfigItem } from '@/types/api';
+import type { ConfigItem, DashboardSystemSettings } from '@/types/api';
 
 export const configService = {
   list: async (resource: string): Promise<ConfigItem[]> => {
@@ -19,5 +19,15 @@ export const configService = {
 
   remove: async (resource: string, id: string): Promise<void> => {
     await apiClient.delete(`/config/${resource}/${id}`);
+  },
+
+  getDashboardSettings: async (): Promise<DashboardSystemSettings> => {
+    const { data } = await apiClient.get<{ config: DashboardSystemSettings }>('/config/system/dashboard');
+    return data.config;
+  },
+
+  updateDashboardSettings: async (config: DashboardSystemSettings): Promise<DashboardSystemSettings> => {
+    const { data } = await apiClient.patch<{ config: DashboardSystemSettings }>('/config/system/dashboard', config);
+    return data.config;
   },
 };

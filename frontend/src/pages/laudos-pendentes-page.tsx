@@ -1,8 +1,10 @@
 import { useMemo } from 'react';
+import { useQuery } from '@tanstack/react-query';
 import { Link } from 'react-router-dom';
 import { FileText, MapPin, FileEdit, AlertTriangle, CheckCircle2, ClipboardList } from 'lucide-react';
 import { EmptyState, ErrorState, LoadingState } from '@/components/ui/state';
 import { useDomainData } from '@/hooks/use-domain-data';
+import { configService } from '@/services/config-service';
 
 type LaudoItem = {
   id?: string | number;
@@ -15,9 +17,12 @@ type LaudoItem = {
   [key: string]: string | number | boolean | undefined;
 };
 
-const isItemUrgent = (item: LaudoItem): boolean => {
+const isItemUrgent = (item: LaudoItem, urgentTerms: string[]): boolean => {
   if (item.isUrgent === true || item.isUrgent === 1 || item.isUrgent === 'true') return true;
-  if (typeof item.status === 'string' && item.status.toUpperCase().includes('URGENTE')) return true;
+  if (typeof item.status === 'string') {
+    const status = item.status.toUpperCase();
+    if (urgentTerms.some((term) => status.includes(term.toUpperCase()))) return true;
+  }
   return false;
 };
 
@@ -32,8 +37,8 @@ const getStatusColor = (status?: string): string => {
   return 'bg-gray-100 text-gray-700';
 };
 
-const LaudoCard = ({ item, index }: { item: LaudoItem; index: number }) => {
-  const urgent = isItemUrgent(item);
+const LaudoCard = ({ item, index, urgentTerms }: { item: LaudoItem; index: number; urgentTerms: string[] }) => {
+  const urgent = isItemUrgent(item, urgentTerms);
   const itemId = item.id ?? index;
   const detailHref = `/pericias/${itemId}`;
 
@@ -113,18 +118,23 @@ const LaudoCard = ({ item, index }: { item: LaudoItem; index: number }) => {
 
 const LaudosPendentesPage = () => {
   const { data = [], isLoading, isError } = useDomainData('laudos-pendentes', '/laudos-pendentes');
+  const { data: dashboardSettings } = useQuery({
+    queryKey: ['system-dashboard-settings'],
+    queryFn: () => configService.getDashboardSettings(),
+  });
+  const urgentTerms = dashboardSettings?.filas.laudosUrgenciaTermosStatus ?? ['URGENTE'];
 
   const sorted = useMemo(() => {
     const items = data as LaudoItem[];
     return [...items].sort((a, b) => {
-      const aUrgent = isItemUrgent(a) ? 0 : 1;
-      const bUrgent = isItemUrgent(b) ? 0 : 1;
+      const aUrgent = isItemUrgent(a, urgentTerms) ? 0 : 1;
+      const bUrgent = isItemUrgent(b, urgentTerms) ? 0 : 1;
       return aUrgent - bUrgent;
     });
-  }, [data]);
+  }, [data, urgentTerms]);
 
   const total = sorted.length;
-  const urgentCount = useMemo(() => sorted.filter(isItemUrgent).length, [sorted]);
+  const urgentCount = useMemo(() => sorted.filter((item) => isItemUrgent(item, urgentTerms)).length, [sorted, urgentTerms]);
 
   return (
     <div className="min-h-screen bg-gray-50">
@@ -205,7 +215,7 @@ const LaudosPendentesPage = () => {
         {!isLoading && !isError && sorted.length > 0 && (
           <div className="grid grid-cols-1 gap-4 md:grid-cols-2">
             {sorted.map((item, index) => (
-              <LaudoCard key={item.id ?? index} item={item} index={index} />
+              <LaudoCard key={item.id ?? index} item={item} index={index} urgentTerms={urgentTerms} />
             ))}
           </div>
         )}

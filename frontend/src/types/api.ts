@@ -246,3 +246,23 @@ export type ApiError = {
   message: string | string[];
   statusCode?: number;
 };
+
+
+export type DashboardSystemSettings = {
+  nomeacoesGroups: {
+    avaliar: string[];
+    aceiteHonorarios: string[];
+    majorarHonorarios: string[];
+    observacaoExtra: string[];
+  };
+  dashboard: {
+    avaliarStatusCodigos: string[];
+    avaliarStatusNomeTermos: string[];
+    enviarLaudoStatusCodigos: string[];
+    enviarLaudoStatusNomeTermos: string[];
+  };
+  filas: {
+    agendamentoBloqueiaTermosStatus: string[];
+    laudosUrgenciaTermosStatus: string[];
+  };
+};

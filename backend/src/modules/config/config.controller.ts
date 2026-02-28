@@ -9,6 +9,18 @@ import { ConfigResourceParamDto, CreateConfigDomainDto, UpdateConfigDomainDto } 
 export class ConfigDomainController {
   constructor(private readonly service: ConfigDomainService) {}
 
+  @Get('system/dashboard')
+  @ApiOperation({ summary: 'Obtém configuração de dashboard e filas do frontend' })
+  getDashboardSettings() {
+    return this.service.getDashboardSettings();
+  }
+
+  @Patch('system/dashboard')
+  @ApiOperation({ summary: 'Atualiza configuração de dashboard e filas do frontend' })
+  updateDashboardSettings(@Body() payload: Record<string, unknown>) {
+    return this.service.updateDashboardSettings(payload);
+  }
+
   @Get(':resource')
   @ApiOperation({ summary: 'Lista catálogo por recurso' })
   list(@Param() params: ConfigResourceParamDto) {

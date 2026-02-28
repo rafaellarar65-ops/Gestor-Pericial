@@ -172,14 +172,40 @@ export class PericiasService {
     return updated;
   }
 
+
+  private async getDashboardQueueSettings() {
+    const tenantId = this.context.get('tenantId') ?? '';
+    const row = await this.prisma.integrationSettings.findUnique({
+      where: {
+        tenantId_provider: { tenantId, provider: 'dashboard_queue_rules' },
+      },
+      select: { config: true },
+    });
+
+    const safe = typeof row?.config === 'object' && row.config !== null ? (row.config as Record<string, unknown>) : {};
+    const asArray = (value: unknown, fallback: string[]) =>
+      Array.isArray(value) ? value.map((item) => String(item).trim()).filter(Boolean) : fallback;
+
+    const dashboard = (safe.dashboard as Record<string, unknown> | undefined) ?? {};
+
+    return {
+      avaliarStatusCodigos: asArray(dashboard.avaliarStatusCodigos, ['AVALIAR', 'ST_AVALIAR', 'NOMEADA', 'ACEITA', 'NOVA_NOMEACAO']),
+      avaliarStatusNomeTermos: asArray(dashboard.avaliarStatusNomeTermos, ['avaliar']),
+      enviarLaudoStatusCodigos: asArray(dashboard.enviarLaudoStatusCodigos, ['ENVIAR_LAUDO', 'EM_LAUDO']),
+      enviarLaudoStatusNomeTermos: asArray(dashboard.enviarLaudoStatusNomeTermos, ['enviar laudo', 'em laudo']),
+    };
+  }
+
   async dashboard() {
+    const rules = await this.getDashboardQueueSettings();
+
     // Buscar status relevantes para categorizar
     const [avaliarStatuses, enviarLaudoStatuses] = await this.prisma.$transaction([
       this.prisma.status.findMany({
         where: {
           OR: [
-            { codigo: { in: ['AVALIAR', 'ST_AVALIAR', 'NOMEADA', 'ACEITA', 'NOVA_NOMEACAO'] } },
-            { nome: { contains: 'avaliar', mode: 'insensitive' } },
+            { codigo: { in: rules.avaliarStatusCodigos } },
+            ...rules.avaliarStatusNomeTermos.map((term) => ({ nome: { contains: term, mode: 'insensitive' as const } })),
           ],
         },
         select: { id: true },
@@ -187,9 +213,8 @@ export class PericiasService {
       this.prisma.status.findMany({
         where: {
           OR: [
-            { codigo: { in: ['ENVIAR_LAUDO', 'EM_LAUDO'] } },
-            { nome: { contains: 'enviar laudo', mode: 'insensitive' } },
-            { nome: { contains: 'em laudo', mode: 'insensitive' } },
+            { codigo: { in: rules.enviarLaudoStatusCodigos } },
+            ...rules.enviarLaudoStatusNomeTermos.map((term) => ({ nome: { contains: term, mode: 'insensitive' as const } })),
           ],
         },
         select: { id: true },
