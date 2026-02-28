@@ -93,3 +93,21 @@ Usado em:
 ## Escalabilidade alvo
 - Volume esperado: 500–2000 perícias por tenant/perito.
 - Estratégia: índices compostos por tenant + soft-delete parcial + JSONB indexado seletivamente.
+
+## Status operacionais (fonte atual do banco)
+
+Os códigos de status usados no cadastro base (`Status`) são:
+
+- `NOMEADA`
+- `ACEITA`
+- `AGENDADA`
+- `REALIZADA`
+- `EM_LAUDO`
+- `LAUDO_ENVIADO`
+- `COBRANCA`
+- `PAGO_PARCIAL`
+- `PAGO`
+
+Para a especificação completa do motor de status alinhado a esses códigos, consultar:
+
+- `docs/motor-status-pericias.md`
