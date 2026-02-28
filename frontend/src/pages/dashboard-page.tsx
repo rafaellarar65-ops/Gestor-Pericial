@@ -1,5 +1,16 @@
 import { Link } from 'react-router-dom';
-import { ArrowUpRight, Scale, CalendarClock, Calendar, FileText, MessageSquareWarning, DollarSign, Video, MessageCircle } from 'lucide-react';
+import {
+  ArrowUpRight,
+  Calendar,
+  CalendarClock,
+  DollarSign,
+  FileText,
+  MessageCircle,
+  MessageSquareWarning,
+  Scale,
+  Video,
+} from 'lucide-react';
+import { Card } from '@/components/ui/card';
 import { LoadingState } from '@/components/ui/state';
 import { useDashboardQuery } from '@/hooks/use-pericias';
 
@@ -8,7 +19,7 @@ type ActionCard = {
   subtitle: string;
   badge: string;
   href: string;
-  color: string;
+  tone: string;
   kpiKey?: string;
   Icon: React.ComponentType<{ size?: number; className?: string }>;
 };
@@ -19,7 +30,7 @@ const ACTION_CARDS: ActionCard[] = [
     subtitle: 'Central de Triagem: Avaliar, Majorar e Observações',
     badge: 'TRIAGEM INICIAL',
     href: '/nomeacoes',
-    color: 'bg-blue-600',
+    tone: 'bg-primary text-primary-foreground',
     kpiKey: 'novas_nomeacoes',
     Icon: Scale,
   },
@@ -28,7 +39,7 @@ const ACTION_CARDS: ActionCard[] = [
     subtitle: 'Pendências de agendamento por cidade',
     badge: 'FILA DE ESPERA',
     href: '/fila-agendamento',
-    color: 'bg-yellow-500',
+    tone: 'bg-warning text-warning-foreground',
     kpiKey: 'agendar_data',
     Icon: CalendarClock,
   },
@@ -37,7 +48,7 @@ const ACTION_CARDS: ActionCard[] = [
     subtitle: 'Agenda futura (Presencial e Tele)',
     badge: 'CALENDÁRIO',
     href: '/pericias-hoje',
-    color: 'bg-pink-600',
+    tone: 'bg-info text-info-foreground',
     kpiKey: 'proximas_pericias',
     Icon: Calendar,
   },
@@ -46,7 +57,7 @@ const ACTION_CARDS: ActionCard[] = [
     subtitle: 'Redação e envio de laudos',
     badge: 'PRODUÇÃO',
     href: '/laudos-pendentes',
-    color: 'bg-teal-600',
+    tone: 'bg-success text-success-foreground',
     kpiKey: 'enviar_laudos',
     Icon: FileText,
   },
@@ -55,7 +66,7 @@ const ACTION_CARDS: ActionCard[] = [
     subtitle: 'Intimações para complementar laudo',
     badge: 'PRIORIDADE ALTA',
     href: '/comunicacao',
-    color: 'bg-orange-500',
+    tone: 'bg-warning text-warning-foreground',
     kpiKey: 'esclarecimentos',
     Icon: MessageSquareWarning,
   },
@@ -64,12 +75,11 @@ const ACTION_CARDS: ActionCard[] = [
     subtitle: 'Processos entregues aguardando pagamento (Carteira)',
     badge: 'FINANCEIRO',
     href: '/cobranca',
-    color: 'bg-green-600',
+    tone: 'bg-success text-success-foreground',
     kpiKey: 'a_receber',
     Icon: DollarSign,
   },
 ];
-
 
 const NEW_MODULE_CARDS: ActionCard[] = [
   {
@@ -77,7 +87,7 @@ const NEW_MODULE_CARDS: ActionCard[] = [
     subtitle: 'WebRTC, sala virtual, chat e upload por QR Code',
     badge: 'NOVA CENTRAL',
     href: '/telepericias',
-    color: 'bg-indigo-600',
+    tone: 'bg-primary text-primary-foreground',
     Icon: Video,
   },
   {
@@ -85,11 +95,10 @@ const NEW_MODULE_CARDS: ActionCard[] = [
     subtitle: 'WhatsApp API, e-mail Uolhost e cobranças por vara',
     badge: 'OMNICHANNEL',
     href: '/comunicacao',
-    color: 'bg-cyan-700',
+    tone: 'bg-info text-info-foreground',
     Icon: MessageCircle,
   },
 ];
-
 
 const normalizeKpiText = (value: string) =>
   value
@@ -114,118 +123,102 @@ const DashboardPage = () => {
   }, {});
 
   return (
-    <div className="space-y-5">
-      {/* Central de Notificações */}
-      <div className="rounded-xl bg-[#1a1d2e] p-5 text-white shadow">
-        <p className="mb-1 text-base font-semibold">Central de Notificações</p>
-        <p className="text-xs text-white/50">Pendências que requerem sua atenção imediata.</p>
+    <div className="space-y-4">
+      <Card className="space-y-3 bg-foreground text-background">
+        <div>
+          <p className="text-lg font-semibold">Central de Notificações</p>
+          <p className="text-xs text-background/70">Pendências que requerem sua atenção imediata.</p>
+        </div>
 
-        <div className="mt-4 grid grid-cols-1 gap-4 md:grid-cols-2">
-          {/* Ausências */}
-          <div className="rounded-lg bg-white/5 p-4">
-            <p className="mb-3 text-sm font-medium">
-              Ausências Pendentes{data?.critical?.length ? ` (${data.critical.length})` : ''}
-            </p>
+        <div className="grid grid-cols-1 gap-3 md:grid-cols-2">
+          <Card className="space-y-2 border-background/15 bg-background/10 p-3 text-background">
+            <p className="text-sm font-medium">Ausências Pendentes{data?.critical?.length ? ` (${data.critical.length})` : ''}</p>
             {data?.critical && data.critical.length > 0 ? (
               <ul className="space-y-2">
                 {data.critical.slice(0, 4).map((p) => (
-                  <li className="flex items-center justify-between rounded bg-white/5 px-3 py-2 text-xs" key={p.id}>
+                  <li className="flex items-center justify-between rounded-md bg-background/10 px-3 py-2 text-xs" key={p.id}>
                     <div>
-                      <p className="font-mono text-white/60">{p.processoCNJ}</p>
+                      <p className="font-mono text-background/70">{p.processoCNJ}</p>
                       <p className="font-medium">{p.autorNome}</p>
                     </div>
-                    <span className="rounded-full bg-green-500/20 px-2 py-0.5 text-[10px] text-green-300">
-                      Ausência Informada
-                    </span>
+                    <span className="rounded-full bg-success/20 px-2 py-0.5 text-[10px] text-success-foreground">Ausência Informada</span>
                   </li>
                 ))}
               </ul>
             ) : (
-              <p className="text-xs text-white/40">Nenhuma ausência pendente.</p>
+              <p className="text-xs text-background/70">Nenhuma ausência pendente.</p>
             )}
-          </div>
+          </Card>
 
-          {/* A Cobrar */}
-          <div className="flex flex-col justify-between rounded-lg bg-white/5 p-4">
+          <Card className="flex flex-col justify-between border-background/15 bg-background/10 p-3 text-background">
             <div>
               <p className="text-sm font-medium">A Cobrar</p>
-              <p className="mt-1 text-xs text-white/50">Prazo de pagamento excedido.</p>
+              <p className="text-xs text-background/70">Prazo de pagamento excedido.</p>
             </div>
             <Link
-              className="mt-4 flex items-center justify-between rounded-lg border border-white/20 bg-white px-4 py-2.5 text-sm font-medium text-gray-800 hover:bg-gray-100"
+              className="mt-3 inline-flex items-center justify-between rounded-md bg-background px-3 py-2 text-sm font-medium text-foreground hover:bg-muted"
               to="/cobranca"
             >
               Gerar Cobranças
               <ArrowUpRight size={16} />
             </Link>
-          </div>
+          </Card>
         </div>
-      </div>
+      </Card>
 
-      {/* Action Cards */}
       {isLoading ? (
         <LoadingState />
       ) : (
         <>
-          <div className="grid grid-cols-1 gap-4 md:grid-cols-3">
+          <div className="grid grid-cols-1 gap-3 md:grid-cols-3">
             {ACTION_CARDS.map((card) => {
               const Icon = card.Icon;
               const value = kpiValueByCard[card.title] ?? '—';
               return (
-                <div
-                  className={`relative overflow-hidden rounded-xl ${card.color} p-5 text-white shadow-md`}
-                  key={card.title}
-                >
-                  <Icon className="absolute right-3 top-3 opacity-10" size={72} />
-                  <div className="relative z-10">
-                    <div className="mb-2 flex items-center gap-2">
+                <Card className={`relative overflow-hidden p-4 ${card.tone}`} key={card.title}>
+                  <Icon className="absolute right-2 top-2 opacity-20" size={56} />
+                  <div className="relative z-10 space-y-2">
+                    <div className="flex items-center gap-2">
                       <Icon size={18} />
-                      <p className="text-sm font-bold tracking-wide">{card.title}</p>
+                      <p className="text-sm font-semibold tracking-wide">{card.title}</p>
                     </div>
-                    <p className="mb-3 text-xs text-white/70">{card.subtitle}</p>
+                    <p className="text-xs opacity-90">{card.subtitle}</p>
                     <div className="flex items-end justify-between">
-                      <p className="text-4xl font-bold">{value}</p>
-                      <span className="rounded bg-black/20 px-2 py-0.5 text-[10px] font-semibold uppercase">
-                        {card.badge}
-                      </span>
+                      <p className="text-3xl font-bold">{value}</p>
+                      <span className="rounded bg-black/20 px-2 py-0.5 text-[10px] font-semibold uppercase">{card.badge}</span>
                     </div>
-                    <Link
-                      className="mt-4 flex items-center gap-1 text-xs font-semibold uppercase tracking-wider text-white/80 hover:text-white"
-                      to={card.href}
-                    >
-                      ACESSAR CENTRAL <ArrowUpRight size={12} />
+                    <Link className="inline-flex items-center gap-1 text-xs font-semibold uppercase tracking-wide opacity-90 hover:opacity-100" to={card.href}>
+                      Acessar central <ArrowUpRight size={12} />
                     </Link>
                   </div>
-                </div>
+                </Card>
               );
             })}
           </div>
 
-          <section className="rounded-xl border border-slate-200 bg-white p-4 shadow-sm">
-            <div className="mb-3 flex items-center justify-between">
-              <div>
-                <h2 className="text-base font-semibold text-slate-800">Novas funcionalidades integradas</h2>
-                <p className="text-xs text-slate-500">Acesso rápido aos módulos de Teleperícia e Comunicação.</p>
-              </div>
+          <Card className="space-y-3">
+            <div>
+              <h2 className="text-lg font-semibold">Novas funcionalidades integradas</h2>
+              <p className="text-sm text-muted-foreground">Acesso rápido aos módulos de Teleperícia e Comunicação.</p>
             </div>
             <div className="grid grid-cols-1 gap-3 md:grid-cols-2">
               {NEW_MODULE_CARDS.map((card) => {
                 const Icon = card.Icon;
                 return (
-                  <div className={`rounded-lg ${card.color} p-4 text-white`} key={card.title}>
-                    <div className="mb-2 flex items-center gap-2">
+                  <Card className={`space-y-2 p-4 ${card.tone}`} key={card.title}>
+                    <div className="flex items-center gap-2">
                       <Icon size={18} />
                       <p className="text-sm font-semibold">{card.title}</p>
                     </div>
-                    <p className="text-xs text-white/80">{card.subtitle}</p>
-                    <Link className="mt-3 inline-flex items-center gap-1 text-xs font-semibold" to={card.href}>
+                    <p className="text-xs opacity-90">{card.subtitle}</p>
+                    <Link className="inline-flex items-center gap-1 text-xs font-semibold" to={card.href}>
                       Acessar módulo <ArrowUpRight size={12} />
                     </Link>
-                  </div>
+                  </Card>
                 );
               })}
             </div>
-          </section>
+          </Card>
         </>
       )}
     </div>
