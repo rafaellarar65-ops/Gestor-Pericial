@@ -12,6 +12,12 @@ import {
   ValidateNested,
 } from 'class-validator';
 
+export enum FinancialImportSource {
+  AI_PRINT = 'AI_PRINT',
+  MANUAL_CSV = 'MANUAL_CSV',
+  INDIVIDUAL = 'INDIVIDUAL',
+}
+
 export class CreateRecebimentoDto {
   @ApiProperty()
   @IsUUID()
@@ -66,12 +72,48 @@ export class CreateDespesaDto {
   periciaId?: string;
 }
 
+export class ImportRecebimentoItemDto {
+  @ApiProperty()
+  @IsString()
+  processoCNJ!: string;
+
+  @ApiProperty({ enum: FontePagamento })
+  @IsEnum(FontePagamento)
+  fontePagamento!: FontePagamento;
+
+  @ApiProperty()
+  @IsDateString()
+  dataRecebimento!: string;
+
+  @ApiProperty()
+  @Type(() => Number)
+  @IsNumber({ maxDecimalPlaces: 2 })
+  valorBruto!: number;
+
+  @ApiPropertyOptional()
+  @IsOptional()
+  @Type(() => Number)
+  @IsNumber({ maxDecimalPlaces: 2 })
+  valorLiquido?: number;
+
+  @ApiPropertyOptional()
+  @IsOptional()
+  @Type(() => Number)
+  @IsNumber({ maxDecimalPlaces: 2 })
+  imposto?: number;
+
+  @ApiPropertyOptional()
+  @IsOptional()
+  @IsString()
+  descricao?: string;
+}
+
 export class ImportRecebimentosDto {
-  @ApiProperty({ type: [CreateRecebimentoDto] })
+  @ApiProperty({ type: [ImportRecebimentoItemDto] })
   @IsArray()
   @ValidateNested({ each: true })
-  @Type(() => CreateRecebimentoDto)
-  rows!: CreateRecebimentoDto[];
+  @Type(() => ImportRecebimentoItemDto)
+  rows!: ImportRecebimentoItemDto[];
 
   @ApiPropertyOptional()
   @IsOptional()

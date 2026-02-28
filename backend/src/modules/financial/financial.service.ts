@@ -2,7 +2,7 @@ import { Injectable } from '@nestjs/common';
 import { PaymentMatchStatus, Prisma } from '@prisma/client';
 import { RequestContextService } from '../../common/request-context.service';
 import { PrismaService } from '../../prisma/prisma.service';
-import { CreateDespesaDto, CreateRecebimentoDto, ImportRecebimentosDto, ReconcileDto } from './dto/financial.dto';
+import { CreateDespesaDto, CreateRecebimentoDto, FinancialImportSource, ImportRecebimentoItemDto, ImportRecebimentosDto, ReconcileDto } from './dto/financial.dto';
 
 @Injectable()
 export class FinancialService {
@@ -52,39 +52,125 @@ export class FinancialService {
   }
 
   async importBatch(dto: ImportRecebimentosDto) {
+    return this.importBatchBySource(FinancialImportSource.MANUAL_CSV, dto);
+  }
+
+  importBatchAiPrint(dto: ImportRecebimentosDto) {
+    return this.importBatchBySource(FinancialImportSource.AI_PRINT, dto);
+  }
+
+  importBatchManualCsv(dto: ImportRecebimentosDto) {
+    return this.importBatchBySource(FinancialImportSource.MANUAL_CSV, dto);
+  }
+
+  importBatchIndividual(dto: ImportRecebimentosDto) {
+    return this.importBatchBySource(FinancialImportSource.INDIVIDUAL, dto);
+  }
+
+  private normalizeCnj(cnj: string): string {
+    return cnj.replace(/\D/g, '');
+  }
+
+  private formatCnj(digits: string): string {
+    if (digits.length !== 20) return digits;
+    return `${digits.slice(0, 7)}-${digits.slice(7, 9)}.${digits.slice(9, 13)}.${digits.slice(13, 14)}.${digits.slice(14, 16)}.${digits.slice(16, 20)}`;
+  }
+
+  private async importBatchBySource(source: FinancialImportSource, dto: ImportRecebimentosDto) {
     const tenantId = this.context.get('tenantId') ?? '';
+
+    const gross = dto.rows.reduce((acc, item) => acc + item.valorBruto, 0);
+    const net = dto.rows.reduce((acc, item) => acc + (item.valorLiquido ?? item.valorBruto), 0);
+    const tax = dto.rows.reduce((acc, item) => acc + (item.imposto ?? Math.max(0, item.valorBruto - (item.valorLiquido ?? item.valorBruto))), 0);
+
     const batch = await this.prisma.importBatch.create({
       data: {
         tenantId,
         ...(dto.sourceFileName ? { sourceFileName: dto.sourceFileName } : {}),
         totalRecords: dto.rows.length,
         status: 'PROCESSING',
+        metadata: { source },
       },
     });
 
-    await this.prisma.$transaction(
-      dto.rows.map((row) =>
-        this.prisma.recebimento.create({
+    const itemsLinked: ImportRecebimentoItemDto[] = [];
+    const itemsUnmatched: ImportRecebimentoItemDto[] = [];
+
+    for (const row of dto.rows) {
+      const cnjDigits = this.normalizeCnj(row.processoCNJ);
+      const pericia = await this.prisma.pericia.findFirst({
+        where: {
+          tenantId,
+          OR: [
+            { processoCNJDigits: cnjDigits },
+            { processoCNJ: row.processoCNJ },
+            { processoCNJ: this.formatCnj(cnjDigits) },
+          ],
+        },
+        select: { id: true },
+      });
+
+      if (pericia) {
+        itemsLinked.push(row);
+        await this.prisma.recebimento.create({
           data: {
             tenantId,
             importBatchId: batch.id,
-            periciaId: row.periciaId,
+            periciaId: pericia.id,
             fontePagamento: row.fontePagamento,
             dataRecebimento: new Date(row.dataRecebimento),
             valorBruto: new Prisma.Decimal(row.valorBruto),
             ...(row.valorLiquido ? { valorLiquido: new Prisma.Decimal(row.valorLiquido) } : {}),
             ...(row.descricao ? { descricao: row.descricao } : {}),
+            metadata: { source, processoCNJOriginal: row.processoCNJ, processoCNJNormalizado: cnjDigits },
           },
-        }),
-      ),
-    );
+        });
+        continue;
+      }
+
+      itemsUnmatched.push(row);
+      await this.prisma.unmatchedPayment.create({
+        data: {
+          tenantId,
+          importBatchId: batch.id,
+          rawData: { ...row, source, processoCNJNormalizado: cnjDigits },
+          amount: new Prisma.Decimal(row.valorLiquido ?? row.valorBruto),
+          transactionDate: new Date(row.dataRecebimento),
+          notes: 'Perícia não encontrada por CNJ normalizado',
+        },
+      });
+    }
 
     await this.prisma.importBatch.update({
       where: { id: batch.id },
-      data: { matchedRecords: dto.rows.length, unmatchedRecords: 0, status: 'DONE' },
+      data: {
+        matchedRecords: itemsLinked.length,
+        unmatchedRecords: itemsUnmatched.length,
+        status: 'DONE',
+        metadata: {
+          source,
+          summary: {
+            itemsLinked: itemsLinked.length,
+            itemsUnmatched: itemsUnmatched.length,
+            gross,
+            net,
+            tax,
+            count: dto.rows.length,
+          },
+        },
+      },
     });
 
-    return { batchId: batch.id, imported: dto.rows.length };
+    return {
+      batchId: batch.id,
+      source,
+      itemsLinked: itemsLinked.length,
+      itemsUnmatched: itemsUnmatched.length,
+      gross,
+      net,
+      tax,
+      count: dto.rows.length,
+    };
   }
 
   unmatched() {

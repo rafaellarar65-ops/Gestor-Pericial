@@ -1,6 +1,31 @@
 import { apiClient } from '@/lib/api-client';
 import type { ApiListResponse, Despesa, FinancialAnalytics, FinancialItem, Recebimento } from '@/types/api';
 
+
+
+type FinancialImportSource = 'AI_PRINT' | 'MANUAL_CSV' | 'INDIVIDUAL';
+
+type ImportRecebimentoItemPayload = {
+  processoCNJ: string;
+  fontePagamento: string;
+  dataRecebimento: string;
+  valorBruto: number;
+  valorLiquido?: number;
+  imposto?: number;
+  descricao?: string;
+};
+
+type ImportBatchResult = {
+  batchId: string;
+  source: FinancialImportSource;
+  itemsLinked: number;
+  itemsUnmatched: number;
+  gross: number;
+  net: number;
+  tax: number;
+  count: number;
+};
+
 type RecebimentoRaw = {
   id: string;
   fontePagamento: string;
@@ -57,6 +82,18 @@ export const financialService = {
     periciaId?: string;
   }): Promise<Despesa> => {
     const { data } = await apiClient.post<Despesa>('/financial/despesas', payload);
+    return data;
+  },
+
+
+
+  importBatch: async (source: FinancialImportSource, payload: { rows: ImportRecebimentoItemPayload[]; sourceFileName?: string }): Promise<ImportBatchResult> => {
+    const pathBySource: Record<FinancialImportSource, string> = {
+      AI_PRINT: '/financial/import-batch/ai-print',
+      MANUAL_CSV: '/financial/import-batch/manual-csv',
+      INDIVIDUAL: '/financial/import-batch/individual',
+    };
+    const { data } = await apiClient.post<ImportBatchResult>(pathBySource[source], payload);
     return data;
   },
 

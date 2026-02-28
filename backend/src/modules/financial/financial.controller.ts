@@ -36,6 +36,21 @@ export class FinancialController {
     return this.service.importBatch(dto);
   }
 
+  @Post('import-batch/ai-print')
+  importBatchAiPrint(@Body() dto: ImportRecebimentosDto) {
+    return this.service.importBatchAiPrint(dto);
+  }
+
+  @Post('import-batch/manual-csv')
+  importBatchManualCsv(@Body() dto: ImportRecebimentosDto) {
+    return this.service.importBatchManualCsv(dto);
+  }
+
+  @Post('import-batch/individual')
+  importBatchIndividual(@Body() dto: ImportRecebimentosDto) {
+    return this.service.importBatchIndividual(dto);
+  }
+
   @Get('unmatched')
   unmatched() {
     return this.service.unmatched();
