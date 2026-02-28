@@ -1,7 +1,7 @@
-import { Body, Controller, Get, Post, Query } from '@nestjs/common';
+import { Body, Controller, Get, Param, Post, Query } from '@nestjs/common';
 import { ApiBearerAuth, ApiOperation, ApiTags } from '@nestjs/swagger';
 import { FinancialService } from './financial.service';
-import { CreateDespesaDto, CreateRecebimentoDto, ImportRecebimentosDto, ReconcileDto } from './dto/financial.dto';
+import { CreateDespesaDto, CreateRecebimentoDto, ImportRecebimentosDto, LinkUnmatchedPaymentDto, ReconcileDto } from './dto/financial.dto';
 
 @ApiTags('financial')
 @ApiBearerAuth()
@@ -39,6 +39,11 @@ export class FinancialController {
   @Get('unmatched')
   unmatched() {
     return this.service.unmatched();
+  }
+
+  @Post('unmatched/:id/link')
+  linkUnmatched(@Param('id') id: string, @Body() dto: LinkUnmatchedPaymentDto) {
+    return this.service.linkUnmatched(id, dto);
   }
 
   @Post('reconcile')

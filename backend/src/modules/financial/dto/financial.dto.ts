@@ -79,6 +79,13 @@ export class ImportRecebimentosDto {
   sourceFileName?: string;
 }
 
+
+export class LinkUnmatchedPaymentDto {
+  @ApiProperty()
+  @IsUUID()
+  periciaId!: string;
+}
+
 export class ReconcileDto {
   @ApiProperty({ type: [String] })
   @IsArray()

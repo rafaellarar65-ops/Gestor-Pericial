@@ -74,6 +74,20 @@ export type Recebimento = {
   createdAt?: string;
 };
 
+
+export type UnmatchedPayment = {
+  id: string;
+  payerName?: string | null;
+  transactionDate?: string | null;
+  amount?: number | string | null;
+  rawData: Record<string, unknown>;
+  matchStatus: 'UNMATCHED' | 'MATCHED' | 'PARTIAL' | 'LINKED';
+  linkedPericiaId?: string | null;
+  linkedAt?: string | null;
+  linkedBy?: string | null;
+  createdAt: string;
+};
+
 export type Despesa = {
   id: string;
   categoria: string;

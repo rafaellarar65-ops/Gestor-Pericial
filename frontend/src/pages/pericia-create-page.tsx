@@ -1,7 +1,7 @@
 import { useMemo, useState } from 'react';
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 import { ArrowLeft, Save, Scale, Sparkles } from 'lucide-react';
-import { Link, useNavigate } from 'react-router-dom';
+import { Link, useNavigate, useSearchParams } from 'react-router-dom';
 import { ErrorState, LoadingState } from '@/components/ui/state';
 import { configService } from '@/services/config-service';
 import { periciaService } from '@/services/pericia-service';
@@ -9,9 +9,10 @@ import type { ConfigItem } from '@/types/api';
 
 const PericiaCreatePage = () => {
   const navigate = useNavigate();
+  const [searchParams] = useSearchParams();
   const queryClient = useQueryClient();
   const [form, setForm] = useState({
-    processoCNJ: '',
+    processoCNJ: searchParams.get('cnj') ?? '',
     juizNome: '',
     autorNome: '',
     reuNome: '',
@@ -51,6 +52,15 @@ const PericiaCreatePage = () => {
       }),
     onSuccess: async (created) => {
       await queryClient.invalidateQueries({ queryKey: ['pericias'] });
+      const returnTo = searchParams.get('returnTo');
+      if (returnTo) {
+        const url = new URL(returnTo, window.location.origin);
+        url.searchParams.set('createdPericiaId', created.id);
+        url.searchParams.set('createdCnj', form.processoCNJ);
+        navigate(url.pathname + url.search);
+        return;
+      }
+
       navigate(`/pericias/${created.id}`);
     },
   });

@@ -71,6 +71,7 @@ enum PaymentMatchStatus {
   MATCHED
   UNMATCHED
   PARTIAL
+  LINKED
 }
 
 enum RuleTrigger {
@@ -695,6 +696,9 @@ model UnmatchedPayment {
   transactionDate   DateTime?
   payerName         String?
   matchStatus       PaymentMatchStatus @default(UNMATCHED)
+  linkedPericiaId   String?            @db.Uuid
+  linkedAt          DateTime?
+  linkedBy          String?            @db.Uuid
   notes             String?
   createdAt         DateTime           @default(now())
   updatedAt         DateTime           @updatedAt

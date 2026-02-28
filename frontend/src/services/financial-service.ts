@@ -1,5 +1,5 @@
 import { apiClient } from '@/lib/api-client';
-import type { ApiListResponse, Despesa, FinancialAnalytics, FinancialItem, Recebimento } from '@/types/api';
+import type { ApiListResponse, Despesa, FinancialAnalytics, FinancialItem, Recebimento, UnmatchedPayment } from '@/types/api';
 
 type RecebimentoRaw = {
   id: string;
@@ -62,6 +62,16 @@ export const financialService = {
 
   analytics: async (): Promise<FinancialAnalytics> => {
     const { data } = await apiClient.get<FinancialAnalytics>('/financial/analytics');
+    return data;
+  },
+
+  listUnmatched: async (): Promise<UnmatchedPayment[]> => {
+    const { data } = await apiClient.get<UnmatchedPayment[]>('/financial/unmatched');
+    return Array.isArray(data) ? data : [];
+  },
+
+  linkUnmatched: async (unmatchedId: string, periciaId: string) => {
+    const { data } = await apiClient.post('/financial/unmatched/' + unmatchedId + '/link', { periciaId });
     return data;
   },
 };
