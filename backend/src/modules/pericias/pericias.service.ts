@@ -173,11 +173,76 @@ export class PericiasService {
   }
 
   async dashboard() {
-    const [total, urgentes, finalizadas, pendentesPagamento, pericias] = await this.prisma.$transaction([
+    const [avaliarStatuses, enviarLaudoStatuses] = await this.prisma.$transaction([
+      this.prisma.status.findMany({
+        where: {
+          OR: [
+            { codigo: { in: ['AVALIAR', 'ST_AVALIAR', 'NOMEADA', 'ACEITA', 'NOVA_NOMEACAO'] } },
+            { nome: { contains: 'avaliar', mode: 'insensitive' } },
+          ],
+        },
+        select: { id: true },
+      }),
+      this.prisma.status.findMany({
+        where: {
+          OR: [
+            { codigo: { in: ['ENVIAR_LAUDO', 'EM_LAUDO'] } },
+            { nome: { contains: 'enviar laudo', mode: 'insensitive' } },
+            { nome: { contains: 'em laudo', mode: 'insensitive' } },
+          ],
+        },
+        select: { id: true },
+      }),
+    ]);
+
+    const avaliarStatusIds = avaliarStatuses.map((status) => status.id);
+    const enviarLaudoStatusIds = enviarLaudoStatuses.map((status) => status.id);
+
+    const [
+      total,
+      urgentes,
+      finalizadas,
+      pendentesPagamento,
+      novasNomeacoes,
+      pendentesAgendamento,
+      proximasPericias,
+      enviarLaudos,
+      pendentesAgendamentoPorCidade,
+      pericias,
+    ] = await this.prisma.$transaction([
       this.prisma.pericia.count(),
       this.prisma.pericia.count({ where: { isUrgent: true } }),
       this.prisma.pericia.count({ where: { finalizada: true } }),
       this.prisma.pericia.count({ where: { pagamentoStatus: 'PENDENTE' } }),
+      this.prisma.pericia.count({
+        where: avaliarStatusIds.length > 0 ? { statusId: { in: avaliarStatusIds } } : { agendada: false, finalizada: false },
+      }),
+      this.prisma.pericia.count({
+        where: {
+          dataAgendamento: null,
+          finalizada: false,
+          laudoEnviado: false,
+        },
+      }),
+      this.prisma.pericia.count({
+        where: {
+          dataAgendamento: { not: null },
+          finalizada: false,
+        },
+      }),
+      this.prisma.pericia.count({
+        where: enviarLaudoStatusIds.length > 0 ? { statusId: { in: enviarLaudoStatusIds } } : { agendada: true, laudoEnviado: false, finalizada: false },
+      }),
+      this.prisma.pericia.groupBy({
+        by: ['cidadeId'],
+        where: {
+          dataAgendamento: null,
+          finalizada: false,
+          laudoEnviado: false,
+        },
+        orderBy: { cidadeId: 'asc' },
+        _count: { _all: true },
+      }),
       this.prisma.pericia.findMany({
         where: { isUrgent: true },
         take: 5,
@@ -188,10 +253,19 @@ export class PericiasService {
 
     return {
       kpis: [
-        { label: 'Total de Perícias', value: String(total) },
-        { label: 'Urgentes', value: String(urgentes), trend: urgentes > 0 ? 'up' : 'stable' },
-        { label: 'Finalizadas', value: String(finalizadas) },
-        { label: 'Pendentes Pagamento', value: String(pendentesPagamento) },
+        { key: 'novas_nomeacoes', label: 'Novas Nomeações', value: String(novasNomeacoes) },
+        {
+          key: 'agendar_data',
+          label: 'Agendar Data',
+          value: String(pendentesAgendamento),
+          trend: `${pendentesAgendamentoPorCidade.filter((item) => item.cidadeId).length} cidades`,
+        },
+        { key: 'proximas_pericias', label: 'Próximas Perícias', value: String(proximasPericias) },
+        { key: 'enviar_laudos', label: 'Enviar Laudos', value: String(enviarLaudos) },
+        { key: 'esclarecimentos', label: 'Esclarecimentos', value: String(urgentes), trend: urgentes > 0 ? 'up' : 'stable' },
+        { key: 'a_receber', label: 'A Receber', value: String(pendentesPagamento) },
+        { key: 'total_pericias', label: 'Total de Perícias', value: String(total) },
+        { key: 'finalizadas', label: 'Finalizadas', value: String(finalizadas) },
       ],
       chart: [
         { name: 'Total', value: total },
