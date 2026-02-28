@@ -1,4 +1,4 @@
-import { Injectable, NotFoundException } from '@nestjs/common';
+import { BadRequestException, Injectable, NotFoundException } from '@nestjs/common';
 import { Prisma } from '@prisma/client';
 import { RequestContextService } from '../../common/request-context.service';
 import { PrismaService } from '../../prisma/prisma.service';
@@ -8,8 +8,10 @@ import {
   CreatePericiasDto,
   ImportPericiasDto,
   ListPericiasDto,
+  SetUrgenciaPericiaDto,
   UpdatePericiasDto,
 } from './dto/pericias.dto';
+import { derivePericiaFlagsFromStatus, isPericiaStatusCode, isTransitionAllowed } from './status-engine';
 
 @Injectable()
 export class PericiasService {
@@ -46,6 +48,7 @@ export class PericiasService {
   async findAll(query: ListPericiasDto) {
     const where: Prisma.PericiaWhereInput = {
       ...(query.statusId ? { statusId: query.statusId } : {}),
+      ...(query.statusCodigo ? { status: { codigo: query.statusCodigo } } : {}),
       ...(query.cidadeId ? { cidadeId: query.cidadeId } : {}),
       ...(query.tipoPericiaId ? { tipoPericiaId: query.tipoPericiaId } : {}),
       ...(query.dateFrom || query.dateTo
@@ -155,7 +158,32 @@ export class PericiasService {
     const tenantId = this.context.get('tenantId') ?? '';
     const current = await this.findOne(dto.periciaId);
 
-    const updated = await this.prisma.pericia.update({ where: { id: dto.periciaId }, data: { statusId: dto.statusId }, include: { status: true } });
+    const targetStatus = await this.prisma.status.findFirst({ where: { id: dto.statusId, tenantId }, select: { id: true, codigo: true } });
+    const currentStatus = current.statusId
+      ? await this.prisma.status.findFirst({ where: { id: current.statusId, tenantId }, select: { id: true, codigo: true } })
+      : null;
+
+    if (!targetStatus) throw new NotFoundException('Status de destino não encontrado para o tenant.');
+    if (!isPericiaStatusCode(targetStatus.codigo)) throw new BadRequestException(`Status de destino inválido: ${targetStatus.codigo}`);
+
+    const currentCode = currentStatus?.codigo && isPericiaStatusCode(currentStatus.codigo) ? currentStatus.codigo : null;
+    if (!isTransitionAllowed(currentCode, targetStatus.codigo)) {
+      throw new BadRequestException(`Transição inválida de ${currentCode ?? 'SEM_STATUS'} para ${targetStatus.codigo}`);
+    }
+
+    const derivedFlags = derivePericiaFlagsFromStatus(targetStatus.codigo);
+
+    const data: Prisma.PericiaUpdateInput = {
+      status: { connect: { id: dto.statusId } },
+      ...derivedFlags,
+      ...(dto.dataAgendamento ? { dataAgendamento: new Date(dto.dataAgendamento) } : {}),
+      ...(dto.horaAgendamento ? { horaAgendamento: dto.horaAgendamento } : {}),
+      ...(dto.dataRealizacao ? { dataRealizacao: new Date(dto.dataRealizacao) } : {}),
+      ...(dto.dataEnvioLaudo ? { dataEnvioLaudo: new Date(dto.dataEnvioLaudo) } : {}),
+      ...(current.statusId && current.statusId !== dto.statusId ? { isUrgent: false } : {}),
+    };
+
+    const updated = await this.prisma.pericia.update({ where: { id: dto.periciaId }, data, include: { status: true } });
 
     await this.prisma.logStatus.create({
       data: {
@@ -164,7 +192,15 @@ export class PericiasService {
         ...(current.statusId ? { statusAnterior: current.statusId } : {}),
         statusNovo: dto.statusId,
         ...(dto.motivo ? { motivo: dto.motivo } : {}),
-        metadata: { source: 'pericias.changeStatus' },
+        metadata: {
+          source: 'pericias.changeStatus',
+          currentCodigo: currentCode,
+          targetCodigo: targetStatus.codigo,
+          ...(dto.dataAgendamento ? { dataAgendamento: dto.dataAgendamento } : {}),
+          ...(dto.horaAgendamento ? { horaAgendamento: dto.horaAgendamento } : {}),
+          ...(dto.dataRealizacao ? { dataRealizacao: dto.dataRealizacao } : {}),
+          ...(dto.dataEnvioLaudo ? { dataEnvioLaudo: dto.dataEnvioLaudo } : {}),
+        },
         ...(actorId ? { createdBy: actorId } : {}),
       },
     });
@@ -172,6 +208,36 @@ export class PericiasService {
     return updated;
   }
 
+  async setUrgencia(dto: SetUrgenciaPericiaDto, actorId?: string) {
+    const tenantId = this.context.get('tenantId') ?? '';
+    const current = await this.findOne(dto.periciaId);
+
+    const updated = await this.prisma.pericia.update({
+      where: { id: dto.periciaId },
+      data: {
+        isUrgent: dto.isUrgent,
+        urgentCheckedAt: new Date(),
+      },
+      include: { status: true },
+    });
+
+    await this.prisma.activityLog.create({
+      data: {
+        tenantId,
+        entityType: 'PERICIA',
+        entityId: dto.periciaId,
+        action: dto.isUrgent ? 'URGENTE_MARCADO' : 'URGENTE_REMOVIDO',
+        payloadJson: {
+          source: 'pericias.setUrgencia',
+          statusId: current.statusId,
+          statusCodigo: current.status?.codigo ?? null,
+        },
+        ...(actorId ? { createdBy: actorId } : {}),
+      },
+    });
+
+    return updated;
+  }
 
   private async getDashboardQueueSettings() {
     const tenantId = this.context.get('tenantId') ?? '';
@@ -189,10 +255,10 @@ export class PericiasService {
     const dashboard = (safe.dashboard as Record<string, unknown> | undefined) ?? {};
 
     return {
-      avaliarStatusCodigos: asArray(dashboard.avaliarStatusCodigos, ['AVALIAR', 'ST_AVALIAR', 'NOMEADA', 'ACEITA', 'NOVA_NOMEACAO']),
+      avaliarStatusCodigos: asArray(dashboard.avaliarStatusCodigos, ['AVALIAR']),
       avaliarStatusNomeTermos: asArray(dashboard.avaliarStatusNomeTermos, ['avaliar']),
-      enviarLaudoStatusCodigos: asArray(dashboard.enviarLaudoStatusCodigos, ['ENVIAR_LAUDO', 'EM_LAUDO']),
-      enviarLaudoStatusNomeTermos: asArray(dashboard.enviarLaudoStatusNomeTermos, ['enviar laudo', 'em laudo']),
+      enviarLaudoStatusCodigos: asArray(dashboard.enviarLaudoStatusCodigos, ['ENVIAR_LAUDO']),
+      enviarLaudoStatusNomeTermos: asArray(dashboard.enviarLaudoStatusNomeTermos, ['enviar laudo']),
     };
   }
 
@@ -307,7 +373,7 @@ export class PericiasService {
         autorNome: p.autorNome ?? '',
         cidade: p.cidade?.nome ?? '',
         dataAgendamento: p.dataAgendamento?.toISOString(),
-        status: (p.status?.codigo ?? 'NOVA_NOMEACAO') as string,
+        status: (p.status?.codigo ?? 'AVALIAR') as string,
       })),
     };
   }

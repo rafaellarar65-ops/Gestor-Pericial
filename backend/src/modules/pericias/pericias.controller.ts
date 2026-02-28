@@ -8,6 +8,7 @@ import {
   CreatePericiasDto,
   ImportPericiasDto,
   ListPericiasDto,
+  SetUrgenciaPericiaDto,
   UpdatePericiasDto,
 } from './dto/pericias.dto';
 import { PericiasService } from './pericias.service';
@@ -29,7 +30,6 @@ export class PericiasController {
   dashboard() {
     return this.service.dashboard();
   }
-
 
   @Get(':id/timeline')
   @ApiOperation({ summary: 'Timeline real de eventos da perícia' })
@@ -84,5 +84,10 @@ export class PericiasController {
   @Patch('change-status')
   changeStatus(@Body() dto: ChangeStatusPericiaDto, @Req() req: Request & { user?: { sub?: string } }) {
     return this.service.changeStatus(dto, req.user?.sub);
+  }
+
+  @Patch('set-urgencia')
+  setUrgencia(@Body() dto: SetUrgenciaPericiaDto, @Req() req: Request & { user?: { sub?: string } }) {
+    return this.service.setUrgencia(dto, req.user?.sub);
   }
 }

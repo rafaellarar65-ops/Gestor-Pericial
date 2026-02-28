@@ -1,7 +1,21 @@
 import { ApiProperty, ApiPropertyOptional } from '@nestjs/swagger';
 import { PericiaPaymentStatus } from '@prisma/client';
 import { Type } from 'class-transformer';
-import { IsArray, IsBoolean, IsDateString, IsEnum, IsInt, IsNotEmpty, IsNumber, IsOptional, IsString, IsUUID, Max, Min, ValidateNested } from 'class-validator';
+import {
+  IsArray,
+  IsBoolean,
+  IsDateString,
+  IsEnum,
+  IsInt,
+  IsNotEmpty,
+  IsNumber,
+  IsOptional,
+  IsString,
+  IsUUID,
+  Max,
+  Min,
+  ValidateNested,
+} from 'class-validator';
 
 export class CreatePericiasDto {
   @ApiProperty()
@@ -59,7 +73,6 @@ export class CreatePericiasDto {
   @IsDateString()
   dataNomeacao?: string;
 
-
   @ApiPropertyOptional()
   @IsOptional()
   @IsString()
@@ -86,7 +99,6 @@ export class CreatePericiasDto {
   @Type(() => Number)
   @IsNumber()
   honorariosPrevistosPartes?: number;
-
 }
 
 export class UpdatePericiasDto {
@@ -115,7 +127,6 @@ export class UpdatePericiasDto {
   @IsDateString()
   dataNomeacao?: string;
 
-
   @ApiPropertyOptional()
   @IsOptional()
   @IsString()
@@ -143,7 +154,6 @@ export class UpdatePericiasDto {
   @IsNumber()
   honorariosPrevistosPartes?: number;
 
-
   @ApiPropertyOptional()
   @IsOptional()
   @IsDateString()
@@ -165,6 +175,11 @@ export class ListPericiasDto {
   @IsOptional()
   @IsUUID()
   statusId?: string;
+
+  @ApiPropertyOptional({ description: 'Filtra por código de status (ex.: ENVIAR_LAUDO)' })
+  @IsOptional()
+  @IsString()
+  statusCodigo?: string;
 
   @ApiPropertyOptional()
   @IsOptional()
@@ -232,6 +247,36 @@ export class ChangeStatusPericiaDto {
   @IsOptional()
   @IsString()
   motivo?: string;
+
+  @ApiPropertyOptional()
+  @IsOptional()
+  @IsDateString()
+  dataAgendamento?: string;
+
+  @ApiPropertyOptional()
+  @IsOptional()
+  @IsString()
+  horaAgendamento?: string;
+
+  @ApiPropertyOptional()
+  @IsOptional()
+  @IsDateString()
+  dataRealizacao?: string;
+
+  @ApiPropertyOptional()
+  @IsOptional()
+  @IsDateString()
+  dataEnvioLaudo?: string;
+}
+
+export class SetUrgenciaPericiaDto {
+  @ApiProperty()
+  @IsUUID()
+  periciaId!: string;
+
+  @ApiProperty()
+  @IsBoolean()
+  isUrgent!: boolean;
 }
 
 export class ImportPericiasDto {

@@ -118,24 +118,24 @@ export class ConfigDomainService {
 
     return {
       nomeacoesGroups: {
-        avaliar: asStringArray(safe.nomeacoesGroups && (safe.nomeacoesGroups as Record<string, unknown>).avaliar, ['NOVA_NOMEACAO', 'AVALIAR']),
+        avaliar: asStringArray(safe.nomeacoesGroups && (safe.nomeacoesGroups as Record<string, unknown>).avaliar, ['AVALIAR']),
         aceiteHonorarios: asStringArray(
           safe.nomeacoesGroups && (safe.nomeacoesGroups as Record<string, unknown>).aceiteHonorarios,
-          ['AGUARDANDO_ACEITE', 'ACEITE_HONORARIOS'],
+          ['AGUARDANDO_ACEITE_HONORARIOS'],
         ),
         majorarHonorarios: asStringArray(
           safe.nomeacoesGroups && (safe.nomeacoesGroups as Record<string, unknown>).majorarHonorarios,
-          ['A_MAJORAR', 'MAJORAR_HONORARIOS'],
+          ['MAJORAR'],
         ),
         observacaoExtra: asStringArray(
           safe.nomeacoesGroups && (safe.nomeacoesGroups as Record<string, unknown>).observacaoExtra,
-          ['OBSERVACAO_EXTRA', 'COM_OBSERVACAO'],
+          ['ESCLARECIMENTOS'],
         ),
       },
       dashboard: {
         avaliarStatusCodigos: asStringArray(
           safe.dashboard && (safe.dashboard as Record<string, unknown>).avaliarStatusCodigos,
-          ['AVALIAR', 'ST_AVALIAR', 'NOMEADA', 'ACEITA', 'NOVA_NOMEACAO'],
+          ['AVALIAR'],
         ),
         avaliarStatusNomeTermos: asStringArray(
           safe.dashboard && (safe.dashboard as Record<string, unknown>).avaliarStatusNomeTermos,
@@ -143,11 +143,11 @@ export class ConfigDomainService {
         ),
         enviarLaudoStatusCodigos: asStringArray(
           safe.dashboard && (safe.dashboard as Record<string, unknown>).enviarLaudoStatusCodigos,
-          ['ENVIAR_LAUDO', 'EM_LAUDO'],
+          ['ENVIAR_LAUDO'],
         ),
         enviarLaudoStatusNomeTermos: asStringArray(
           safe.dashboard && (safe.dashboard as Record<string, unknown>).enviarLaudoStatusNomeTermos,
-          ['enviar laudo', 'em laudo'],
+          ['enviar laudo'],
         ),
       },
       filas: {
