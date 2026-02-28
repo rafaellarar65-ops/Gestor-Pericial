@@ -35,6 +35,16 @@ const toDateTime = (value: string) => {
 
 const toCsvValue = (value: string) => `"${value.replaceAll('"', '""')}"`;
 
+const buildAgendaCsv = (rows: AgendaRow[]) => {
+  const header = ['Título', 'Tipo', 'Início', 'Fim', 'Local', 'Status'];
+  const csvLines = [
+    header,
+    ...rows.map((row) => [row.titulo, row.tipo, row.inicio || '—', row.fim || '—', row.local, row.status]),
+  ].map((line) => line.map((value) => toCsvValue(value)).join(';'));
+
+  return `\uFEFF${csvLines.join('\n')}`;
+};
+
 const inferStatus = (item: Record<string, string | number | undefined>): AgendaRow['status'] => {
   const raw = getValue(item, ['status', 'state']).toLowerCase();
   if (raw.includes('realiz')) return 'realizado';
@@ -60,34 +70,28 @@ const Page = () => {
 
   const rows = useMemo(() => data.map(mapAgendaRow), [data]);
 
-  const filteredRows = useMemo(
-    () =>
-      rows.filter((row) => {
-        const matchesBusca =
-          !busca ||
-          [row.titulo, row.tipo, row.local].some((value) => value.toLowerCase().includes(busca.toLowerCase()));
+  const filteredRows = useMemo(() => {
+    const searchTerm = busca.toLowerCase();
 
-        const matchesStatus = status === 'todos' || row.status === status;
-        const matchesPeriodo = !periodo || row.inicio.startsWith(periodo);
+    return rows.filter((row) => {
+      const matchesBusca =
+        !busca ||
+        [row.titulo, row.tipo, row.local].some((value) => value.toLowerCase().includes(searchTerm));
+      const matchesStatus = status === 'todos' || row.status === status;
+      const matchesPeriodo = !periodo || row.inicio.startsWith(periodo);
 
-        return matchesBusca && matchesStatus && matchesPeriodo;
-      }),
-    [rows, busca, status, periodo],
-  );
+      return matchesBusca && matchesStatus && matchesPeriodo;
+    });
+  }, [rows, busca, status, periodo]);
 
   const handleExportAgenda = () => {
-    const header = ['Título', 'Tipo', 'Início', 'Fim', 'Local', 'Status'];
-    const csvLines = [header, ...filteredRows.map((row) => [row.titulo, row.tipo, row.inicio, row.fim, row.local, row.status])]
-      .map((line) => line.map((value) => toCsvValue(value || '—')).join(';'));
-
-    const filtroDescricao = [`busca=${busca || 'todos'}`, `status=${status}`, `periodo=${periodo || 'todos'}`].join(',');
-    const csvContent = [`"Filtros";"${filtroDescricao}"`, ...csvLines].join('\n');
+    const csvContent = buildAgendaCsv(filteredRows);
     const blob = new Blob([csvContent], { type: 'text/csv;charset=utf-8;' });
     const url = URL.createObjectURL(blob);
     const link = document.createElement('a');
 
     link.href = url;
-    link.setAttribute('download', `agenda-${periodo || 'completa'}.csv`);
+    link.setAttribute('download', `agenda-${periodo || new Date().toISOString().slice(0, 10)}.csv`);
     document.body.appendChild(link);
     link.click();
     document.body.removeChild(link);
@@ -105,7 +109,9 @@ const Page = () => {
           <p className="text-sm text-muted-foreground">Gerencie eventos, horários e compromissos operacionais.</p>
         </div>
         <div className="flex gap-2">
-          <Button onClick={handleExportAgenda} variant="outline">Exportar agenda</Button>
+          <Button disabled={filteredRows.length === 0} onClick={handleExportAgenda} variant="outline">
+            Exportar agenda
+          </Button>
           <Button>Criar evento</Button>
         </div>
       </header>
