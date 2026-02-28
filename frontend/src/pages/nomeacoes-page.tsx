@@ -4,7 +4,7 @@ import { Scale, ChevronDown, ChevronUp, ExternalLink, MapPin } from 'lucide-reac
 import { LoadingState } from '@/components/ui/state';
 import { useDomainData } from '@/hooks/use-domain-data';
 
-type PericiaItem = Record<string, string | number | undefined>;
+type PericiaItem = Record<string, unknown>;
 
 type StatusGroup = {
   label: string;
@@ -18,7 +18,7 @@ const STATUS_GROUPS: StatusGroup[] = [
     label: 'A AVALIAR (NOVAS)',
     color: 'bg-blue-600',
     textColor: 'text-white',
-    statuses: ['NOVA_NOMEACAO', 'AVALIAR'],
+    statuses: ['AVALIAR'],
   },
   {
     label: 'AGUARDANDO ACEITE HONORÁRIOS',
@@ -40,8 +40,32 @@ const STATUS_GROUPS: StatusGroup[] = [
   },
 ];
 
+function getStatusCode(item: PericiaItem): string {
+  const rawStatus = item['status'];
+
+  if (typeof rawStatus === 'string' || typeof rawStatus === 'number') {
+    return String(rawStatus).toUpperCase();
+  }
+
+  if (rawStatus && typeof rawStatus === 'object') {
+    const statusObject = rawStatus as Record<string, unknown>;
+    const statusCode = statusObject['codigo'];
+    const statusName = statusObject['nome'];
+
+    if (typeof statusCode === 'string' || typeof statusCode === 'number') {
+      return String(statusCode).toUpperCase();
+    }
+
+    if (typeof statusName === 'string' || typeof statusName === 'number') {
+      return String(statusName).toUpperCase();
+    }
+  }
+
+  return '';
+}
+
 function matchGroup(item: PericiaItem, group: StatusGroup): boolean {
-  const status = String(item['status'] ?? '').toUpperCase();
+  const status = getStatusCode(item);
   return group.statuses.some((s) => status.includes(s));
 }
 
@@ -57,16 +81,11 @@ const NomeacoesPage = () => {
     });
   };
 
-  // Distribute items into groups; unmatched go to first group
+  // Distribute items into groups
   const groups = STATUS_GROUPS.map((sg) => ({
     ...sg,
     items: data.filter((item) => matchGroup(item, sg)),
   }));
-  // Items that didn't match any group go to "A AVALIAR"
-  const unmatched = data.filter((item) =>
-    !STATUS_GROUPS.some((sg) => matchGroup(item, sg)),
-  );
-  groups[0].items = [...groups[0].items, ...unmatched];
 
   if (isLoading) return <LoadingState />;
 
@@ -150,7 +169,7 @@ const NomeacoesPage = () => {
                             </div>
                           )}
                           <p className="mt-2 text-xs font-medium text-blue-600">
-                            Status: {String(item['status'] ?? '—')}
+                            Status: {getStatusCode(item) || '—'}
                           </p>
                         </div>
                       ))}
