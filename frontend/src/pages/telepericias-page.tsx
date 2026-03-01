@@ -5,7 +5,7 @@ import { Button } from '@/components/ui/button';
 import { Card } from '@/components/ui/card';
 import { EmptyState, ErrorState, LoadingState } from '@/components/ui/state';
 import { periciaService } from '@/services/pericia-service';
-import type { TelepericiaQueueItem } from '@/types/api';
+import type { TelepericiaQueueItem, TelepericiaQueueResponse } from '@/types/api';
 
 const toDateTime = (value?: string) => {
   if (!value) return '—';
@@ -23,7 +23,7 @@ const buildTemplateMessage = (item: TelepericiaQueueItem) =>
 
 const Page = () => {
   const queryClient = useQueryClient();
-  const { data, isLoading, isError } = useQuery({
+  const { data, isLoading, isError } = useQuery<TelepericiaQueueResponse>({
     queryKey: ['telepericia', 'queue'],
     queryFn: () => periciaService.telepericiaQueue(),
   });

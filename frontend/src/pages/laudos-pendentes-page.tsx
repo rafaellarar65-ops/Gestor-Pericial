@@ -1,5 +1,6 @@
 import { useMemo, useState } from 'react';
 import { Link } from 'react-router-dom';
+import { useQuery } from '@tanstack/react-query';
 import { FileText, MapPin, FileEdit, AlertTriangle, CheckCircle2, ClipboardList } from 'lucide-react';
 import { ErrorState, LoadingState } from '@/components/ui/state';
 import { useDomainData } from '@/hooks/use-domain-data';
@@ -80,6 +81,7 @@ const LaudoCard = ({ item, index, urgentTerms }: { item: LaudoItem; index: numbe
   const urgent = isItemUrgent(item, urgentTerms);
   const itemId = item.id ?? index;
   const detailHref = `/pericias/${itemId}`;
+  const laudoInteligenteHref = `/laudo-inteligente?periciaId=${itemId}`;
   const statusLabel = getStatusLabel(item);
   const delayDays = getDelayDays(item);
 
@@ -166,6 +168,11 @@ const LaudoCard = ({ item, index, urgentTerms }: { item: LaudoItem; index: numbe
 const LaudosPendentesPage = () => {
   const { data = [], isLoading, isError } = useDomainData('laudos-pendentes', '/laudos-pendentes');
   const [prioritizeUrgent, setPrioritizeUrgent] = useState(false);
+  const { data: dashboardSettings } = useQuery({
+    queryKey: ['system-dashboard-settings'],
+    queryFn: () => configService.getDashboardSettings(),
+  });
+  const urgentTerms = dashboardSettings?.filas.laudosUrgenciaTermosStatus ?? ['URGENTE'];
 
   const sorted = useMemo(() => {
     const items = (data as LaudoItem[]).filter(isEnviarLaudoStatus);
@@ -176,8 +183,8 @@ const LaudosPendentesPage = () => {
       if (aDelay !== bDelay) return bDelay - aDelay;
 
       if (prioritizeUrgent) {
-        const aUrgent = isItemUrgent(a) ? 0 : 1;
-        const bUrgent = isItemUrgent(b) ? 0 : 1;
+        const aUrgent = isItemUrgent(a, urgentTerms) ? 0 : 1;
+        const bUrgent = isItemUrgent(b, urgentTerms) ? 0 : 1;
         if (aUrgent !== bUrgent) return aUrgent - bUrgent;
       }
 
@@ -186,7 +193,7 @@ const LaudosPendentesPage = () => {
 
       return String(a.id ?? '').localeCompare(String(b.id ?? ''));
     });
-  }, [data, prioritizeUrgent]);
+  }, [data, prioritizeUrgent, urgentTerms]);
 
   const total = sorted.length;
   const urgentCount = useMemo(() => sorted.filter((item) => isItemUrgent(item, urgentTerms)).length, [sorted, urgentTerms]);

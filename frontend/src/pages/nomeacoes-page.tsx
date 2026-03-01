@@ -1,9 +1,10 @@
 import { useMemo, useState } from 'react';
 import { Link } from 'react-router-dom';
-import { useInfiniteQuery } from '@tanstack/react-query';
+import { useInfiniteQuery, useQuery } from '@tanstack/react-query';
 import { Scale, ChevronDown, ChevronUp, ExternalLink, MapPin } from 'lucide-react';
 import { LoadingState } from '@/components/ui/state';
 import { apiClient } from '@/lib/api-client';
+import { configService } from '@/services/config-service';
 
 type PericiaItem = Record<string, unknown>;
 
@@ -26,7 +27,7 @@ type StatusGroup = {
 
 const PAGE_SIZE = 20;
 
-const STATUS_GROUPS: StatusGroup[] = [
+const DEFAULT_STATUS_GROUPS: StatusGroup[] = [
   {
     label: 'A AVALIAR (NOVAS)',
     color: 'bg-blue-600',
@@ -132,7 +133,7 @@ const NomeacoesPage = () => {
 
   const groups = useMemo(
     () =>
-      STATUS_GROUPS.map((sg) => {
+      statusGroups.map((sg) => {
         const groupItems = allItems.filter((item) => matchGroup(item, sg));
         const groupTotal = Object.entries(statusTotals).reduce((acc, [status, value]) => {
           if (sg.statuses.some((expected) => status.includes(expected))) {
@@ -147,7 +148,7 @@ const NomeacoesPage = () => {
           total: groupTotal,
         };
       }),
-    [allItems, statusTotals],
+    [allItems, statusTotals, statusGroups],
   );
 
   const loadedCount = allItems.length;
@@ -221,7 +222,7 @@ const NomeacoesPage = () => {
                             <p className="font-mono text-xs text-gray-400">
                               {String(item.processoCNJ ?? item.id ?? `#${i + 1}`)}
                             </p>
-                            {item.id && (
+                            {item.id != null && (
                               <Link
                                 className="text-gray-400 hover:text-blue-600"
                                 to={`/pericias/${String(item.id)}`}
@@ -235,7 +236,7 @@ const NomeacoesPage = () => {
                             {String(item.autorNome ?? item.nome ?? '—')}
                           </p>
 
-                          {item.cidade && (
+                          {item.cidade != null && (
                             <div className="mt-2 flex items-center gap-1 text-xs text-gray-400">
                               <MapPin size={11} />
                               {String(item.cidade)}
