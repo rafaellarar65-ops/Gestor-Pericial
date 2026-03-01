@@ -1,6 +1,6 @@
 import { useMemo, useState } from 'react';
 import { useNavigate, useParams } from 'react-router-dom';
-import { ArrowLeft, Building2, Check, Copy } from 'lucide-react';
+import { ArrowLeft, Building2, Check, ChevronDown, ChevronUp, Copy } from 'lucide-react';
 import { ErrorState, LoadingState } from '@/components/ui/state';
 import { useCityOverviewQuery } from '@/hooks/use-pericias';
 
@@ -15,19 +15,31 @@ const CidadeDetailPage = () => {
   const navigate = useNavigate();
   const [activeTab, setActiveTab] = useState<TabType>('Visão Geral');
   const [idCopied, setIdCopied] = useState(false);
+  const [collapsedBucket, setCollapsedBucket] = useState<Record<string, boolean>>({});
   const { data, isLoading, isError } = useCityOverviewQuery(id);
 
   if (isLoading) return <LoadingState />;
   if (isError || !data) return <ErrorState message="Erro ao carregar central da cidade" />;
 
   const buckets = [
-    { label: 'Avaliar', values: data.buckets.avaliar.cnjs },
-    { label: 'Agendar', values: data.buckets.agendar.cnjs },
-    { label: 'Laudos', values: data.buckets.laudos.cnjs },
-    { label: 'Esclarecimentos', values: data.buckets.esclarecimentos.cnjs },
-    { label: 'Pagamento', values: data.buckets.pagamento.cnjs },
-    { label: 'Críticos', values: data.buckets.criticos.cnjs },
-  ];
+    { key: 'avaliar', label: 'Avaliar', total: data.buckets.avaliar.total, values: data.buckets.avaliar.cnjs },
+    { key: 'agendar', label: 'Agendar', total: data.buckets.agendar.total, values: data.buckets.agendar.cnjs },
+    { key: 'laudos', label: 'Laudos', total: data.buckets.laudos.total, values: data.buckets.laudos.cnjs },
+    { key: 'esclarecimentos', label: 'Esclarecimentos', total: data.buckets.esclarecimentos.total, values: data.buckets.esclarecimentos.cnjs },
+    { key: 'pagamento', label: 'Pagamento', total: data.buckets.pagamento.total, values: data.buckets.pagamento.cnjs },
+    { key: 'criticos', label: 'Críticos', total: data.buckets.criticos.total, values: data.buckets.criticos.cnjs },
+  ] as const;
+
+  const totalStatus = useMemo(
+    () =>
+      data.buckets.avaliar.total +
+      data.buckets.agendar.total +
+      data.buckets.laudos.total +
+      data.buckets.esclarecimentos.total +
+      data.buckets.pagamento.total +
+      data.buckets.finalizada.total,
+    [data],
+  );
 
   const totalAtivos = useMemo(
     () =>
@@ -39,6 +51,8 @@ const CidadeDetailPage = () => {
     [data],
   );
 
+  const apiDelta = data.metrics.totalPericias - totalStatus;
+
   const copyCityId = async () => {
     try {
       await navigator.clipboard.writeText(data.cidade.id);
@@ -47,6 +61,10 @@ const CidadeDetailPage = () => {
     } catch {
       setIdCopied(false);
     }
+  };
+
+  const toggleBucket = (bucketKey: string) => {
+    setCollapsedBucket((prev) => ({ ...prev, [bucketKey]: !prev[bucketKey] }));
   };
 
   return (
@@ -72,8 +90,14 @@ const CidadeDetailPage = () => {
           <CityMetric label="Score Fin." value={`${data.metrics.score}/100`} />
           <CityMetric label="A Receber Total" value={toMoney(data.metrics.aReceberTotal)} />
           <CityMetric label="Atraso Crítico" value={String(data.metrics.atrasoCritico)} />
-          <CityMetric label="Total Perícias" value={String(data.metrics.totalPericias)} />
+          <CityMetric label="Total (status)" value={String(totalStatus)} />
         </div>
+
+        {apiDelta !== 0 && (
+          <p className="mt-3 text-center text-xs text-amber-100">
+            Divergência detectada: total API ({data.metrics.totalPericias}) vs soma por status ({totalStatus}). Diferença: {apiDelta > 0 ? `+${apiDelta}` : apiDelta}.
+          </p>
+        )}
       </section>
 
       <section className="rounded-xl border bg-white">
@@ -92,18 +116,35 @@ const CidadeDetailPage = () => {
 
         <div className="p-4">
           {activeTab === 'Visão Geral' && (
-            <div className="grid gap-3 md:grid-cols-3 lg:grid-cols-6">
-              {buckets.map((bucket) => (
-                <div className="min-h-40 rounded-lg border bg-slate-50 p-3" key={bucket.label}>
-                  <p className="mb-2 border-b pb-2 text-center font-semibold uppercase">{bucket.label}</p>
-                  <ul className="space-y-1 text-xs text-slate-700">
-                    {bucket.values.length === 0 && <li>Sem processos</li>}
-                    {bucket.values.map((cnj) => (
-                      <li key={cnj}>{cnj}</li>
-                    ))}
-                  </ul>
-                </div>
-              ))}
+            <div className="grid gap-3 md:grid-cols-2 lg:grid-cols-3">
+              {buckets.map((bucket) => {
+                const isCollapsed = collapsedBucket[bucket.key] === true;
+
+                return (
+                  <div className="rounded-lg border bg-slate-50 p-3" key={bucket.key}>
+                    <button
+                      className="mb-2 flex w-full items-center justify-between border-b pb-2 text-left"
+                      onClick={() => toggleBucket(bucket.key)}
+                      type="button"
+                    >
+                      <p className="font-semibold uppercase">{bucket.label}</p>
+                      <div className="flex items-center gap-2">
+                        <span className="rounded bg-indigo-100 px-2 py-0.5 text-xs font-semibold text-indigo-700">{bucket.total}</span>
+                        {isCollapsed ? <ChevronDown size={14} /> : <ChevronUp size={14} />}
+                      </div>
+                    </button>
+
+                    {!isCollapsed && (
+                      <ul className="space-y-1 text-xs text-slate-700">
+                        {bucket.values.length === 0 && <li>Sem processos</li>}
+                        {bucket.values.map((cnj) => (
+                          <li className="truncate" key={cnj} title={cnj}>{cnj}</li>
+                        ))}
+                      </ul>
+                    )}
+                  </div>
+                );
+              })}
             </div>
           )}
 
@@ -114,30 +155,41 @@ const CidadeDetailPage = () => {
                 <ProcessMetric title="Finalizadas" value={String(data.buckets.finalizada.total)} />
                 <ProcessMetric
                   title="Taxa de Conclusão"
-                  value={`${data.metrics.totalPericias ? Math.round((data.buckets.finalizada.total / data.metrics.totalPericias) * 100) : 0}%`}
+                  value={`${totalStatus ? Math.round((data.buckets.finalizada.total / totalStatus) * 100) : 0}%`}
                 />
               </div>
 
               <div className="grid gap-3 md:grid-cols-2 xl:grid-cols-3">
-                {buckets.map((bucket) => (
-                  <div className="rounded-lg border bg-slate-50 p-4" key={bucket.label}>
-                    <div className="mb-3 flex items-center justify-between">
-                      <p className="font-semibold text-slate-800">{bucket.label}</p>
-                      <span className="rounded-full bg-indigo-100 px-2 py-1 text-xs font-semibold text-indigo-700">
-                        {bucket.values.length}
-                      </span>
-                    </div>
+                {buckets.map((bucket) => {
+                  const isCollapsed = collapsedBucket[bucket.key] === true;
 
-                    <ul className="space-y-1 text-xs text-slate-700">
-                      {bucket.values.length === 0 && <li>Sem processos neste status.</li>}
-                      {bucket.values.map((cnj) => (
-                        <li className="truncate font-mono" key={cnj} title={cnj}>
-                          {cnj}
-                        </li>
-                      ))}
-                    </ul>
-                  </div>
-                ))}
+                  return (
+                    <div className="rounded-lg border bg-slate-50 p-4" key={bucket.key}>
+                      <button
+                        className="mb-3 flex w-full items-center justify-between"
+                        onClick={() => toggleBucket(bucket.key)}
+                        type="button"
+                      >
+                        <p className="font-semibold text-slate-800">{bucket.label}</p>
+                        <span className="inline-flex items-center gap-1 rounded-full bg-indigo-100 px-2 py-1 text-xs font-semibold text-indigo-700">
+                          {bucket.total}
+                          {isCollapsed ? <ChevronDown size={12} /> : <ChevronUp size={12} />}
+                        </span>
+                      </button>
+
+                      {!isCollapsed && (
+                        <ul className="space-y-1 text-xs text-slate-700">
+                          {bucket.values.length === 0 && <li>Sem processos neste status.</li>}
+                          {bucket.values.map((cnj) => (
+                            <li className="truncate font-mono" key={cnj} title={cnj}>
+                              {cnj}
+                            </li>
+                          ))}
+                        </ul>
+                      )}
+                    </div>
+                  );
+                })}
               </div>
             </div>
           )}
@@ -167,7 +219,7 @@ const CidadeDetailPage = () => {
               <div className="rounded-lg border p-4 text-sm">
                 <h3 className="mb-3 text-base font-semibold text-slate-800">Resumo Operacional</h3>
                 <ul className="space-y-2 text-slate-700">
-                  <li><strong>Total de perícias:</strong> {data.metrics.totalPericias}</li>
+                  <li><strong>Total por status:</strong> {totalStatus}</li>
                   <li><strong>A receber:</strong> {toMoney(data.metrics.aReceberTotal)}</li>
                   <li><strong>Atraso crítico:</strong> {data.metrics.atrasoCritico}</li>
                   <li><strong>Score atual:</strong> {data.metrics.score}/100</li>
@@ -188,7 +240,6 @@ const CidadeDetailPage = () => {
     </div>
   );
 };
-
 
 const ProcessMetric = ({ title, value }: { title: string; value: string }) => (
   <div className="rounded-lg border bg-slate-50 p-4">

@@ -1,4 +1,5 @@
 import { useMemo, useState } from 'react';
+import { CalendarDays, ChevronLeft, ChevronRight } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { Card } from '@/components/ui/card';
 import { Input } from '@/components/ui/input';
@@ -78,18 +79,28 @@ const Page = () => {
 
   return (
     <div className="space-y-4">
-      <header className="flex flex-wrap items-start justify-between gap-3">
-        <div>
-          <h1 className="text-2xl font-semibold">Agenda</h1>
-          <p className="text-sm text-muted-foreground">Gerencie eventos, horários e compromissos operacionais.</p>
-        </div>
-        <div className="flex gap-2">
-          <Button variant="outline">Exportar agenda</Button>
-          <Button>Criar evento</Button>
+      <header className="rounded-xl border bg-white px-5 py-4 shadow-sm">
+        <div className="flex flex-wrap items-center justify-between gap-3">
+          <div className="flex items-center gap-3">
+            <CalendarDays className="text-red-500" size={20} />
+            <h1 className="text-2xl font-semibold text-slate-900">Agenda Geral</h1>
+          </div>
+
+          <div className="flex items-center gap-2 rounded-lg border px-2 py-1">
+            <button className="rounded p-1 hover:bg-slate-100" type="button"><ChevronLeft size={16} /></button>
+            <button className="rounded-md bg-slate-100 px-3 py-1 text-sm" type="button">Hoje</button>
+            <button className="rounded p-1 hover:bg-slate-100" type="button"><ChevronRight size={16} /></button>
+          </div>
+
+          <div className="flex items-center gap-1 rounded-lg bg-slate-100 p-1 text-sm">
+            <button className="rounded-md px-3 py-1.5 text-slate-600" type="button">Mês</button>
+            <button className="rounded-md bg-white px-3 py-1.5 font-semibold text-red-600" type="button">Semana</button>
+            <button className="rounded-md px-3 py-1.5 text-slate-600" type="button">Lista</button>
+          </div>
         </div>
       </header>
 
-      <Card className="space-y-3">
+      <Card className="space-y-3 p-4">
         <div className="grid gap-3 md:grid-cols-3">
           <Input onChange={(event) => setBusca(event.target.value)} placeholder="Buscar por título, tipo ou local" value={busca} />
           <Input onChange={(event) => setPeriodo(event.target.value)} type="date" value={periodo} />
@@ -112,27 +123,27 @@ const Page = () => {
         <Card>
           <div className="overflow-x-auto">
             <table className="w-full text-sm">
-              <thead>
+              <thead className="bg-slate-100 text-left text-xs uppercase tracking-wide text-slate-500">
                 <tr className="border-b">
-                  <th className="px-2 py-2 text-left">Título</th>
-                  <th className="px-2 py-2 text-left">Tipo</th>
-                  <th className="px-2 py-2 text-left">Início</th>
-                  <th className="px-2 py-2 text-left">Fim</th>
-                  <th className="px-2 py-2 text-left">Local</th>
-                  <th className="px-2 py-2 text-left">Status</th>
-                  <th className="px-2 py-2 text-right">Ações</th>
+                  <th className="px-3 py-3">Título</th>
+                  <th className="px-3 py-3">Tipo</th>
+                  <th className="px-3 py-3">Início</th>
+                  <th className="px-3 py-3">Fim</th>
+                  <th className="px-3 py-3">Local</th>
+                  <th className="px-3 py-3">Status</th>
+                  <th className="px-3 py-3 text-right">Ações</th>
                 </tr>
               </thead>
               <tbody>
                 {filteredRows.map((row) => (
                   <tr className="border-b" key={row.id}>
-                    <td className="px-2 py-2">{row.titulo}</td>
-                    <td className="px-2 py-2">{row.tipo}</td>
-                    <td className="px-2 py-2">{toDateTime(row.inicio)}</td>
-                    <td className="px-2 py-2">{toDateTime(row.fim)}</td>
-                    <td className="px-2 py-2">{row.local}</td>
-                    <td className="px-2 py-2 capitalize">{row.status}</td>
-                    <td className="px-2 py-2 text-right">
+                    <td className="px-3 py-3">{row.titulo}</td>
+                    <td className="px-3 py-3">{row.tipo}</td>
+                    <td className="px-3 py-3">{toDateTime(row.inicio)}</td>
+                    <td className="px-3 py-3">{toDateTime(row.fim)}</td>
+                    <td className="px-3 py-3">{row.local}</td>
+                    <td className="px-3 py-3 capitalize">{row.status}</td>
+                    <td className="px-3 py-3 text-right">
                       <Button size="sm" variant="outline">
                         Editar
                       </Button>

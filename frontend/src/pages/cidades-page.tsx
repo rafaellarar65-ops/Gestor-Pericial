@@ -1,16 +1,26 @@
 import { useMemo, useState } from 'react';
 import { Link } from 'react-router-dom';
 import { useMutation, useQueryClient } from '@tanstack/react-query';
-import { ChevronRight, Plus, Search, X } from 'lucide-react';
+import { ChevronDown, ChevronRight, ChevronUp, Plus, Search, X } from 'lucide-react';
 import { ErrorState, LoadingState } from '@/components/ui/state';
 import { useCityOverviewListQuery } from '@/hooks/use-pericias';
 import { configService } from '@/services/config-service';
+import type { CityOverview } from '@/types/api';
+
+const getStatusTotal = (city: CityOverview) =>
+  city.buckets.avaliar.total +
+  city.buckets.agendar.total +
+  city.buckets.laudos.total +
+  city.buckets.pagamento.total +
+  city.buckets.esclarecimentos.total +
+  city.buckets.finalizada.total;
 
 const CidadesPage = () => {
   const queryClient = useQueryClient();
   const [search, setSearch] = useState('');
   const [showCreateModal, setShowCreateModal] = useState(false);
   const [newCity, setNewCity] = useState({ nome: '', codigo: '', uf: 'MG' });
+  const [collapsed, setCollapsed] = useState<Record<string, boolean>>({});
 
   const { data, isLoading, isError } = useCityOverviewListQuery();
 
@@ -35,6 +45,10 @@ const CidadesPage = () => {
       ),
     [data?.items, search],
   );
+
+  const toggleCity = (cityId: string) => {
+    setCollapsed((prev) => ({ ...prev, [cityId]: !prev[cityId] }));
+  };
 
   if (isLoading) return <LoadingState />;
   if (isError) return <ErrorState message="Erro ao carregar cidades" />;
@@ -64,29 +78,50 @@ const CidadesPage = () => {
       </div>
 
       <div className="space-y-3">
-        {rows.map((city) => (
-          <div className="rounded-xl border bg-white p-3" key={city.cidade.id}>
-            <div className="mb-3 flex items-center justify-between">
-              <div className="flex items-center gap-2">
-                <h3 className="text-2xl font-bold text-slate-800">{city.cidade.nome}</h3>
-                <span className="rounded bg-slate-100 px-2 py-0.5 text-xs">{city.cidade.uf ?? '--'}</span>
-              </div>
-              <Link className="inline-flex items-center gap-1 text-sm font-semibold text-indigo-600" to={`/cidades/${city.cidade.id}`}>
-                Abrir central <ChevronRight size={15} />
-              </Link>
-            </div>
+        {rows.map((city) => {
+          const statusTotal = getStatusTotal(city);
+          const apiTotal = city.metrics.totalPericias;
+          const isCollapsed = collapsed[city.cidade.id] === true;
+          const delta = apiTotal - statusTotal;
 
-            <div className="grid grid-cols-2 gap-2 md:grid-cols-7">
-              <Kpi label="Total" value={city.metrics.totalPericias} />
-              <Kpi label="Avaliar" value={city.buckets.avaliar.total} />
-              <Kpi label="Agendar" value={city.buckets.agendar.total} />
-              <Kpi label="Laudos" value={city.buckets.laudos.total} />
-              <Kpi label="Aguardando Pag" value={city.buckets.pagamento.total} />
-              <Kpi label="Esclarecimentos" value={city.buckets.esclarecimentos.total} />
-              <Kpi label="Finalizada" value={city.buckets.finalizada.total} />
+          return (
+            <div className="rounded-xl border bg-white p-3" key={city.cidade.id}>
+              <div className="mb-1 flex items-center justify-between gap-2">
+                <button
+                  className="flex items-center gap-2 text-left"
+                  onClick={() => toggleCity(city.cidade.id)}
+                  type="button"
+                >
+                  {isCollapsed ? <ChevronDown size={16} /> : <ChevronUp size={16} />}
+                  <h3 className="text-2xl font-bold text-slate-800">{city.cidade.nome}</h3>
+                  <span className="rounded bg-slate-100 px-2 py-0.5 text-xs">{city.cidade.uf ?? '--'}</span>
+                </button>
+
+                <Link className="inline-flex items-center gap-1 text-sm font-semibold text-indigo-600" to={`/cidades/${city.cidade.id}`}>
+                  Abrir central <ChevronRight size={15} />
+                </Link>
+              </div>
+
+              {delta !== 0 && (
+                <p className="mb-3 text-xs text-amber-700">
+                  Divergência detectada: total API ({apiTotal}) vs soma por status ({statusTotal}). Diferença: {delta > 0 ? `+${delta}` : delta}.
+                </p>
+              )}
+
+              {!isCollapsed && (
+                <div className="grid grid-cols-2 gap-2 md:grid-cols-7">
+                  <Kpi label="Total (status)" value={statusTotal} />
+                  <Kpi label="Avaliar" value={city.buckets.avaliar.total} />
+                  <Kpi label="Agendar" value={city.buckets.agendar.total} />
+                  <Kpi label="Laudos" value={city.buckets.laudos.total} />
+                  <Kpi label="Aguardando Pag" value={city.buckets.pagamento.total} />
+                  <Kpi label="Esclarecimentos" value={city.buckets.esclarecimentos.total} />
+                  <Kpi label="Finalizada" value={city.buckets.finalizada.total} />
+                </div>
+              )}
             </div>
-          </div>
-        ))}
+          );
+        })}
       </div>
 
       {showCreateModal && (

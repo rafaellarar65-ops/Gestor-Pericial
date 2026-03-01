@@ -1,6 +1,6 @@
 import { useEffect, useMemo, useState } from 'react';
 import { useQuery } from '@tanstack/react-query';
-import { CalendarClock, List, MapPin, Plus, Trash2 } from 'lucide-react';
+import { CalendarClock, ListFilter, MapPin, Plus, Trash2 } from 'lucide-react';
 import { toast } from 'sonner';
 import { Button } from '@/components/ui/button';
 import { Card } from '@/components/ui/card';
@@ -91,25 +91,33 @@ const FilaAgendamentoPage = () => {
 
   return (
     <div className="space-y-4">
-      <div className="rounded-xl bg-yellow-500 px-6 py-5 text-white shadow">
-        <div className="flex items-center justify-between gap-3">
-          <div className="flex items-center gap-3">
-            <CalendarClock size={22} />
+      <header className="rounded-xl border bg-white px-5 py-4 shadow-sm">
+        <div className="flex flex-wrap items-center justify-between gap-3">
+          <div className="flex items-start gap-3">
+            <CalendarClock className="mt-1 text-blue-600" size={22} />
             <div>
-              <p className="text-lg font-bold">FILA DE AGENDAMENTO POR CIDADE</p>
-              <p className="text-sm text-white/80">Segmentação entregue pelo backend (sem filtro duplicado no cliente).</p>
+              <h1 className="text-xl font-semibold text-slate-900">Central de Agendamento (Presencial)</h1>
+              <p className="text-sm text-slate-500">Fila de espera por cidade e lista de preparação de lotes.</p>
             </div>
           </div>
-          <span className="rounded-full bg-white/20 px-3 py-1 text-sm font-semibold">{data?.total ?? 0} pendentes</span>
+
+          <div className="flex items-center gap-1 rounded-lg bg-slate-100 p-1 text-sm">
+            <button className="rounded-md bg-white px-3 py-1.5 font-semibold text-blue-700" type="button">
+              Fila por Cidade
+            </button>
+            <button className="rounded-md px-3 py-1.5 text-slate-600" type="button">
+              Lista de Preparação
+            </button>
+          </div>
         </div>
-      </div>
+      </header>
 
       <div className="flex items-center gap-2">
-        <Button variant={activeTab === 'fila' ? 'default' : 'outline'} onClick={() => setActiveTab('fila')}>
-          <List className="mr-2" size={14} />
+        <Button onClick={() => setActiveTab('fila')} variant={activeTab === 'fila' ? 'default' : 'outline'}>
+          <ListFilter className="mr-2" size={14} />
           Fila
         </Button>
-        <Button variant={activeTab === 'preparacao' ? 'default' : 'outline'} onClick={() => setActiveTab('preparacao')}>
+        <Button onClick={() => setActiveTab('preparacao')} variant={activeTab === 'preparacao' ? 'default' : 'outline'}>
           <Plus className="mr-2" size={14} />
           Preparação ({prepList.length})
         </Button>
@@ -118,22 +126,28 @@ const FilaAgendamentoPage = () => {
       {activeTab === 'fila' ? (
         <>
           <Card className="p-4">
-            <Input placeholder="Buscar por processo, autor ou cidade" value={search} onChange={(e) => setSearch(e.target.value)} />
+            <Input
+              onChange={(e) => setSearch(e.target.value)}
+              placeholder="Buscar por processo, autor ou cidade"
+              value={search}
+            />
           </Card>
 
-          <div className="space-y-3">
+          <div className="grid gap-3 lg:grid-cols-2">
             {cityGroups.length === 0 ? (
-              <EmptyState title="Sem perícias na fila" />
+              <div className="lg:col-span-2">
+                <EmptyState title="Sem perícias na fila" />
+              </div>
             ) : (
               cityGroups.map((group) => (
                 <Card className="p-4" key={group.cidade}>
                   <div className="mb-3 flex items-center justify-between">
-                    <button className="flex items-center gap-2 text-left" onClick={() => toggleCity(group.cidade)}>
-                      <input type="checkbox" checked={selectedCities.has(group.cidade)} readOnly />
+                    <button className="flex items-center gap-2 text-left" onClick={() => toggleCity(group.cidade)} type="button">
+                      <input checked={selectedCities.has(group.cidade)} readOnly type="checkbox" />
                       <MapPin size={14} />
                       <span className="font-semibold">{group.cidade}</span>
                     </button>
-                    <span className="rounded-full bg-yellow-100 px-2 py-1 text-xs font-semibold text-yellow-800">{group.total}</span>
+                    <span className="rounded-full bg-blue-100 px-2 py-1 text-xs font-semibold text-blue-800">{group.total}</span>
                   </div>
                   <ul className="space-y-2">
                     {group.items.slice(0, 6).map((item) => (
@@ -166,7 +180,7 @@ const FilaAgendamentoPage = () => {
                       {item.autorNome || '—'} · {item.cidade}
                     </p>
                   </div>
-                  <Button variant="ghost" size="sm" onClick={() => removePrepItem(item.id)}>
+                  <Button onClick={() => removePrepItem(item.id)} size="sm" variant="ghost">
                     <Trash2 size={14} />
                   </Button>
                 </li>
