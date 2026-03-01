@@ -15,6 +15,7 @@ import {
 } from './dto/pericias.dto';
 import { derivePericiaFlagsFromStatus, isPericiaStatusCode, isTransitionAllowed } from './status-engine';
 import { PericiaStageFilterService } from './pericia-stage-filter.service';
+import { DASHBOARD_BUCKET_STATUS_CODES, buildDashboardBucketWheres } from './pericia-dashboard-rules';
 
 @Injectable()
 export class PericiasService {
@@ -258,110 +259,34 @@ export class PericiasService {
     return updated;
   }
 
-  private async getDashboardQueueSettings() {
-    const tenantId = this.context.get('tenantId') ?? '';
-    const row = await this.prisma.integrationSettings.findUnique({
-      where: {
-        tenantId_provider: { tenantId, provider: 'dashboard_queue_rules' },
-      },
-      select: { config: true },
-    });
-
-    const safe = typeof row?.config === 'object' && row.config !== null ? (row.config as Record<string, unknown>) : {};
-    const asArray = (value: unknown, fallback: string[]) =>
-      Array.isArray(value) ? value.map((item) => String(item).trim()).filter(Boolean) : fallback;
-
-    const dashboard = (safe.dashboard as Record<string, unknown> | undefined) ?? {};
-
-    return {
-      avaliarStatusCodigos: asArray(dashboard.avaliarStatusCodigos, ['AVALIAR']),
-      avaliarStatusNomeTermos: asArray(dashboard.avaliarStatusNomeTermos, ['avaliar']),
-      enviarLaudoStatusCodigos: asArray(dashboard.enviarLaudoStatusCodigos, ['ENVIAR_LAUDO']),
-      enviarLaudoStatusNomeTermos: asArray(dashboard.enviarLaudoStatusNomeTermos, ['enviar laudo']),
-    };
-  }
-
   async dashboard() {
-    const rules = await this.getDashboardQueueSettings();
-
-    // Buscar status relevantes para categorizar
-    const [avaliarStatuses, enviarLaudoStatuses] = await this.prisma.$transaction([
-      this.prisma.status.findMany({
-        where: {
-          OR: [
-            { codigo: { in: rules.avaliarStatusCodigos } },
-            ...rules.avaliarStatusNomeTermos.map((term) => ({ nome: { contains: term, mode: 'insensitive' as const } })),
-          ],
-        },
-        select: { id: true },
-      }),
-      this.prisma.status.findMany({
-        where: {
-          OR: [
-            { codigo: { in: rules.enviarLaudoStatusCodigos } },
-            ...rules.enviarLaudoStatusNomeTermos.map((term) => ({ nome: { contains: term, mode: 'insensitive' as const } })),
-          ],
-        },
-        select: { id: true },
-      }),
-    ]);
-
-    const avaliarStatusIds = avaliarStatuses.map((status) => status.id);
-    const enviarLaudoStatusIds = enviarLaudoStatuses.map((status) => status.id);
+    const dashboardCodes = Object.values(DASHBOARD_BUCKET_STATUS_CODES).flat();
+    const statuses = await this.prisma.status.findMany({
+      where: { codigo: { in: dashboardCodes } },
+      select: { id: true, codigo: true },
+    });
+    const statusIdsByCode = Object.fromEntries(statuses.map((item) => [item.codigo, item.id]));
 
     const today = new Date();
     today.setHours(0, 0, 0, 0);
     const nextWeek = new Date(today.getTime() + 7 * 24 * 60 * 60 * 1000);
 
-    // Contagem para cada KPI
-    const [
-      total,
-      novasNomeacoes,
-      agendarData,
-      proximasPericias,
-      enviarLaudos,
-      esclarecimentos,
-      aReceber,
-      criticalPericias,
-    ] = await this.prisma.$transaction([
+    const whereByBucket = buildDashboardBucketWheres({
+      statusIdsByCode,
+      today,
+      nextWeek,
+    });
+
+    const [total, novasNomeacoes, agendarData, proximasPericias, enviarLaudos, esclarecimentos, aReceber, criticalPericias] = await this.prisma.$transaction([
       this.prisma.pericia.count(),
-      // NOVAS NOMEAÇÕES: não agendada, não finalizada (ou status de avaliação)
-      this.prisma.pericia.count({
-        where: {
-          OR: [
-            { agendada: false, finalizada: false },
-            ...(avaliarStatusIds.length > 0 ? [{ statusId: { in: avaliarStatusIds } }] : []),
-          ],
-        },
-      }),
-      // AGENDAR DATA: perícias sem data de agendamento, não finalizadas
-      this.prisma.pericia.count({
-        where: { dataAgendamento: null, finalizada: false, laudoEnviado: false },
-      }),
-      // PRÓXIMAS PERÍCIAS: agendadas para os próximos 7 dias
-      this.prisma.pericia.count({
-        where: { dataAgendamento: { gte: today, lte: nextWeek }, finalizada: false },
-      }),
-      // ENVIAR LAUDOS: agendadas, não enviou laudo, não finalizada
-      this.prisma.pericia.count({
-        where: {
-          OR: [
-            { agendada: true, laudoEnviado: false, finalizada: false },
-            ...(enviarLaudoStatusIds.length > 0 ? [{ statusId: { in: enviarLaudoStatusIds } }] : []),
-          ],
-        },
-      }),
-      // ESCLARECIMENTOS: tem extraObservation preenchido
-      this.prisma.pericia.count({
-        where: { extraObservation: { not: null }, finalizada: false },
-      }),
-      // A RECEBER: pagamento pendente e laudo enviado
-      this.prisma.pericia.count({
-        where: { pagamentoStatus: 'PENDENTE', laudoEnviado: true },
-      }),
-      // Critical: urgentes ou com ausência informada
+      this.prisma.pericia.count({ where: whereByBucket.nomeacoes }),
+      this.prisma.pericia.count({ where: whereByBucket.agendarData }),
+      this.prisma.pericia.count({ where: whereByBucket.proximasPericias }),
+      this.prisma.pericia.count({ where: whereByBucket.enviarLaudos }),
+      this.prisma.pericia.count({ where: whereByBucket.esclarecimentos }),
+      this.prisma.pericia.count({ where: whereByBucket.aReceber }),
       this.prisma.pericia.findMany({
-        where: { isUrgent: true },
+        where: whereByBucket.ausenciasPendentes,
         take: 5,
         orderBy: { createdAt: 'desc' },
         include: { cidade: true, status: true },
