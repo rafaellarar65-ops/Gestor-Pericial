@@ -1,35 +1,6 @@
 import { useState } from 'react';
 import { Link, Outlet, useLocation, useMatches, useNavigate } from 'react-router-dom';
-import { Bell, ChevronDown, ChevronLeft, ChevronRight, LayoutDashboard, CalendarClock, ClipboardList, MapPin, Scale, Calendar, Video, MessageSquareWarning, BookOpen, FileEdit, Dumbbell, Wallet, Upload, BarChart3, Settings, LogOut } from 'lucide-react';
-import { Link, Outlet, useLocation, useNavigate } from 'react-router-dom';
-import {
-  Bell,
-  ChevronDown,
-  ChevronLeft,
-  ChevronRight,
-  LayoutDashboard,
-  CalendarClock,
-  ClipboardList,
-  MapPin,
-  Scale,
-  Calendar,
-  Video,
-  MessageSquareWarning,
-  BookOpen,
-  FileEdit,
-  Dumbbell,
-  Wallet,
-  Upload,
-  BarChart3,
-  LogOut,
-  CalendarDays,
-  CalendarRange,
-  FileText,
-  HandCoins,
-  Inbox,
-  Briefcase,
-  Receipt,
-} from 'lucide-react';
+import { Bell, ChevronDown, ChevronLeft, ChevronRight, LayoutDashboard, CalendarClock, ClipboardList, MapPin, Scale, Calendar, Video, MessageSquareWarning, BookOpen, FileEdit, Dumbbell, Wallet, Upload, BarChart3, LogOut, CalendarDays, CalendarRange, FileText, HandCoins, Inbox, Briefcase, Receipt } from 'lucide-react';
 import { CommandPalette } from '@/components/domain/command-palette';
 import { sidebarSections, type SidebarItem } from '@/config/sidebar-config';
 import { useAuthStore } from '@/stores/auth-store';

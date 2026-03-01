@@ -2,9 +2,7 @@ import { useEffect, useMemo, useState } from 'react';
 import { Link, useNavigate, useOutletContext, useSearchParams } from 'react-router-dom';
 import { Bot, Filter, Plus, RotateCw, Upload } from 'lucide-react';
 import { DomainPageTemplate } from '@/components/domain/domain-page-template';
-import { EmptyState } from '@/components/ui/state';
 import { EmptyState, ErrorState, LoadingState } from '@/components/ui/state';
-import { toast } from 'sonner';
 import { usePericiasQuery } from '@/hooks/use-pericias';
 import type { AppShellOutletContext } from '@/layouts/app-shell-context';
 
@@ -65,7 +63,6 @@ export const PericiasPage = () => {
     return clearHeaderConfig;
   }, [setHeaderConfig, clearHeaderConfig, navigate]);
 
-  const { data, isLoading, isError } = usePericiasQuery(page, {
   const { data, isLoading, isError, isFetching, refetch } = usePericiasQuery(page, {
     limit: 100,
     search: search.trim().length >= 3 ? search : undefined,
@@ -90,7 +87,6 @@ export const PericiasPage = () => {
 
   const cities = useMemo(() => {
     const unique = new Set(((data?.items ?? []) as Array<Record<string, unknown>>).map((item) => cityLabel(item.cidade)).filter(Boolean));
-
     return ['todas', ...Array.from(unique)];
   }, [data?.items]);
 
@@ -115,83 +111,23 @@ export const PericiasPage = () => {
     setSearchParams(params, { replace: true });
   };
 
+  if (isLoading) return <LoadingState />;
+  if (isError) return <ErrorState message="Erro ao carregar perícias" />;
+
   return (
     <DomainPageTemplate
       title="Listagem de Perícias"
       description="Gestão centralizada de casos com filtros por texto, status e cidade."
-      isLoading={isLoading}
-      isError={isError}
-      filters={
-        <div className="space-y-3">
-          <p className="inline-flex items-center gap-2 text-sm font-semibold text-foreground"><Filter size={15} /> Filtros e Busca</p>
-          <div className="grid gap-3 md:grid-cols-2 xl:grid-cols-4">
-            <label className="text-xs font-semibold uppercase text-muted-foreground">Busca (CNJ, autor, réu)
-              <input className="mt-1 w-full rounded-md border px-3 py-2 text-sm" onBlur={() => syncQueryString({ q: search })} onChange={(event) => setSearch(event.target.value)} placeholder="Digite ao menos 3 caracteres..." value={search} />
-            </label>
-            <label className="text-xs font-semibold uppercase text-muted-foreground">Status
-              <select className="mt-1 w-full rounded-md border px-3 py-2 text-sm" onChange={(event) => { const next = event.target.value as StatusFilter; setStatusFilter(next); syncQueryString({ status: next }); }} value={statusFilter}>
-                <option value="todos">Todos</option><option value="avaliar">Avaliar</option><option value="agendada">Agendada</option><option value="laudo enviado">Laudo Enviado</option><option value="finalizada">Finalizada</option>
-              </select>
-            </label>
-            <label className="text-xs font-semibold uppercase text-muted-foreground">Cidade
-              <select className="mt-1 w-full rounded-md border px-3 py-2 text-sm" onChange={(event) => { const next = event.target.value; setCityFilter(next); syncQueryString({ cidade: next }); }} value={cityFilter}>
-                {cities.map((city) => <option key={city} value={city}>{city === 'todas' ? 'Todas' : city}</option>)}
-              </select>
-            </label>
-            <div className="flex items-end">
-              <button className="w-full rounded-md border px-3 py-2 text-sm font-semibold" onClick={() => { setSearch(''); setStatusFilter('todos'); setCityFilter('todas'); setSearchParams(new URLSearchParams(), { replace: true }); }} type="button">Limpar Filtros</button>
-            </div>
-    <div className="space-y-4">
-      <div className="flex flex-wrap items-center justify-between gap-3">
-        <h1 className="text-3xl font-semibold text-slate-800">
-          Listagem de Perícias{' '}
-          <span className="rounded-full bg-slate-100 px-3 py-1 text-base text-slate-600">{rows.length}</span>
-        </h1>
-
-        <div className="flex flex-wrap gap-2">
-          <button
-            aria-label="Atualizar perícias"
-            className="inline-flex items-center gap-2 rounded-md border px-3 py-2 text-sm font-semibold"
-            disabled={isFetching}
-            onClick={async () => {
-              const result = await refetch();
-              if (result.isError) {
-                toast.error('Falha ao atualizar a lista de perícias.');
-                return;
-              }
-              toast.success('Lista de perícias atualizada.');
-            }}
-            type="button"
-          >
-            <RotateCw size={14} />
-          </button>
-          <button
-            className="inline-flex cursor-not-allowed items-center gap-2 rounded-md border px-3 py-2 text-sm font-semibold text-purple-700 opacity-70"
-            disabled
-            title="Integração de IA para triagem de perícias ainda não disponível nesta tela."
-            type="button"
-          >
-            <Bot size={14} /> IA (Em breve)
-          </button>
-          <button
-            className="inline-flex cursor-not-allowed items-center gap-2 rounded-md border px-3 py-2 text-sm font-semibold opacity-70"
-            disabled
-            title="Fluxo de importação em lote será habilitado em uma próxima versão."
-            type="button"
-          >
-            <Upload size={14} /> Importar (Em breve)
-          </button>
-          <button
-            className="inline-flex items-center gap-2 rounded-md bg-blue-600 px-3 py-2 text-sm font-semibold text-white"
-            onClick={() => navigate('/pericias/nova')}
-            type="button"
-          >
-            <Plus size={14} /> Nova
-          </button>
-        </div>
-      </div>
-
-      <section className="rounded-xl border bg-white p-4 shadow-sm">
+      headerActions={
+        <>
+          <button className="inline-flex items-center gap-2 rounded-md border px-3 py-2 text-sm font-semibold" onClick={() => refetch()} type="button"><RotateCw size={14} /></button>
+          <button className="inline-flex items-center gap-2 rounded-md border px-3 py-2 text-sm font-semibold text-purple-700" type="button"><Bot size={14} /> IA</button>
+          <button className="inline-flex items-center gap-2 rounded-md border px-3 py-2 text-sm font-semibold" type="button"><Upload size={14} /> Importar</button>
+          <button className="inline-flex items-center gap-2 rounded-md bg-primary px-3 py-2 text-sm font-semibold text-primary-foreground" onClick={() => navigate('/pericias/nova')} type="button"><Plus size={14} /> Nova</button>
+        </>
+      }
+    >
+      <section className="mb-4 rounded-xl border bg-white p-4 shadow-sm">
         <p className="mb-4 inline-flex items-center gap-2 text-sm font-semibold text-slate-700">
           <Filter size={15} /> Filtros e Busca
         </p>
@@ -199,26 +135,12 @@ export const PericiasPage = () => {
         <div className="grid gap-3 md:grid-cols-2 xl:grid-cols-4">
           <label className="text-xs font-semibold uppercase text-slate-500">
             Busca (CNJ, autor, réu)
-            <input
-              className="mt-1 w-full rounded-md border px-3 py-2 text-sm"
-              onBlur={() => syncQueryString({ q: search })}
-              onChange={(event) => setSearch(event.target.value)}
-              placeholder="Digite ao menos 3 caracteres..."
-              value={search}
-            />
+            <input className="mt-1 w-full rounded-md border px-3 py-2 text-sm" onBlur={() => syncQueryString({ q: search })} onChange={(event) => setSearch(event.target.value)} placeholder="Digite ao menos 3 caracteres..." value={search} />
           </label>
 
           <label className="text-xs font-semibold uppercase text-slate-500">
             Status
-            <select
-              className="mt-1 w-full rounded-md border px-3 py-2 text-sm"
-              onChange={(event) => {
-                const next = event.target.value as StatusFilter;
-                setStatusFilter(next);
-                syncQueryString({ status: next });
-              }}
-              value={statusFilter}
-            >
+            <select className="mt-1 w-full rounded-md border px-3 py-2 text-sm" onChange={(event) => { const next = event.target.value as StatusFilter; setStatusFilter(next); syncQueryString({ status: next }); }} value={statusFilter}>
               <option value="todos">Todos</option>
               <option value="avaliar">Avaliar</option>
               <option value="agendada">Agendada</option>
@@ -229,15 +151,7 @@ export const PericiasPage = () => {
 
           <label className="text-xs font-semibold uppercase text-slate-500">
             Cidade
-            <select
-              className="mt-1 w-full rounded-md border px-3 py-2 text-sm"
-              onChange={(event) => {
-                const next = event.target.value;
-                setCityFilter(next);
-                syncQueryString({ cidade: next });
-              }}
-              value={cityFilter}
-            >
+            <select className="mt-1 w-full rounded-md border px-3 py-2 text-sm" onChange={(event) => { const next = event.target.value; setCityFilter(next); syncQueryString({ cidade: next }); }} value={cityFilter}>
               {cities.map((city) => (
                 <option key={city} value={city}>
                   {city === 'todas' ? 'Todas' : city}
@@ -247,34 +161,18 @@ export const PericiasPage = () => {
           </label>
 
           <div className="flex items-end">
-            <button
-              className="w-full rounded-md border px-3 py-2 text-sm font-semibold"
-              onClick={() => {
-                setSearch('');
-                setStatusFilter('todos');
-                setCityFilter('todas');
-                setSearchParams(new URLSearchParams(), { replace: true });
-              }}
-              type="button"
-            >
+            <button className="w-full rounded-md border px-3 py-2 text-sm font-semibold" onClick={() => { setSearch(''); setStatusFilter('todos'); setCityFilter('todas'); setSearchParams(new URLSearchParams(), { replace: true }); }} type="button">
               Limpar Filtros
             </button>
           </div>
         </div>
-      }
-      headerActions={
-        <>
-          <button className="inline-flex items-center gap-2 rounded-md border px-3 py-2 text-sm font-semibold" type="button"><RotateCw size={14} /></button>
-          <button className="inline-flex items-center gap-2 rounded-md border px-3 py-2 text-sm font-semibold text-purple-700" type="button"><Bot size={14} /> IA</button>
-          <button className="inline-flex items-center gap-2 rounded-md border px-3 py-2 text-sm font-semibold" type="button"><Upload size={14} /> Importar</button>
-          <button className="inline-flex items-center gap-2 rounded-md bg-primary px-3 py-2 text-sm font-semibold text-primary-foreground" onClick={() => navigate('/pericias/nova')} type="button"><Plus size={14} /> Nova</button>
-        </>
-      }
-    >
+      </section>
+
       <section className="overflow-hidden rounded-lg border bg-card shadow-sm">
         <div className="grid grid-cols-[2fr_2fr_1fr_1fr_1fr] gap-2 border-b bg-muted/50 px-4 py-3 text-xs font-semibold uppercase text-muted-foreground">
           <span>CNJ / Data</span><span>Partes</span><span>Local</span><span>Status</span><span className="text-right">Valor</span>
         </div>
+        {isFetching && <div className="border-b px-4 py-2 text-xs text-muted-foreground">Atualizando...</div>}
         {rows.length === 0 && <EmptyState title="Use os filtros acima para encontrar processos" />}
         {rows.map((row) => {
           const rowData = row as Record<string, unknown>;
