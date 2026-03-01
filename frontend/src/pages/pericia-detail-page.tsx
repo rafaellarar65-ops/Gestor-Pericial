@@ -1,6 +1,7 @@
 import { useMemo, useState } from 'react';
-import { Link, useParams } from 'react-router-dom';
+import { Link, useNavigate, useParams } from 'react-router-dom';
 import { AlertCircle, CalendarDays, CheckCircle2, CircleDollarSign, Landmark, MapPin, Pencil, Plus, Save, Send, UserX } from 'lucide-react';
+import { toast } from 'sonner';
 import {
   usePericiaCnjQuery,
   usePericiaDetailQuery,
@@ -22,6 +23,7 @@ const toMoney = (value?: number | string) =>
   Number(value ?? 0).toLocaleString('pt-BR', { style: 'currency', currency: 'BRL' });
 
 const PericiaDetailPage = () => {
+  const navigate = useNavigate();
   const { id = '' } = useParams();
   const [activeTab, setActiveTab] = useState<TabType>('Visão 360°');
   const [showDatesModal, setShowDatesModal] = useState(false);
@@ -65,7 +67,6 @@ const PericiaDetailPage = () => {
   if (detailQuery.isError) return <ErrorState message="Erro ao carregar perícia" />;
   if (!detail) return <EmptyState title="Perícia não encontrada" />;
 
-
   const statusText = `${detail.status?.nome ?? ''} ${detail.status?.codigo ?? ''}`.toLowerCase();
   const isTele = statusText.includes('tele');
   const isLaudoFlow = statusText.includes('laudo');
@@ -92,19 +93,37 @@ const PericiaDetailPage = () => {
             <div className="mt-4 flex flex-wrap gap-2">
               {isTele ? (
                 <>
-                  <button className="inline-flex items-center gap-2 rounded-md bg-emerald-600 px-4 py-2 text-sm font-semibold text-white" type="button">
-                    <CheckCircle2 size={14} /> Realizada
+                  <button
+                    className="inline-flex cursor-not-allowed items-center gap-2 rounded-md bg-emerald-600 px-4 py-2 text-sm font-semibold text-white opacity-70"
+                    disabled
+                    title="Atualização de status de teleperícia será disponibilizada em breve."
+                    type="button"
+                  >
+                    <CheckCircle2 size={14} /> Realizada (Em breve)
                   </button>
-                  <button className="inline-flex items-center gap-2 rounded-md bg-red-500 px-4 py-2 text-sm font-semibold text-white" type="button">
-                    <UserX size={14} /> Ausência
+                  <button
+                    className="inline-flex cursor-not-allowed items-center gap-2 rounded-md bg-red-500 px-4 py-2 text-sm font-semibold text-white opacity-70"
+                    disabled
+                    title="Registro de ausência via botão será disponibilizado em breve."
+                    type="button"
+                  >
+                    <UserX size={14} /> Ausência (Em breve)
                   </button>
                 </>
               ) : isLaudoFlow ? (
                 <>
-                  <button className="inline-flex items-center gap-2 rounded-md bg-amber-500 px-4 py-2 text-sm font-semibold text-white" type="button">
+                  <button
+                    className="inline-flex items-center gap-2 rounded-md bg-amber-500 px-4 py-2 text-sm font-semibold text-white"
+                    onClick={() => navigate('/comunicacao')}
+                    type="button"
+                  >
                     <AlertCircle size={14} /> Esclarecimentos
                   </button>
-                  <button className="inline-flex items-center gap-2 rounded-md bg-emerald-600 px-4 py-2 text-sm font-semibold text-white" type="button">
+                  <button
+                    className="inline-flex items-center gap-2 rounded-md bg-emerald-600 px-4 py-2 text-sm font-semibold text-white"
+                    onClick={() => navigate('/financeiro')}
+                    type="button"
+                  >
                     <CircleDollarSign size={14} /> Receber
                   </button>
                   <button
@@ -134,7 +153,11 @@ const PericiaDetailPage = () => {
           </div>
 
           <div className="flex flex-wrap gap-2">
-            <button className="inline-flex items-center gap-2 rounded-md bg-indigo-600 px-4 py-2 text-sm font-semibold text-white" type="button">
+            <button
+              className="inline-flex items-center gap-2 rounded-md bg-indigo-600 px-4 py-2 text-sm font-semibold text-white"
+              onClick={() => navigate('/laudo-v2')}
+              type="button"
+            >
               <Pencil size={14} /> Editor V2
             </button>
             <button
@@ -210,8 +233,13 @@ const PericiaDetailPage = () => {
                   <p className="font-semibold">Central de Documentos</p>
                   <p className="text-sm text-muted-foreground">Documentos reais vinculados ao processo.</p>
                 </div>
-                <button className="inline-flex items-center gap-2 rounded-md bg-blue-600 px-3 py-2 text-sm font-semibold text-white" type="button">
-                  <Plus size={14} /> Adicionar Documento
+                <button
+                  className="inline-flex cursor-not-allowed items-center gap-2 rounded-md bg-blue-600 px-3 py-2 text-sm font-semibold text-white opacity-70"
+                  disabled
+                  title="Upload de documento por esta aba será disponibilizado em breve."
+                  type="button"
+                >
+                  <Plus size={14} /> Adicionar Documento (Em breve)
                 </button>
               </div>
               {documentsQuery.isLoading ? (
@@ -316,17 +344,22 @@ const PericiaDetailPage = () => {
                   className="inline-flex items-center gap-1 rounded-md bg-blue-600 px-3 py-2 text-sm font-semibold text-white"
                   disabled={updateDates.isPending}
                   onClick={async () => {
-                    await updateDates.mutateAsync({
-                      dataNomeacao: dates.dataNomeacao || undefined,
-                      dataAgendamento: dates.dataAgendamento || undefined,
-                      dataRealizacao: dates.dataRealizacao || undefined,
-                      dataEnvioLaudo: dates.dataEnvioLaudo || undefined,
-                    });
-                    setShowDatesModal(false);
+                    try {
+                      await updateDates.mutateAsync({
+                        dataNomeacao: dates.dataNomeacao || undefined,
+                        dataAgendamento: dates.dataAgendamento || undefined,
+                        dataRealizacao: dates.dataRealizacao || undefined,
+                        dataEnvioLaudo: dates.dataEnvioLaudo || undefined,
+                      });
+                      toast.success('Datas atualizadas com sucesso.');
+                      setShowDatesModal(false);
+                    } catch {
+                      toast.error('Falha ao atualizar datas da perícia.');
+                    }
                   }}
                   type="button"
                 >
-                  <Save size={14} />Salvar
+                  <Save size={14} />{updateDates.isPending ? 'Salvando...' : 'Salvar'}
                 </button>
               </div>
             </div>
@@ -361,12 +394,17 @@ const PericiaDetailPage = () => {
                   className="rounded-md bg-blue-600 px-4 py-2 text-sm font-semibold text-white"
                   disabled={updateDates.isPending}
                   onClick={async () => {
-                    await updateDates.mutateAsync({ dataEnvioLaudo: dataProtocoloLaudo || undefined });
-                    setShowLaudoModal(false);
+                    try {
+                      await updateDates.mutateAsync({ dataEnvioLaudo: dataProtocoloLaudo || undefined });
+                      toast.success('Envio de laudo registrado com sucesso.');
+                      setShowLaudoModal(false);
+                    } catch {
+                      toast.error('Falha ao registrar envio de laudo.');
+                    }
                   }}
                   type="button"
                 >
-                  Confirmar
+                  {updateDates.isPending ? 'Confirmando...' : 'Confirmar'}
                 </button>
               </div>
             </div>
