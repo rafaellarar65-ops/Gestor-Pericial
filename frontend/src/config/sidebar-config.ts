@@ -28,6 +28,7 @@ export const sidebarSections: SidebarSection[] = [
       { label: 'Teleperícias', href: '/telepericias' },
       { label: 'Esclarecimentos', href: '/esclarecimentos' },
       { label: 'Agenda', href: '/agenda' },
+      { label: 'Agenda Geral', href: '/agenda-geral' },
       { label: 'Google Calendar', href: '/integrations/google-calendar' },
     ],
   },
@@ -44,19 +45,26 @@ export const sidebarSections: SidebarSection[] = [
     items: [
       { label: 'Central de Cobrança', href: '/cobranca' },
       { label: 'Importações', href: '/importacoes' },
-      { label: 'Análise Financeira', href: '/financeiro' },
+      { label: 'Recebimentos', href: '/financeiro' },
+      { label: 'Análise Financeira', href: '/relatorios-financeiros' },
       { label: 'Analytics Calendar', href: '/analytics-calendar' },
-      { label: 'Relatórios Financeiros', href: '/relatorios-financeiros' },
       { label: 'Pagamentos não vinculados', href: '/pagamentos-nao-vinculados' },
+      { label: 'Despesas', href: '/despesas' },
     ],
   },
   {
-    section: 'SUPORTE E ADMINISTRAÇÃO',
+    section: 'COMUNICAÇÃO',
     items: [
-      { label: 'Documentação', href: '/documentacao' },
+      { label: 'Central de Comunicação', href: '/comunicacao' },
       { label: 'Inbox de Email', href: '/inbox-email' },
       { label: 'Advogados', href: '/advogados' },
-      { label: 'Despesas', href: '/despesas' },
+    ],
+  },
+  {
+    section: 'SISTEMA',
+    items: [
+      { label: 'Configurações', href: '/configuracoes', permission: 'ADMIN' },
+      { label: 'Documentação', href: '/documentacao' },
     ],
   },
 ];
