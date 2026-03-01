@@ -1,7 +1,7 @@
 import { useMemo, useState } from 'react';
 import { Link } from 'react-router-dom';
 import { useInfiniteQuery, useQuery } from '@tanstack/react-query';
-import { Scale, ChevronDown, ChevronUp, ExternalLink, MapPin } from 'lucide-react';
+import { Scale, ChevronDown, ChevronUp, ExternalLink, MapPin, Clock3, AlertCircle, MessageSquareMore } from 'lucide-react';
 import { LoadingState } from '@/components/ui/state';
 import { apiClient } from '@/lib/api-client';
 import { configService } from '@/services/config-service';
@@ -21,7 +21,9 @@ type NomeacoesResponse = {
 type StatusGroup = {
   label: string;
   color: string;
+  bodyColor: string;
   textColor: string;
+  icon: 'scale' | 'clock' | 'alert' | 'message';
   statuses: string[];
 };
 
@@ -31,28 +33,63 @@ const DEFAULT_STATUS_GROUPS: StatusGroup[] = [
   {
     label: 'A AVALIAR (NOVAS)',
     color: 'bg-blue-600',
+    bodyColor: 'bg-blue-50',
     textColor: 'text-white',
+    icon: 'scale',
     statuses: ['AVALIAR', 'NOVA_NOMEACAO', 'NOMEACAO'],
   },
   {
     label: 'AGUARDANDO ACEITE HONORÁRIOS',
     color: 'bg-yellow-500',
+    bodyColor: 'bg-yellow-50',
     textColor: 'text-white',
+    icon: 'clock',
     statuses: ['AGUARDANDO_ACEITE', 'ACEITE_HONORARIOS', 'ACEITE'],
   },
   {
     label: 'A MAJORAR HONORÁRIOS',
     color: 'bg-orange-500',
+    bodyColor: 'bg-orange-50',
     textColor: 'text-white',
+    icon: 'alert',
     statuses: ['A_MAJORAR', 'MAJORAR_HONORARIOS', 'MAJORAR'],
   },
   {
     label: 'COM OBSERVAÇÃO EXTRA',
     color: 'bg-pink-600',
+    bodyColor: 'bg-pink-50',
     textColor: 'text-white',
+    icon: 'message',
     statuses: ['OBSERVACAO_EXTRA', 'COM_OBSERVACAO', 'OBSERVACAO'],
   },
 ];
+
+function statusDisplayLabel(item: PericiaItem): string {
+  const rawStatus = item.status;
+
+  if (typeof rawStatus === 'string' || typeof rawStatus === 'number') {
+    return String(rawStatus);
+  }
+
+  if (rawStatus && typeof rawStatus === 'object') {
+    const statusObject = rawStatus as Record<string, unknown>;
+    if (typeof statusObject.nome === 'string' || typeof statusObject.nome === 'number') {
+      return String(statusObject.nome);
+    }
+    if (typeof statusObject.codigo === 'string' || typeof statusObject.codigo === 'number') {
+      return String(statusObject.codigo);
+    }
+  }
+
+  return '—';
+}
+
+function getGroupIcon(icon: StatusGroup['icon']) {
+  if (icon === 'clock') return <Clock3 size={18} />;
+  if (icon === 'alert') return <AlertCircle size={18} />;
+  if (icon === 'message') return <MessageSquareMore size={18} />;
+  return <Scale size={18} />;
+}
 
 function getStatusCode(item: PericiaItem): string {
   const rawStatus = item.status;
@@ -129,7 +166,7 @@ const NomeacoesPage = () => {
   );
 
   const total = data?.pages?.[0]?.pagination?.total ?? allItems.length;
-  const statusTotals = data?.pages?.[0]?.statusTotals ?? {};
+  const statusTotals = useMemo(() => data?.pages?.[0]?.statusTotals ?? {}, [data?.pages]);
 
   const groups = useMemo(
     () =>
@@ -156,7 +193,11 @@ const NomeacoesPage = () => {
   const toggle = (label: string) => {
     setOpenGroups((prev) => {
       const next = new Set(prev);
-      next.has(label) ? next.delete(label) : next.add(label);
+      if (next.has(label)) {
+        next.delete(label);
+      } else {
+        next.add(label);
+      }
       return next;
     });
   };
@@ -194,7 +235,9 @@ const NomeacoesPage = () => {
                 type="button"
               >
                 <div className="flex items-center gap-3">
-                  <Scale size={18} />
+                  <span className="flex h-8 w-8 items-center justify-center rounded-lg bg-white/20">
+                    {getGroupIcon(group.icon)}
+                  </span>
                   <p className="font-bold tracking-wide">{group.label}</p>
                 </div>
                 <div className="flex items-center gap-3">
@@ -206,7 +249,7 @@ const NomeacoesPage = () => {
               </button>
 
               {isOpen && (
-                <div className="p-4">
+                <div className={`p-3 sm:p-4 ${group.bodyColor}`}>
                   {group.items.length === 0 ? (
                     <p className="py-4 text-center text-sm text-gray-400">
                       Nenhum processo nesta categoria.
@@ -214,39 +257,38 @@ const NomeacoesPage = () => {
                   ) : (
                     <div className="grid grid-cols-1 gap-3 sm:grid-cols-2 lg:grid-cols-3">
                       {group.items.map((item, i) => (
-                        <div
-                          className="rounded-lg border border-gray-100 bg-gray-50 p-4 transition-colors hover:border-blue-200 hover:bg-blue-50"
+                        <Link
+                          className="block rounded-lg border border-slate-200 bg-white p-4 shadow-sm transition-colors hover:border-blue-300 hover:bg-blue-50/30"
                           key={String(item.id ?? i)}
+                          to={`/pericias/${String(item.id ?? item.periciaId ?? '')}`}
                         >
                           <div className="mb-2 flex items-start justify-between">
-                            <p className="font-mono text-xs text-gray-400">
+                            <p className="inline-flex max-w-full rounded-md bg-slate-100 px-2 py-0.5 font-mono text-xs text-slate-600">
                               {String(item.processoCNJ ?? item.id ?? `#${i + 1}`)}
                             </p>
-                            {item.id != null && (
-                              <Link
-                                className="text-gray-400 hover:text-blue-600"
-                                to={`/pericias/${String(item.id)}`}
-                              >
-                                <ExternalLink size={14} />
-                              </Link>
-                            )}
+                            <ExternalLink className="text-slate-300" size={14} />
                           </div>
 
-                          <p className="font-semibold text-gray-800">
+                          <p className="font-semibold uppercase text-slate-900">
                             {String(item.autorNome ?? item.nome ?? '—')}
                           </p>
 
+                          <p className="text-xs text-slate-500">
+                            vs {String(item.reuNome ?? item.parteRe ?? item.parteContraria ?? 'Réu não informado')}
+                          </p>
+
                           {item.cidade != null && (
-                            <div className="mt-2 flex items-center gap-1 text-xs text-gray-400">
-                              <MapPin size={11} />
+                            <div className="mt-2 flex items-center gap-1 text-xs text-slate-500">
+                              <MapPin className="text-pink-500" size={11} />
                               {String(item.cidade)}
+                              {item.vara != null ? ` · ${String(item.vara)}` : ''}
                             </div>
                           )}
 
                           <p className="mt-2 text-xs font-medium text-blue-600">
-                            Status: {getStatusCode(item) || '—'}
+                            Status: {statusDisplayLabel(item)}
                           </p>
-                        </div>
+                        </Link>
                       ))}
                     </div>
                   )}
