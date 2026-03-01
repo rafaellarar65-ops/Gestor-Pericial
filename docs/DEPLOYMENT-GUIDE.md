@@ -76,6 +76,27 @@ Frontend (React/Vite)  -->  Backend (NestJS)  -->  PostgreSQL (Supabase)
 2. Selecione o repositorio `Gestor-Pericial`
 3. Railway vai detectar o `Dockerfile.backend` automaticamente via `railway.toml`
 
+### 2.2.1 Separar Backend e Frontend em servicos diferentes (recomendado)
+
+Quando backend e frontend estao no mesmo repositorio, use arquivos separados de config-as-code:
+
+- `railway.backend.toml` (usa `Dockerfile.backend`)
+- `railway.frontend.toml` (usa `Dockerfile.frontend`)
+
+**Passo a passo no Railway (Frontend Service):**
+
+1. Crie um novo service no mesmo projeto (ex: `frontend`).
+2. Va em **Settings** > **Config-as-code** > **Railway Config File**.
+3. Defina o arquivo como `railway.frontend.toml`.
+4. Em **Variables**, configure `VITE_API_URL=https://SEU_BACKEND.up.railway.app/api`.
+5. Gere dominio em **Networking** > **Generate Domain**.
+
+**Passo a passo no Railway (Backend Service):**
+
+1. No service do backend, mantenha o config file como `railway.backend.toml`.
+2. Confirme `healthcheckPath=/api/health`.
+3. Confirme `startCommand=./docker-entrypoint.sh`.
+
 ### 2.3 Configurar variaveis de ambiente
 
 No painel do Railway, va em **Variables** e adicione:
