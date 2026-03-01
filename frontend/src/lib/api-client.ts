@@ -2,14 +2,20 @@ import axios, { AxiosError } from 'axios';
 import { useAuthStore } from '@/stores/auth-store';
 import type { ApiError, AuthTokens } from '@/types/api';
 
-const normalizeApiBaseUrl = (baseUrl: string): string => {
-  const normalized = baseUrl.replace(/\/$/, '');
-  return normalized.endsWith('/api') ? normalized : `${normalized}/api`;
+const ensureApiPrefix = (url: string): string => {
+  const normalized = url.trim().replace(/\/+$/, '');
+  if (!normalized) return '/api';
+
+  if (normalized === '/api' || normalized.endsWith('/api')) {
+    return normalized;
+  }
+
+  return `${normalized}/api`;
 };
 
 const resolveApiUrl = (): string => {
   const fromEnv = import.meta.env.VITE_API_URL ?? import.meta.env.VITE_BACKEND_URL;
-  if (fromEnv) return normalizeApiBaseUrl(fromEnv);
+  if (fromEnv) return ensureApiPrefix(fromEnv);
 
   if (
     typeof __API_URL__ === 'string' &&
@@ -17,7 +23,7 @@ const resolveApiUrl = (): string => {
     !__API_URL__.includes('localhost') &&
     !__API_URL__.includes('127.0.0.1')
   ) {
-    return normalizeApiBaseUrl(__API_URL__);
+    return ensureApiPrefix(__API_URL__);
   }
 
   if (typeof window !== 'undefined') {
