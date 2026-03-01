@@ -153,15 +153,31 @@ const PericiaDetailPage = () => {
         description={`Autor: ${detail.autorNome ?? '—'} • Réu: ${detail.reuNome ?? '—'}`}
         headerActions={
           <>
+            <Link
+              className="inline-flex items-center gap-2 rounded-md border px-3 py-2 text-sm font-medium text-foreground transition-colors hover:bg-muted focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-indigo-600 focus-visible:ring-offset-2"
+              to={`/pericias/${id}/editar`}
+            >
+              Editar
+            </Link>
             <button
-              className="inline-flex items-center gap-2 rounded-md border px-3 py-2 text-sm"
+              className="inline-flex items-center gap-2 rounded-md border px-3 py-2 text-sm font-medium text-foreground transition-colors hover:bg-muted focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-indigo-600 focus-visible:ring-offset-2"
               onClick={openDatesModal}
               type="button"
             >
               <Pencil size={14} /> Editar Datas
             </button>
-            <Link className="rounded-md border px-3 py-2 text-sm" to={`/laudo-inteligente/${id}`}>Laudo Inteligente</Link>
-            <Link className="rounded-md border px-3 py-2 text-sm" to="/laudo-v2">CNJ</Link>
+            <Link
+              className="inline-flex items-center gap-2 rounded-md border px-3 py-2 text-sm font-medium text-foreground transition-colors hover:bg-muted focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-indigo-600 focus-visible:ring-offset-2"
+              to={`/laudo-inteligente/${id}`}
+            >
+              Laudo Inteligente
+            </Link>
+            <Link
+              className="inline-flex items-center gap-2 rounded-md border px-3 py-2 text-sm font-medium text-foreground transition-colors hover:bg-muted focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-indigo-600 focus-visible:ring-offset-2"
+              to="/laudo-v2"
+            >
+              CNJ
+            </Link>
           </>
         }
       >
