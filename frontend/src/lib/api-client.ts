@@ -38,7 +38,7 @@ const resolveApiUrl = (): string => {
   return 'http://localhost:3000/api';
 };
 
-const API_URL = resolveApiUrl();
+export const API_URL = resolveApiUrl();
 const DEFAULT_TENANT_ID = import.meta.env.VITE_TENANT_ID ?? '11111111-1111-1111-1111-111111111111';
 
 export const apiClient = axios.create({
