@@ -1,9 +1,12 @@
-import { useMemo, useState } from 'react';
-import { Link, useNavigate, useSearchParams } from 'react-router-dom';
+import { useEffect, useMemo, useState } from 'react';
+import { Link, useNavigate, useOutletContext, useSearchParams } from 'react-router-dom';
 import { Bot, Filter, Plus, RotateCw, Upload } from 'lucide-react';
+import { DomainPageTemplate } from '@/components/domain/domain-page-template';
+import { EmptyState } from '@/components/ui/state';
 import { EmptyState, ErrorState, LoadingState } from '@/components/ui/state';
 import { toast } from 'sonner';
 import { usePericiasQuery } from '@/hooks/use-pericias';
+import type { AppShellOutletContext } from '@/layouts/app-shell-context';
 
 type StatusFilter = 'todos' | 'avaliar' | 'agendada' | 'laudo enviado' | 'finalizada';
 
@@ -17,8 +20,7 @@ const statusFromQuery = (value: string | null): StatusFilter => {
   return 'todos';
 };
 
-const toMoney = (value?: number | string) =>
-  Number(value ?? 0).toLocaleString('pt-BR', { style: 'currency', currency: 'BRL' });
+const toMoney = (value?: number | string) => Number(value ?? 0).toLocaleString('pt-BR', { style: 'currency', currency: 'BRL' });
 
 const statusLabel = (status: unknown) => {
   if (typeof status === 'string') return status;
@@ -38,10 +40,10 @@ const cityLabel = (cidade: unknown) => {
   return '—';
 };
 
-const authorLabel = (item: Record<string, unknown>) =>
-  String(item.autorNome ?? item.periciadoNome ?? 'Sem autor');
+const authorLabel = (item: Record<string, unknown>) => String(item.autorNome ?? item.periciadoNome ?? 'Sem autor');
 
 export const PericiasPage = () => {
+  const { setHeaderConfig, clearHeaderConfig } = useOutletContext<AppShellOutletContext>();
   const navigate = useNavigate();
   const [searchParams, setSearchParams] = useSearchParams();
   const [page] = useState(1);
@@ -51,6 +53,19 @@ export const PericiasPage = () => {
   const [statusFilter, setStatusFilter] = useState<StatusFilter>(statusFromQuery(searchParams.get('status')));
   const [cityFilter, setCityFilter] = useState(searchParams.get('cidade') ?? 'todas');
 
+  useEffect(() => {
+    setHeaderConfig({
+      primaryActions: (
+        <button className="inline-flex items-center gap-2 rounded-md bg-primary px-3 py-2 text-xs font-semibold text-primary-foreground" onClick={() => navigate('/pericias/nova')} type="button">
+          <Plus size={14} /> Nova perícia
+        </button>
+      ),
+    });
+
+    return clearHeaderConfig;
+  }, [setHeaderConfig, clearHeaderConfig, navigate]);
+
+  const { data, isLoading, isError } = usePericiasQuery(page, {
   const { data, isLoading, isError, isFetching, refetch } = usePericiasQuery(page, {
     limit: 100,
     search: search.trim().length >= 3 ? search : undefined,
@@ -74,11 +89,7 @@ export const PericiasPage = () => {
   }, [data?.items, search, statusFilter, cityFilter]);
 
   const cities = useMemo(() => {
-    const unique = new Set(
-      ((data?.items ?? []) as Array<Record<string, unknown>>)
-        .map((item) => cityLabel(item.cidade))
-        .filter(Boolean),
-    );
+    const unique = new Set(((data?.items ?? []) as Array<Record<string, unknown>>).map((item) => cityLabel(item.cidade)).filter(Boolean));
 
     return ['todas', ...Array.from(unique)];
   }, [data?.items]);
@@ -104,11 +115,32 @@ export const PericiasPage = () => {
     setSearchParams(params, { replace: true });
   };
 
-  if (isLoading) return <LoadingState />;
-  if (isError) return <ErrorState message="Erro ao carregar perícias" />;
-  if (!data) return <EmptyState title="Sem perícias encontradas" />;
-
   return (
+    <DomainPageTemplate
+      title="Listagem de Perícias"
+      description="Gestão centralizada de casos com filtros por texto, status e cidade."
+      isLoading={isLoading}
+      isError={isError}
+      filters={
+        <div className="space-y-3">
+          <p className="inline-flex items-center gap-2 text-sm font-semibold text-foreground"><Filter size={15} /> Filtros e Busca</p>
+          <div className="grid gap-3 md:grid-cols-2 xl:grid-cols-4">
+            <label className="text-xs font-semibold uppercase text-muted-foreground">Busca (CNJ, autor, réu)
+              <input className="mt-1 w-full rounded-md border px-3 py-2 text-sm" onBlur={() => syncQueryString({ q: search })} onChange={(event) => setSearch(event.target.value)} placeholder="Digite ao menos 3 caracteres..." value={search} />
+            </label>
+            <label className="text-xs font-semibold uppercase text-muted-foreground">Status
+              <select className="mt-1 w-full rounded-md border px-3 py-2 text-sm" onChange={(event) => { const next = event.target.value as StatusFilter; setStatusFilter(next); syncQueryString({ status: next }); }} value={statusFilter}>
+                <option value="todos">Todos</option><option value="avaliar">Avaliar</option><option value="agendada">Agendada</option><option value="laudo enviado">Laudo Enviado</option><option value="finalizada">Finalizada</option>
+              </select>
+            </label>
+            <label className="text-xs font-semibold uppercase text-muted-foreground">Cidade
+              <select className="mt-1 w-full rounded-md border px-3 py-2 text-sm" onChange={(event) => { const next = event.target.value; setCityFilter(next); syncQueryString({ cidade: next }); }} value={cityFilter}>
+                {cities.map((city) => <option key={city} value={city}>{city === 'todas' ? 'Todas' : city}</option>)}
+              </select>
+            </label>
+            <div className="flex items-end">
+              <button className="w-full rounded-md border px-3 py-2 text-sm font-semibold" onClick={() => { setSearch(''); setStatusFilter('todos'); setCityFilter('todas'); setSearchParams(new URLSearchParams(), { replace: true }); }} type="button">Limpar Filtros</button>
+            </div>
     <div className="space-y-4">
       <div className="flex flex-wrap items-center justify-between gap-3">
         <h1 className="text-3xl font-semibold text-slate-800">
@@ -229,45 +261,36 @@ export const PericiasPage = () => {
             </button>
           </div>
         </div>
-      </section>
-
-      <section className="overflow-hidden rounded-xl border bg-white shadow-sm">
-        <div className="grid grid-cols-[2fr_2fr_1fr_1fr_1fr] gap-2 border-b bg-slate-50 px-4 py-3 text-xs font-semibold uppercase text-slate-500">
-          <span>CNJ / Data</span>
-          <span>Partes</span>
-          <span>Local</span>
-          <span>Status</span>
-          <span className="text-right">Valor</span>
+      }
+      headerActions={
+        <>
+          <button className="inline-flex items-center gap-2 rounded-md border px-3 py-2 text-sm font-semibold" type="button"><RotateCw size={14} /></button>
+          <button className="inline-flex items-center gap-2 rounded-md border px-3 py-2 text-sm font-semibold text-purple-700" type="button"><Bot size={14} /> IA</button>
+          <button className="inline-flex items-center gap-2 rounded-md border px-3 py-2 text-sm font-semibold" type="button"><Upload size={14} /> Importar</button>
+          <button className="inline-flex items-center gap-2 rounded-md bg-primary px-3 py-2 text-sm font-semibold text-primary-foreground" onClick={() => navigate('/pericias/nova')} type="button"><Plus size={14} /> Nova</button>
+        </>
+      }
+    >
+      <section className="overflow-hidden rounded-lg border bg-card shadow-sm">
+        <div className="grid grid-cols-[2fr_2fr_1fr_1fr_1fr] gap-2 border-b bg-muted/50 px-4 py-3 text-xs font-semibold uppercase text-muted-foreground">
+          <span>CNJ / Data</span><span>Partes</span><span>Local</span><span>Status</span><span className="text-right">Valor</span>
         </div>
-
         {rows.length === 0 && <EmptyState title="Use os filtros acima para encontrar processos" />}
-
         {rows.map((row) => {
           const rowData = row as Record<string, unknown>;
           const status = statusLabel(rowData.status);
-
           return (
             <div className="grid grid-cols-[2fr_2fr_1fr_1fr_1fr] gap-2 border-b px-4 py-3 text-sm" key={String(rowData.id)}>
-              <div>
-                <Link className="font-semibold text-slate-800 underline" to={`/pericias/${rowData.id}`}>
-                  {String(rowData.processoCNJ ?? '—')}
-                </Link>
-                <p className="text-xs text-slate-500">{rowData.dataNomeacao ? new Date(String(rowData.dataNomeacao)).toLocaleDateString('pt-BR') : '—'}</p>
-              </div>
-              <div>
-                <p className="font-semibold text-slate-800">{authorLabel(rowData)}</p>
-                <p className="truncate text-xs text-slate-500">{String(rowData.reuNome ?? '—')}</p>
-              </div>
-              <div className="text-slate-700">{cityLabel(rowData.cidade)}</div>
-              <div>
-                <span className="rounded-full bg-slate-100 px-2 py-1 text-xs font-semibold text-slate-700">{status}</span>
-              </div>
-              <div className="text-right font-semibold text-slate-700">{toMoney(rowData.honorariosPrevistosJG as number | string)}</div>
+              <div><Link className="font-semibold text-foreground underline" to={`/pericias/${rowData.id}`}>{String(rowData.processoCNJ ?? '—')}</Link><p className="text-xs text-muted-foreground">{rowData.dataNomeacao ? new Date(String(rowData.dataNomeacao)).toLocaleDateString('pt-BR') : '—'}</p></div>
+              <div><p className="font-semibold text-foreground">{authorLabel(rowData)}</p><p className="truncate text-xs text-muted-foreground">{String(rowData.reuNome ?? '—')}</p></div>
+              <div className="text-foreground">{cityLabel(rowData.cidade)}</div>
+              <div><span className="rounded-full bg-muted px-2 py-1 text-xs font-semibold text-foreground">{status}</span></div>
+              <div className="text-right font-semibold text-foreground">{toMoney(rowData.honorariosPrevistosJG as number | string)}</div>
             </div>
           );
         })}
       </section>
-    </div>
+    </DomainPageTemplate>
   );
 };
 
