@@ -2,15 +2,29 @@
 
 FROM node:20-alpine AS deps
 WORKDIR /app
-COPY frontend/package*.json ./
-RUN npm ci
+RUN --mount=type=bind,source=.,target=/src \
+    if [ -f /src/frontend/package.json ]; then \
+      cp /src/frontend/package*.json ./; \
+    elif [ -f /src/package.json ]; then \
+      cp /src/package*.json ./; \
+    else \
+      echo "package.json not found in /src or /src/frontend" && exit 1; \
+    fi \
+    && npm ci
 
 FROM deps AS build
 WORKDIR /app
 ARG VITE_API_URL=http://localhost:3001
 ENV VITE_API_URL=$VITE_API_URL
-COPY frontend/ ./
-RUN npm run build
+RUN --mount=type=bind,source=.,target=/src \
+    if [ -f /src/frontend/package.json ]; then \
+      cp -r /src/frontend/. ./; \
+    elif [ -f /src/package.json ]; then \
+      cp -r /src/. ./; \
+    else \
+      echo "frontend source not found in /src or /src/frontend" && exit 1; \
+    fi \
+    && npm run build
 
 FROM nginx:1.27-alpine AS runtime
 WORKDIR /usr/share/nginx/html
