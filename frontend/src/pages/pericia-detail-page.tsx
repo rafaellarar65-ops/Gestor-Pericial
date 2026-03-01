@@ -24,6 +24,17 @@ type TabType = (typeof tabs)[number];
 const toDateInput = (iso?: string) => (iso ? new Date(iso).toISOString().slice(0, 10) : '');
 const toDateBR = (iso?: string) => (iso ? new Date(iso).toLocaleDateString('pt-BR') : '—');
 const toMoney = (value?: number | string) => Number(value ?? 0).toLocaleString('pt-BR', { style: 'currency', currency: 'BRL' });
+const withFallback = (value?: string | number | null) => {
+  if (value === null || value === undefined) return '—';
+  const stringValue = String(value).trim();
+  return stringValue.length > 0 ? stringValue : '—';
+};
+const formatCNJ = (cnj?: string) => {
+  if (!cnj) return '—';
+  const digits = cnj.replace(/\D/g, '');
+  if (digits.length !== 20) return cnj;
+  return digits.replace(/(\d{7})(\d{2})(\d{4})(\d)(\d{2})(\d{4})/, '$1-$2.$3.$4.$5.$6');
+};
 
 const PericiaDetailPage = () => {
   const { setHeaderConfig, clearHeaderConfig } = useOutletContext<AppShellOutletContext>();
@@ -69,6 +80,32 @@ const PericiaDetailPage = () => {
     const previsto = Number(detail?.honorariosPrevistosJG ?? 0);
     return { previsto, recebido, saldo: previsto - recebido, items: recebimentos };
   }, [detail?.honorariosPrevistosJG, recebimentosQuery.data]);
+
+  const esclarecimentosMeta = useMemo(() => {
+    const intimacao = detail?.esclarecimentos?.dataIntimacao;
+    const prazo = Number(detail?.esclarecimentos?.prazoDias ?? 0);
+    if (!intimacao || !prazo) return null;
+
+    const deadlineDate = new Date(intimacao);
+    deadlineDate.setDate(deadlineDate.getDate() + prazo);
+
+    const today = new Date();
+    today.setHours(0, 0, 0, 0);
+    const diffDays = Math.ceil((deadlineDate.getTime() - today.getTime()) / (1000 * 60 * 60 * 24));
+
+    const levelClass = diffDays < 0
+      ? 'text-red-600'
+      : diffDays <= 3
+        ? 'text-amber-600'
+        : 'text-emerald-600';
+
+    return {
+      prazo,
+      deadline: toDateBR(deadlineDate.toISOString()),
+      diasRestantes: `${diffDays} dia${Math.abs(diffDays) === 1 ? '' : 's'}`,
+      levelClass,
+    };
+  }, [detail?.esclarecimentos?.dataIntimacao, detail?.esclarecimentos?.prazoDias]);
 
   if (detailQuery.isLoading) return <LoadingState />;
   if (detailQuery.isError) return <ErrorState message="Erro ao carregar perícia" />;
@@ -256,9 +293,92 @@ const PericiaDetailPage = () => {
 
           <div className="p-4">
             {activeTab === 'Visão 360°' && (
-              <div className="grid gap-4 md:grid-cols-2">
-                <div className="rounded-lg border p-4"><h3 className="font-semibold">Resumo do Caso</h3><ul className="mt-3 space-y-2 text-sm text-muted-foreground"><li className="flex justify-between"><span>Status Atual</span><strong>{detail.status?.nome ?? '—'}</strong></li><li className="flex justify-between"><span>Cidade / Vara</span><span>{detail.cidade?.nome ?? '—'} / {detail.vara?.nome ?? '—'}</span></li><li className="flex justify-between"><span>Data Nomeação</span><span>{toDateBR(detail.dataNomeacao)}</span></li></ul></div>
-                <div className="rounded-lg border p-4"><h3 className="font-semibold">Prazos</h3><ul className="mt-3 space-y-2 text-sm text-muted-foreground"><li className="flex justify-between"><span>Agendamento</span><span>{toDateBR(detail.dataAgendamento)}</span></li><li className="flex justify-between"><span>Realização</span><span>{toDateBR(detail.dataRealizacao)}</span></li><li className="flex justify-between"><span>Envio Laudo</span><span>{toDateBR(detail.dataEnvioLaudo)}</span></li></ul></div>
+              <div className="space-y-4">
+                <div className="grid gap-4 md:grid-cols-2">
+                  <div className="rounded-lg border p-4">
+                    <h3 className="font-semibold">Resumo do Caso</h3>
+                    <ul className="mt-3 space-y-2 text-sm text-muted-foreground">
+                      <li className="flex items-center justify-between gap-2">
+                        <span>Status</span>
+                        <span
+                          className="inline-flex rounded-full border border-slate-200 bg-slate-100 px-2 py-0.5 text-xs font-semibold text-slate-700"
+                          style={detail.status?.cor ? { backgroundColor: `${detail.status.cor}20`, borderColor: detail.status.cor, color: detail.status.cor } : undefined}
+                        >
+                          {withFallback(detail.status?.nome)}
+                        </span>
+                      </li>
+                      <li className="flex justify-between gap-2"><span>Cidade / Vara</span><span className="text-right">{withFallback(detail.cidade?.nome)} / {withFallback(detail.vara?.nome)}</span></li>
+                      <li className="flex justify-between gap-2"><span>Tipo de perícia</span><span className="text-right">{withFallback(detail.tipoPericia?.nome)}</span></li>
+                      <li className="flex justify-between gap-2"><span>Modalidade</span><span className="text-right">{withFallback(detail.modalidade?.nome)}</span></li>
+                      <li className="flex justify-between gap-2"><span>CNJ</span><span className="font-mono text-right">{formatCNJ(detail.processoCNJ)}</span></li>
+                      <li className="flex justify-between gap-2"><span>Juiz(a)</span><span className="text-right">{withFallback(detail.juizNome)}</span></li>
+                    </ul>
+                  </div>
+
+                  <div className="rounded-lg border p-4">
+                    <h3 className="font-semibold">Partes</h3>
+                    <ul className="mt-3 space-y-2 text-sm text-muted-foreground">
+                      <li className="flex justify-between gap-2"><span>Autor</span><span className="text-right">{withFallback(detail.autorNome)}</span></li>
+                      <li className="flex justify-between gap-2"><span>Réu</span><span className="text-right">{withFallback(detail.reuNome)}</span></li>
+                      <li className="flex justify-between gap-2"><span>Periciado</span><span className="text-right">{withFallback(detail.periciadoNome)}</span></li>
+                    </ul>
+                  </div>
+                </div>
+
+                <div className="grid gap-4 md:grid-cols-2">
+                  <div className="rounded-lg border p-4">
+                    <h3 className="font-semibold">Datas/Prazos</h3>
+                    <ul className="mt-3 space-y-2 text-sm text-muted-foreground">
+                      <li className="flex justify-between gap-2"><span>Nomeação</span><span>{toDateBR(detail.dataNomeacao)}</span></li>
+                      <li className="flex justify-between gap-2"><span>Agendamento</span><span>{toDateBR(detail.dataAgendamento)} {detail.horaAgendamento ? `às ${detail.horaAgendamento}` : ''}</span></li>
+                      <li className="flex justify-between gap-2"><span>Realização</span><span>{toDateBR(detail.dataRealizacao)}</span></li>
+                      <li className="flex justify-between gap-2"><span>Envio de laudo</span><span>{toDateBR(detail.dataEnvioLaudo)}</span></li>
+                    </ul>
+                  </div>
+
+                  <div className="rounded-lg border p-4">
+                    <h3 className="font-semibold">Financeiro Resumo</h3>
+                    <ul className="mt-3 space-y-2 text-sm text-muted-foreground">
+                      <li className="flex justify-between gap-2"><span>JG</span><span>{toMoney(detail.honorariosPrevistosJG)}</span></li>
+                      <li className="flex justify-between gap-2"><span>Partes</span><span>{toMoney(detail.honorariosPrevistosPartes)}</span></li>
+                      <li className="flex justify-between gap-2"><span>Total previsto</span><span className="font-semibold text-foreground">{toMoney(Number(detail.honorariosPrevistosJG ?? 0) + Number(detail.honorariosPrevistosPartes ?? 0))}</span></li>
+                      <li className="flex justify-between gap-2">
+                        <span>Status pagamento</span>
+                        <span
+                          className={cn('font-semibold', {
+                            'text-emerald-600': (detail.pagamentoStatus ?? '').toUpperCase() === 'SIM',
+                            'text-red-600': (detail.pagamentoStatus ?? '').toUpperCase() === 'NÃO' || (detail.pagamentoStatus ?? '').toUpperCase() === 'NAO',
+                            'text-amber-600': (detail.pagamentoStatus ?? '').toUpperCase() === 'PARCIAL',
+                          })}
+                        >
+                          {withFallback(detail.pagamentoStatus)}
+                        </span>
+                      </li>
+                    </ul>
+                  </div>
+                </div>
+
+                {(detail.observacoes || detail.observacaoExtra) && (
+                  <div className="rounded-lg border p-4">
+                    <h3 className="font-semibold">Observações</h3>
+                    <ul className="mt-3 space-y-2 text-sm text-muted-foreground">
+                      {detail.observacoes && <li><span className="font-medium text-foreground">Observação:</span> {detail.observacoes}</li>}
+                      {detail.observacaoExtra && <li><span className="font-medium text-foreground">Observação extra:</span> {detail.observacaoExtra}</li>}
+                    </ul>
+                  </div>
+                )}
+
+                {statusNome.includes('esclarec') && (
+                  <div className="rounded-lg border border-amber-200 bg-amber-50/40 p-4">
+                    <h3 className="font-semibold">Esclarecimentos</h3>
+                    <ul className="mt-3 space-y-2 text-sm text-muted-foreground">
+                      <li className="flex justify-between gap-2"><span>Data de intimação</span><span>{toDateBR(detail.esclarecimentos?.dataIntimacao)}</span></li>
+                      <li className="flex justify-between gap-2"><span>Prazo (dias)</span><span>{detail.esclarecimentos?.prazoDias ?? '—'}</span></li>
+                      <li className="flex justify-between gap-2"><span>Deadline</span><span>{esclarecimentosMeta?.deadline ?? '—'}</span></li>
+                      <li className="flex justify-between gap-2"><span>Dias restantes</span><span className={cn('font-semibold', esclarecimentosMeta?.levelClass)}>{esclarecimentosMeta?.diasRestantes ?? '—'}</span></li>
+                    </ul>
+                  </div>
+                )}
               </div>
             )}
 
