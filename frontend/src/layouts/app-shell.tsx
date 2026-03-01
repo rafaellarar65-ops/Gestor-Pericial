@@ -1,6 +1,6 @@
 import { useState } from 'react';
 import { Link, Outlet, useLocation, useMatches, useNavigate } from 'react-router-dom';
-import { Bell, ChevronDown, ChevronLeft, ChevronRight, LayoutDashboard, CalendarClock, ClipboardList, MapPin, Scale, Calendar, Video, MessageSquareWarning, BookOpen, FileEdit, Dumbbell, Wallet, Upload, BarChart3, LogOut, CalendarDays, CalendarRange, FileText, HandCoins, Inbox, Briefcase, Receipt, AlertTriangle } from 'lucide-react';
+import { Bell, ChevronDown, ChevronLeft, ChevronRight, LayoutDashboard, CalendarClock, ClipboardList, MapPin, Scale, Calendar, Video, MessageSquareWarning, BookOpen, FileEdit, Dumbbell, Wallet, Upload, BarChart3, LogOut, CalendarDays, CalendarRange, FileText, HandCoins, Inbox, Briefcase, Receipt, AlertTriangle, Settings } from 'lucide-react';
 import { CommandPalette } from '@/components/domain/command-palette';
 import { sidebarSections, type SidebarItem } from '@/config/sidebar-config';
 import { useAuthStore } from '@/stores/auth-store';
@@ -23,6 +23,7 @@ const ICON_MAP: Record<SidebarItem['href'], React.ComponentType<{ size?: number;
   '/esclarecimentos': AlertTriangle,
   '/comunicacao': MessageSquareWarning,
   '/agenda': Calendar,
+  '/agenda-geral': CalendarDays,
   '/integrations/google-calendar': CalendarDays,
   '/laudos-pendentes': FileEdit,
   '/base-conhecimento': BookOpen,
@@ -33,6 +34,7 @@ const ICON_MAP: Record<SidebarItem['href'], React.ComponentType<{ size?: number;
   '/analytics-calendar': CalendarRange,
   '/relatorios-financeiros': FileText,
   '/pagamentos-nao-vinculados': HandCoins,
+  '/configuracoes': Settings,
   '/documentacao': FileText,
   '/inbox-email': Inbox,
   '/advogados': Briefcase,
@@ -99,7 +101,9 @@ export const AppShell = () => {
 
                 {isOpen && (
                   <ul className="mt-0.5">
-                    {sec.items.map((item) => {
+                    {sec.items
+                      .filter(item => !item.permission || item.permission === user?.role)
+                      .map((item) => {
                       const isActive = location.pathname === item.href;
                       const Icon = ICON_MAP[item.href];
                       return (
