@@ -88,6 +88,9 @@ Quando backend e frontend estao no mesmo repositorio, use arquivos separados de 
 1. Crie um novo service no mesmo projeto (ex: `frontend`).
 2. Va em **Settings** > **Config-as-code** > **Railway Config File**.
 3. Defina o arquivo como `railway.frontend.toml`.
+4. Se aparecer **"The value is set in railway.toml"** no Builder, remova a secao `[build]` do `railway.toml` raiz (deixe apenas deploy generico) para evitar override global.
+5. Em **Variables**, configure `VITE_API_URL=https://SEU_BACKEND.up.railway.app/api`.
+6. Gere dominio em **Networking** > **Generate Domain**.
 4. Em **Variables**, configure `VITE_API_URL=https://SEU_BACKEND.up.railway.app/api`.
 5. Gere dominio em **Networking** > **Generate Domain**.
 
