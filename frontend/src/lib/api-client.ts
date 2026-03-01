@@ -2,8 +2,27 @@ import axios, { AxiosError } from 'axios';
 import { useAuthStore } from '@/stores/auth-store';
 import type { ApiError, AuthTokens } from '@/types/api';
 
+const ensureAbsoluteUrl = (url: string): string => {
+  const normalized = url.trim();
+  if (!normalized) return normalized;
+
+  if (/^https?:\/\//i.test(normalized)) {
+    return normalized;
+  }
+
+  if (/^(localhost|127\.0\.0\.1)(:\d+)?(\/.*)?$/i.test(normalized)) {
+    return `http://${normalized}`;
+  }
+
+  if (normalized.startsWith('/')) {
+    return normalized;
+  }
+
+  return `https://${normalized}`;
+};
+
 const ensureApiPrefix = (url: string): string => {
-  const normalized = url.trim().replace(/\/+$/, '');
+  const normalized = ensureAbsoluteUrl(url).replace(/\/+$/, '');
   if (!normalized) return '/api';
 
   if (normalized === '/api' || normalized.endsWith('/api')) {
