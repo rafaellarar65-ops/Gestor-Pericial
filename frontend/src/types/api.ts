@@ -147,6 +147,34 @@ export type EmailTemplate = {
   active?: boolean;
 };
 
+export type MessageTemplateChannel = 'whatsapp_template' | 'whatsapp_freeform' | 'clipboard' | 'wa_me_prefill';
+
+export type MessageTemplate = {
+  id: string;
+  channel: MessageTemplateChannel;
+  name: string;
+  body: string;
+  placeholdersUsed?: string[];
+  variablesMapping?: Record<string, string>;
+};
+
+export type TemplatePreview = {
+  text: string;
+  channel: MessageTemplateChannel;
+};
+
+export type InboxItem = {
+  id: string;
+  message?: string;
+  tags?: string[];
+  from?: string;
+  to?: string;
+  channel?: string;
+  status?: string;
+  body?: string;
+  createdAt?: string;
+};
+
 export type AgendaEvent = {
   id: string;
   title: string;
@@ -263,6 +291,25 @@ export type ConfigItem = {
   esfera?: string;
   cidadeId?: string;
   tribunalId?: string;
+};
+
+export type DashboardSystemSettings = {
+  nomeacoesGroups: {
+    avaliar: string[];
+    aceiteHonorarios: string[];
+    majorarHonorarios: string[];
+    observacaoExtra: string[];
+  };
+  dashboard: {
+    avaliarStatusCodigos: string[];
+    avaliarStatusNomeTermos: string[];
+    enviarLaudoStatusCodigos: string[];
+    enviarLaudoStatusNomeTermos: string[];
+  };
+  filas: {
+    agendamentoBloqueiaTermosStatus: string[];
+    laudosUrgenciaTermosStatus: string[];
+  };
 };
 
 
