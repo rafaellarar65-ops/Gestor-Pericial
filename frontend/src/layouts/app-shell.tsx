@@ -1,6 +1,6 @@
 import { useState } from 'react';
 import { Link, Outlet, useLocation, useMatches, useNavigate } from 'react-router-dom';
-import { Bell, ChevronDown, ChevronLeft, ChevronRight, LayoutDashboard, CalendarClock, ClipboardList, MapPin, Scale, Calendar, Video, MessageSquareWarning, BookOpen, FileEdit, Dumbbell, Wallet, Upload, BarChart3, LogOut, CalendarDays, CalendarRange, FileText, HandCoins, Inbox, Briefcase, Receipt } from 'lucide-react';
+import { Bell, ChevronDown, ChevronLeft, ChevronRight, LayoutDashboard, CalendarClock, ClipboardList, MapPin, Scale, Calendar, Video, MessageSquareWarning, BookOpen, FileEdit, Dumbbell, Wallet, Upload, BarChart3, LogOut, CalendarDays, CalendarRange, FileText, HandCoins, Inbox, Briefcase, Receipt, AlertTriangle } from 'lucide-react';
 import { CommandPalette } from '@/components/domain/command-palette';
 import { sidebarSections, type SidebarItem } from '@/config/sidebar-config';
 import { useAuthStore } from '@/stores/auth-store';
@@ -20,6 +20,7 @@ const ICON_MAP: Record<SidebarItem['href'], React.ComponentType<{ size?: number;
   '/tarefas': ClipboardList,
   '/fila-agendamento': Calendar,
   '/telepericias': Video,
+  '/esclarecimentos': AlertTriangle,
   '/comunicacao': MessageSquareWarning,
   '/agenda': Calendar,
   '/integrations/google-calendar': CalendarDays,

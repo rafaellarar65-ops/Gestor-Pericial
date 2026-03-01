@@ -4,6 +4,7 @@ import { AlertCircle, CalendarDays, CheckCircle2, CircleDollarSign, Landmark, Ma
 import { useQueryClient } from '@tanstack/react-query';
 import { toast } from 'sonner';
 import { DomainPageTemplate } from '@/components/domain/domain-page-template';
+import { Dialog } from '@/components/ui/dialog';
 import { EmptyState, ErrorState, LoadingState } from '@/components/ui/state';
 import {
   usePericiaCnjQuery,
@@ -13,9 +14,11 @@ import {
   usePericiaTimelineQuery,
   useUpdatePericiaDatesMutation,
 } from '@/hooks/use-pericias';
+import { financialService } from '@/services/financial-service';
 import { apiClient } from '@/lib/api-client';
 import { cn } from '@/lib/utils';
 import type { AppShellOutletContext } from '@/layouts/app-shell-context';
+import { financialService } from '@/services/financial-service';
 
 const tabs = ['Visão 360°', 'Documentos', 'Timeline', 'Financeiro', 'CNJ'] as const;
 type TabType = (typeof tabs)[number];
@@ -23,6 +26,17 @@ type TabType = (typeof tabs)[number];
 const toDateInput = (iso?: string) => (iso ? new Date(iso).toISOString().slice(0, 10) : '');
 const toDateBR = (iso?: string) => (iso ? new Date(iso).toLocaleDateString('pt-BR') : '—');
 const toMoney = (value?: number | string) => Number(value ?? 0).toLocaleString('pt-BR', { style: 'currency', currency: 'BRL' });
+const withFallback = (value?: string | number | null) => {
+  if (value === null || value === undefined) return '—';
+  const stringValue = String(value).trim();
+  return stringValue.length > 0 ? stringValue : '—';
+};
+const formatCNJ = (cnj?: string) => {
+  if (!cnj) return '—';
+  const digits = cnj.replace(/\D/g, '');
+  if (digits.length !== 20) return cnj;
+  return digits.replace(/(\d{7})(\d{2})(\d{4})(\d)(\d{2})(\d{4})/, '$1-$2.$3.$4.$5.$6');
+};
 
 const PericiaDetailPage = () => {
   const { setHeaderConfig, clearHeaderConfig } = useOutletContext<AppShellOutletContext>();
@@ -32,7 +46,14 @@ const PericiaDetailPage = () => {
   const [activeTab, setActiveTab] = useState<TabType>('Visão 360°');
   const [showDatesModal, setShowDatesModal] = useState(false);
   const [showLaudoModal, setShowLaudoModal] = useState(false);
+  const [showRecebimentoDialog, setShowRecebimentoDialog] = useState(false);
   const [dataProtocoloLaudo, setDataProtocoloLaudo] = useState(new Date().toISOString().slice(0, 10));
+  const [fontePagamento, setFontePagamento] = useState('');
+  const [dataRecebimento, setDataRecebimento] = useState(new Date().toISOString().slice(0, 10));
+  const [valorBruto, setValorBruto] = useState('');
+  const [valorLiquido, setValorLiquido] = useState('');
+  const [descricao, setDescricao] = useState('');
+  const [isSubmittingRecebimento, setIsSubmittingRecebimento] = useState(false);
 
   const detailQuery = usePericiaDetailQuery(id);
   const timelineQuery = usePericiaTimelineQuery(id);
@@ -62,6 +83,32 @@ const PericiaDetailPage = () => {
     return { previsto, recebido, saldo: previsto - recebido, items: recebimentos };
   }, [detail?.honorariosPrevistosJG, recebimentosQuery.data]);
 
+  const esclarecimentosMeta = useMemo(() => {
+    const intimacao = detail?.esclarecimentos?.dataIntimacao;
+    const prazo = Number(detail?.esclarecimentos?.prazoDias ?? 0);
+    if (!intimacao || !prazo) return null;
+
+    const deadlineDate = new Date(intimacao);
+    deadlineDate.setDate(deadlineDate.getDate() + prazo);
+
+    const today = new Date();
+    today.setHours(0, 0, 0, 0);
+    const diffDays = Math.ceil((deadlineDate.getTime() - today.getTime()) / (1000 * 60 * 60 * 24));
+
+    const levelClass = diffDays < 0
+      ? 'text-red-600'
+      : diffDays <= 3
+        ? 'text-amber-600'
+        : 'text-emerald-600';
+
+    return {
+      prazo,
+      deadline: toDateBR(deadlineDate.toISOString()),
+      diasRestantes: `${diffDays} dia${Math.abs(diffDays) === 1 ? '' : 's'}`,
+      levelClass,
+    };
+  }, [detail?.esclarecimentos?.dataIntimacao, detail?.esclarecimentos?.prazoDias]);
+
   if (detailQuery.isLoading) return <LoadingState />;
   if (detailQuery.isError) return <ErrorState message="Erro ao carregar perícia" />;
   if (!detail) return <EmptyState title="Perícia não encontrada" />;
@@ -85,6 +132,37 @@ const PericiaDetailPage = () => {
       toast.success(successMessage);
     } catch {
       toast.error('Falha ao atualizar status da perícia.');
+    }
+  };
+
+  const resetRecebimentoForm = () => {
+    setFontePagamento('');
+    setDataRecebimento(new Date().toISOString().slice(0, 10));
+    setValorBruto('');
+    setValorLiquido('');
+    setDescricao('');
+  };
+
+  const handleCreateRecebimento = async (event: React.FormEvent<HTMLFormElement>) => {
+    event.preventDefault();
+    setIsSubmittingRecebimento(true);
+    try {
+      await financialService.createRecebimento({
+        periciaId: id,
+        fontePagamento,
+        dataRecebimento,
+        valorBruto: Number(valorBruto),
+        valorLiquido: valorLiquido ? Number(valorLiquido) : undefined,
+        descricao: descricao || undefined,
+      });
+      await queryClient.invalidateQueries({ queryKey: ['pericia-recebimentos', id] });
+      toast.success('Recebimento cadastrado com sucesso.');
+      setShowRecebimentoDialog(false);
+      resetRecebimentoForm();
+    } catch {
+      toast.error('Falha ao cadastrar recebimento.');
+    } finally {
+      setIsSubmittingRecebimento(false);
     }
   };
 
@@ -153,8 +231,15 @@ const PericiaDetailPage = () => {
         description={`Autor: ${detail.autorNome ?? '—'} • Réu: ${detail.reuNome ?? '—'}`}
         headerActions={
           <>
+            <Link
+              className="inline-flex items-center gap-2 rounded-md border px-3 py-2 text-sm font-medium text-foreground transition-colors hover:bg-muted focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-indigo-600 focus-visible:ring-offset-2"
+              to={`/pericias/${id}/editar`}
+            >
+              Editar
+            </Link>
             <button
               className="inline-flex items-center gap-2 rounded-md border px-3 py-2 text-sm font-medium text-foreground transition-colors hover:bg-muted focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-indigo-500 focus-visible:ring-offset-2"
+              className="inline-flex items-center gap-2 rounded-md border px-3 py-2 text-sm font-medium text-foreground transition-colors hover:bg-muted focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-indigo-600 focus-visible:ring-offset-2"
               onClick={openDatesModal}
               type="button"
             >
@@ -168,6 +253,17 @@ const PericiaDetailPage = () => {
             </Link>
             <Link className="inline-flex items-center gap-2 rounded-md border px-3 py-2 text-sm font-medium text-foreground transition-colors hover:bg-muted focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-indigo-500 focus-visible:ring-offset-2" to={`/laudo-inteligente/${id}`}>Laudo Inteligente</Link>
             <Link className="inline-flex items-center gap-2 rounded-md border px-3 py-2 text-sm font-medium text-foreground transition-colors hover:bg-muted focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-indigo-500 focus-visible:ring-offset-2" to="/laudo-v2">CNJ</Link>
+              className="inline-flex items-center gap-2 rounded-md border px-3 py-2 text-sm font-medium text-foreground transition-colors hover:bg-muted focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-indigo-600 focus-visible:ring-offset-2"
+              to={`/laudo-inteligente/${id}`}
+            >
+              Laudo Inteligente
+            </Link>
+            <Link
+              className="inline-flex items-center gap-2 rounded-md border px-3 py-2 text-sm font-medium text-foreground transition-colors hover:bg-muted focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-indigo-600 focus-visible:ring-offset-2"
+              to="/laudo-v2"
+            >
+              CNJ
+            </Link>
           </>
         }
       >
@@ -200,9 +296,92 @@ const PericiaDetailPage = () => {
 
           <div className="p-4">
             {activeTab === 'Visão 360°' && (
-              <div className="grid gap-4 md:grid-cols-2">
-                <div className="rounded-lg border p-4"><h3 className="font-semibold">Resumo do Caso</h3><ul className="mt-3 space-y-2 text-sm text-muted-foreground"><li className="flex justify-between"><span>Status Atual</span><strong>{detail.status?.nome ?? '—'}</strong></li><li className="flex justify-between"><span>Cidade / Vara</span><span>{detail.cidade?.nome ?? '—'} / {detail.vara?.nome ?? '—'}</span></li><li className="flex justify-between"><span>Data Nomeação</span><span>{toDateBR(detail.dataNomeacao)}</span></li></ul></div>
-                <div className="rounded-lg border p-4"><h3 className="font-semibold">Prazos</h3><ul className="mt-3 space-y-2 text-sm text-muted-foreground"><li className="flex justify-between"><span>Agendamento</span><span>{toDateBR(detail.dataAgendamento)}</span></li><li className="flex justify-between"><span>Realização</span><span>{toDateBR(detail.dataRealizacao)}</span></li><li className="flex justify-between"><span>Envio Laudo</span><span>{toDateBR(detail.dataEnvioLaudo)}</span></li></ul></div>
+              <div className="space-y-4">
+                <div className="grid gap-4 md:grid-cols-2">
+                  <div className="rounded-lg border p-4">
+                    <h3 className="font-semibold">Resumo do Caso</h3>
+                    <ul className="mt-3 space-y-2 text-sm text-muted-foreground">
+                      <li className="flex items-center justify-between gap-2">
+                        <span>Status</span>
+                        <span
+                          className="inline-flex rounded-full border border-slate-200 bg-slate-100 px-2 py-0.5 text-xs font-semibold text-slate-700"
+                          style={detail.status?.cor ? { backgroundColor: `${detail.status.cor}20`, borderColor: detail.status.cor, color: detail.status.cor } : undefined}
+                        >
+                          {withFallback(detail.status?.nome)}
+                        </span>
+                      </li>
+                      <li className="flex justify-between gap-2"><span>Cidade / Vara</span><span className="text-right">{withFallback(detail.cidade?.nome)} / {withFallback(detail.vara?.nome)}</span></li>
+                      <li className="flex justify-between gap-2"><span>Tipo de perícia</span><span className="text-right">{withFallback(detail.tipoPericia?.nome)}</span></li>
+                      <li className="flex justify-between gap-2"><span>Modalidade</span><span className="text-right">{withFallback(detail.modalidade?.nome)}</span></li>
+                      <li className="flex justify-between gap-2"><span>CNJ</span><span className="font-mono text-right">{formatCNJ(detail.processoCNJ)}</span></li>
+                      <li className="flex justify-between gap-2"><span>Juiz(a)</span><span className="text-right">{withFallback(detail.juizNome)}</span></li>
+                    </ul>
+                  </div>
+
+                  <div className="rounded-lg border p-4">
+                    <h3 className="font-semibold">Partes</h3>
+                    <ul className="mt-3 space-y-2 text-sm text-muted-foreground">
+                      <li className="flex justify-between gap-2"><span>Autor</span><span className="text-right">{withFallback(detail.autorNome)}</span></li>
+                      <li className="flex justify-between gap-2"><span>Réu</span><span className="text-right">{withFallback(detail.reuNome)}</span></li>
+                      <li className="flex justify-between gap-2"><span>Periciado</span><span className="text-right">{withFallback(detail.periciadoNome)}</span></li>
+                    </ul>
+                  </div>
+                </div>
+
+                <div className="grid gap-4 md:grid-cols-2">
+                  <div className="rounded-lg border p-4">
+                    <h3 className="font-semibold">Datas/Prazos</h3>
+                    <ul className="mt-3 space-y-2 text-sm text-muted-foreground">
+                      <li className="flex justify-between gap-2"><span>Nomeação</span><span>{toDateBR(detail.dataNomeacao)}</span></li>
+                      <li className="flex justify-between gap-2"><span>Agendamento</span><span>{toDateBR(detail.dataAgendamento)} {detail.horaAgendamento ? `às ${detail.horaAgendamento}` : ''}</span></li>
+                      <li className="flex justify-between gap-2"><span>Realização</span><span>{toDateBR(detail.dataRealizacao)}</span></li>
+                      <li className="flex justify-between gap-2"><span>Envio de laudo</span><span>{toDateBR(detail.dataEnvioLaudo)}</span></li>
+                    </ul>
+                  </div>
+
+                  <div className="rounded-lg border p-4">
+                    <h3 className="font-semibold">Financeiro Resumo</h3>
+                    <ul className="mt-3 space-y-2 text-sm text-muted-foreground">
+                      <li className="flex justify-between gap-2"><span>JG</span><span>{toMoney(detail.honorariosPrevistosJG)}</span></li>
+                      <li className="flex justify-between gap-2"><span>Partes</span><span>{toMoney(detail.honorariosPrevistosPartes)}</span></li>
+                      <li className="flex justify-between gap-2"><span>Total previsto</span><span className="font-semibold text-foreground">{toMoney(Number(detail.honorariosPrevistosJG ?? 0) + Number(detail.honorariosPrevistosPartes ?? 0))}</span></li>
+                      <li className="flex justify-between gap-2">
+                        <span>Status pagamento</span>
+                        <span
+                          className={cn('font-semibold', {
+                            'text-emerald-600': (detail.pagamentoStatus ?? '').toUpperCase() === 'SIM',
+                            'text-red-600': (detail.pagamentoStatus ?? '').toUpperCase() === 'NÃO' || (detail.pagamentoStatus ?? '').toUpperCase() === 'NAO',
+                            'text-amber-600': (detail.pagamentoStatus ?? '').toUpperCase() === 'PARCIAL',
+                          })}
+                        >
+                          {withFallback(detail.pagamentoStatus)}
+                        </span>
+                      </li>
+                    </ul>
+                  </div>
+                </div>
+
+                {(detail.observacoes || detail.observacaoExtra) && (
+                  <div className="rounded-lg border p-4">
+                    <h3 className="font-semibold">Observações</h3>
+                    <ul className="mt-3 space-y-2 text-sm text-muted-foreground">
+                      {detail.observacoes && <li><span className="font-medium text-foreground">Observação:</span> {detail.observacoes}</li>}
+                      {detail.observacaoExtra && <li><span className="font-medium text-foreground">Observação extra:</span> {detail.observacaoExtra}</li>}
+                    </ul>
+                  </div>
+                )}
+
+                {statusNome.includes('esclarec') && (
+                  <div className="rounded-lg border border-amber-200 bg-amber-50/40 p-4">
+                    <h3 className="font-semibold">Esclarecimentos</h3>
+                    <ul className="mt-3 space-y-2 text-sm text-muted-foreground">
+                      <li className="flex justify-between gap-2"><span>Data de intimação</span><span>{toDateBR(detail.esclarecimentos?.dataIntimacao)}</span></li>
+                      <li className="flex justify-between gap-2"><span>Prazo (dias)</span><span>{detail.esclarecimentos?.prazoDias ?? '—'}</span></li>
+                      <li className="flex justify-between gap-2"><span>Deadline</span><span>{esclarecimentosMeta?.deadline ?? '—'}</span></li>
+                      <li className="flex justify-between gap-2"><span>Dias restantes</span><span className={cn('font-semibold', esclarecimentosMeta?.levelClass)}>{esclarecimentosMeta?.diasRestantes ?? '—'}</span></li>
+                    </ul>
+                  </div>
+                )}
               </div>
             )}
 
@@ -245,6 +424,15 @@ const PericiaDetailPage = () => {
                   <div className="rounded-lg border border-emerald-200 bg-emerald-50 p-3"><p className="text-xs">Recebido</p><p className="text-2xl font-bold text-emerald-700">{toMoney(financial.recebido)}</p></div>
                   <div className="rounded-lg border border-red-200 bg-red-50 p-3"><p className="text-xs">Saldo</p><p className="text-2xl font-bold text-red-700">{toMoney(financial.saldo)}</p></div>
                 </div>
+                <div className="flex justify-end">
+                  <button
+                    className="inline-flex items-center gap-2 rounded-md bg-blue-600 px-3 py-2 text-sm font-semibold text-white"
+                    onClick={() => setShowRecebimentoDialog(true)}
+                    type="button"
+                  >
+                    <Plus size={14} /> Novo Recebimento
+                  </button>
+                </div>
                 <div className="space-y-2">
                   {financial.items.map((item) => (
                     <div className="rounded-md border p-3 text-sm" key={item.id}><p className="font-semibold">Recebimento</p><p className="text-muted-foreground">{toMoney(item.valorLiquido ?? item.valorBruto)} • {toDateBR(item.dataRecebimento ?? item.createdAt)}</p></div>
@@ -259,6 +447,58 @@ const PericiaDetailPage = () => {
           </div>
         </section>
       </DomainPageTemplate>
+
+      <Dialog
+        onClose={() => {
+          setShowRecebimentoDialog(false);
+          resetRecebimentoForm();
+        }}
+        open={showRecebimentoDialog}
+        title="Novo Recebimento"
+      >
+        <form className="space-y-3" onSubmit={(event) => void handleCreateRecebimento(event)}>
+          <label className="block text-sm">
+            <span className="mb-1 block text-xs font-semibold uppercase text-muted-foreground">Fonte de pagamento</span>
+            <input className="w-full rounded-md border px-3 py-2" onChange={(e) => setFontePagamento(e.target.value)} required type="text" value={fontePagamento} />
+          </label>
+
+          <label className="block text-sm">
+            <span className="mb-1 block text-xs font-semibold uppercase text-muted-foreground">Data de recebimento</span>
+            <input className="w-full rounded-md border px-3 py-2" onChange={(e) => setDataRecebimento(e.target.value)} required type="date" value={dataRecebimento} />
+          </label>
+
+          <label className="block text-sm">
+            <span className="mb-1 block text-xs font-semibold uppercase text-muted-foreground">Valor bruto</span>
+            <input className="w-full rounded-md border px-3 py-2" min="0" onChange={(e) => setValorBruto(e.target.value)} required step="0.01" type="number" value={valorBruto} />
+          </label>
+
+          <label className="block text-sm">
+            <span className="mb-1 block text-xs font-semibold uppercase text-muted-foreground">Valor líquido</span>
+            <input className="w-full rounded-md border px-3 py-2" min="0" onChange={(e) => setValorLiquido(e.target.value)} step="0.01" type="number" value={valorLiquido} />
+          </label>
+
+          <label className="block text-sm">
+            <span className="mb-1 block text-xs font-semibold uppercase text-muted-foreground">Descrição</span>
+            <textarea className="w-full rounded-md border px-3 py-2" onChange={(e) => setDescricao(e.target.value)} rows={3} value={descricao} />
+          </label>
+
+          <div className="flex justify-end gap-2 pt-2">
+            <button
+              className="rounded-md px-3 py-2 text-sm"
+              onClick={() => {
+                setShowRecebimentoDialog(false);
+                resetRecebimentoForm();
+              }}
+              type="button"
+            >
+              Cancelar
+            </button>
+            <button className="rounded-md bg-blue-600 px-4 py-2 text-sm font-semibold text-white" disabled={isSubmittingRecebimento} type="submit">
+              {isSubmittingRecebimento ? 'Salvando...' : 'Salvar'}
+            </button>
+          </div>
+        </form>
+      </Dialog>
 
       {showDatesModal && (
         <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/40 p-4">
@@ -316,6 +556,25 @@ const PericiaDetailPage = () => {
                 >
                   {updateDates.isPending ? 'Confirmando...' : 'Confirmar'}
                 </button>
+              </div>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {showRecebimentoModal && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/40 p-4">
+          <div className="w-full max-w-xl rounded-xl bg-white shadow-xl">
+            <div className="flex items-center justify-between rounded-t-xl bg-slate-900 px-4 py-3 text-white"><p className="font-semibold">Novo Recebimento</p><button onClick={() => setShowRecebimentoModal(false)} type="button">×</button></div>
+            <div className="grid gap-3 p-4 md:grid-cols-2">
+              <label className="block text-sm md:col-span-2"><span className="mb-1 block text-xs font-semibold uppercase text-muted-foreground">Fonte de Pagamento</span><input className="w-full rounded-md border px-3 py-2" onChange={(e) => setFontePagamento(e.target.value)} placeholder="Ex.: Tribunal de Justiça" type="text" value={fontePagamento} /></label>
+              <label className="block text-sm"><span className="mb-1 block text-xs font-semibold uppercase text-muted-foreground">Data de Recebimento</span><input className="w-full rounded-md border px-3 py-2" onChange={(e) => setDataRecebimento(e.target.value)} type="date" value={dataRecebimento} /></label>
+              <label className="block text-sm"><span className="mb-1 block text-xs font-semibold uppercase text-muted-foreground">Valor Bruto</span><input className="w-full rounded-md border px-3 py-2" min="0" onChange={(e) => setValorBruto(e.target.value)} placeholder="0,00" step="0.01" type="number" value={valorBruto} /></label>
+              <label className="block text-sm md:col-span-2"><span className="mb-1 block text-xs font-semibold uppercase text-muted-foreground">Valor Líquido</span><input className="w-full rounded-md border px-3 py-2" min="0" onChange={(e) => setValorLiquido(e.target.value)} placeholder="0,00" step="0.01" type="number" value={valorLiquido} /></label>
+              <label className="block text-sm md:col-span-2"><span className="mb-1 block text-xs font-semibold uppercase text-muted-foreground">Descrição</span><textarea className="w-full rounded-md border px-3 py-2" onChange={(e) => setDescricao(e.target.value)} placeholder="Observações do recebimento" rows={3} value={descricao} /></label>
+              <div className="flex justify-end gap-2 pt-2 md:col-span-2">
+                <button className="rounded-md px-3 py-2 text-sm" onClick={() => setShowRecebimentoModal(false)} type="button">Cancelar</button>
+                <button className="rounded-md bg-blue-600 px-4 py-2 text-sm font-semibold text-white" disabled={isCreatingRecebimento} onClick={() => void handleCreateRecebimento()} type="button">{isCreatingRecebimento ? 'Salvando...' : 'Salvar recebimento'}</button>
               </div>
             </div>
           </div>
