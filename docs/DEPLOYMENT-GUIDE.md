@@ -274,6 +274,19 @@ Apos o login, configure:
 3. Verifique se o projeto Supabase esta ativo (nao pausado)
 4. No Supabase, va em **Settings** > **Database** > **Connection Pooling** e confirme que esta habilitado
 
+### Erro: Build do frontend falha com `"/frontend": not found`
+
+**Sintoma no log**:
+`failed to calculate checksum ... "/frontend": not found`
+
+**Causa comum**: Contexto de build diferente entre servicos (alguns usam raiz do repo, outros usam subdiretorio).
+
+**Solucao**:
+1. Use `railway.frontend.toml` no service frontend.
+2. Nao force `Root Directory` no Railway quando usar `Dockerfile.frontend` na raiz.
+3. Garanta que o backend use `railway.backend.toml` e o frontend use `railway.frontend.toml`.
+4. Rode novo deploy apos salvar as configuracoes.
+
 ### Erro: CORS / "Network Error" no frontend
 
 **Causa**: O backend nao aceita requisicoes do dominio do frontend.
