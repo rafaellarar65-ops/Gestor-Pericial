@@ -80,7 +80,7 @@ class GestorPericialAPITester:
             "Login with Valid Credentials",
             "POST", 
             "auth/login",
-            200,
+            201,  # Backend returns 201 for successful login
             data={"email": "admin@gestor-pericial.com", "password": "SenhaSegura123!"}
         )
         if success and 'accessToken' in response:
