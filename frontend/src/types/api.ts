@@ -341,15 +341,24 @@ export type PericiaDetail = {
   autorNome?: string;
   reuNome?: string;
   periciadoNome?: string;
+  tipoPericia?: { id: string; nome: string } | null;
+  modalidade?: { id: string; nome: string } | null;
   cidade?: { id: string; nome: string; uf?: string } | null;
   vara?: { id: string; nome: string } | null;
-  status?: { id: string; nome: string; codigo?: string } | null;
+  status?: { id: string; nome: string; codigo?: string; cor?: string } | null;
   pagamentoStatus?: string;
   dataNomeacao?: string;
   dataAgendamento?: string;
+  horaAgendamento?: string;
   dataRealizacao?: string;
   dataEnvioLaudo?: string;
   honorariosPrevistosJG?: number | string;
+  honorariosPrevistosPartes?: number | string;
+  juizNome?: string;
+  observacoes?: string;
+  observacaoExtra?: string;
+  esclarecimentos?: { dataIntimacao?: string; prazoDias?: number };
+  finalizada?: boolean;
 };
 
 export type PericiaTimelineItem = {
