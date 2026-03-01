@@ -21,10 +21,10 @@ export default defineConfig(({ mode }) => {
       ],
       proxy: {
         '/api': {
-          target: 'http://localhost:8001',
+          target: 'https://gestor-pericial-production.up.railway.app',
           changeOrigin: true,
-          secure: false,
-          credentials: 'include',
+          secure: true,
+          rewrite: (path) => path,
         },
       },
       hmr: {
