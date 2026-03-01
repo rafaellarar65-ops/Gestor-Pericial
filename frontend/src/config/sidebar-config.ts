@@ -26,7 +26,7 @@ export const sidebarSections: SidebarSection[] = [
       { label: 'Tarefas', href: '/tarefas' },
       { label: 'Fila de Agendamento', href: '/fila-agendamento' },
       { label: 'Teleperícias', href: '/telepericias' },
-      { label: 'Esclarecimentos', href: '/comunicacao' },
+      { label: 'Esclarecimentos', href: '/esclarecimentos' },
       { label: 'Agenda', href: '/agenda' },
       { label: 'Google Calendar', href: '/integrations/google-calendar' },
     ],
