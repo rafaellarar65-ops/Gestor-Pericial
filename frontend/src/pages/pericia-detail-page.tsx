@@ -1,6 +1,7 @@
-import { useEffect, useMemo, useState } from 'react';
+import { type ReactNode, useEffect, useMemo, useState } from 'react';
 import { Link, useNavigate, useOutletContext, useParams } from 'react-router-dom';
 import { AlertCircle, CalendarDays, CheckCircle2, CircleDollarSign, Landmark, MapPin, Pencil, Plus, Save, Send, UserX } from 'lucide-react';
+import { useQueryClient } from '@tanstack/react-query';
 import { toast } from 'sonner';
 import { DomainPageTemplate } from '@/components/domain/domain-page-template';
 import { EmptyState, ErrorState, LoadingState } from '@/components/ui/state';
@@ -12,6 +13,7 @@ import {
   usePericiaTimelineQuery,
   useUpdatePericiaDatesMutation,
 } from '@/hooks/use-pericias';
+import { apiClient } from '@/lib/api-client';
 import { cn } from '@/lib/utils';
 import type { AppShellOutletContext } from '@/layouts/app-shell-context';
 
@@ -25,6 +27,7 @@ const toMoney = (value?: number | string) => Number(value ?? 0).toLocaleString('
 const PericiaDetailPage = () => {
   const { setHeaderConfig, clearHeaderConfig } = useOutletContext<AppShellOutletContext>();
   const navigate = useNavigate();
+  const queryClient = useQueryClient();
   const { id = '' } = useParams();
   const [activeTab, setActiveTab] = useState<TabType>('Visão 360°');
   const [showDatesModal, setShowDatesModal] = useState(false);
@@ -63,9 +66,85 @@ const PericiaDetailPage = () => {
   if (detailQuery.isError) return <ErrorState message="Erro ao carregar perícia" />;
   if (!detail) return <EmptyState title="Perícia não encontrada" />;
 
-  const statusText = `${detail.status?.nome ?? ''} ${detail.status?.codigo ?? ''}`.toLowerCase();
-  const isTele = statusText.includes('tele');
-  const isLaudoFlow = statusText.includes('laudo');
+  const statusNome = (detail.status?.nome ?? '').toLowerCase();
+
+  const openDatesModal = () => {
+    setDates({
+      dataNomeacao: toDateInput(detail.dataNomeacao),
+      dataAgendamento: toDateInput(detail.dataAgendamento),
+      dataRealizacao: toDateInput(detail.dataRealizacao),
+      dataEnvioLaudo: toDateInput(detail.dataEnvioLaudo),
+    });
+    setShowDatesModal(true);
+  };
+
+  const transitionStatus = async (statusId: string, successMessage: string) => {
+    try {
+      await apiClient.patch(`/pericias/${id}`, { statusId });
+      await queryClient.invalidateQueries({ queryKey: ['pericia-detail', id] });
+      toast.success(successMessage);
+    } catch {
+      toast.error('Falha ao atualizar status da perícia.');
+    }
+  };
+
+  const actions: Array<{ label: string; className: string; onClick: () => void; icon: ReactNode }> = [];
+
+  if (statusNome.includes('avaliar')) {
+    actions.push(
+      { label: 'Aceitar Nomeação', className: 'bg-emerald-600 text-white', onClick: () => void transitionStatus('NOMEACAO_ACEITA', 'Nomeação aceita com sucesso.'), icon: <CheckCircle2 size={14} /> },
+      { label: 'Recusar', className: 'bg-red-500 text-white', onClick: () => void transitionStatus('NOMEACAO_RECUSADA', 'Nomeação recusada com sucesso.'), icon: <UserX size={14} /> },
+      { label: 'Majorar', className: 'bg-amber-500 text-white', onClick: () => void transitionStatus('HONORARIOS_MAJORADOS', 'Solicitação de majoração registrada.'), icon: <CircleDollarSign size={14} /> },
+    );
+  }
+
+  if (statusNome.includes('agendar')) {
+    actions.push({ label: 'Agendar Data', className: 'bg-blue-600 text-white', onClick: openDatesModal, icon: <CalendarDays size={14} /> });
+  }
+
+  if (statusNome.includes('agendada')) {
+    actions.push(
+      { label: 'Realizada', className: 'bg-emerald-600 text-white', onClick: () => void transitionStatus('PERICIA_REALIZADA', 'Perícia marcada como realizada.'), icon: <CheckCircle2 size={14} /> },
+      { label: 'Ausência', className: 'bg-red-500 text-white', onClick: () => void transitionStatus('PERICIA_AUSENCIA', 'Ausência registrada com sucesso.'), icon: <UserX size={14} /> },
+      { label: 'Cancelar', className: 'bg-slate-600 text-white', onClick: () => void transitionStatus('PERICIA_CANCELADA', 'Perícia cancelada com sucesso.'), icon: <AlertCircle size={14} /> },
+    );
+  }
+
+  if (statusNome.includes('ausent')) {
+    actions.push(
+      { label: 'Informar Ausência', className: 'bg-red-500 text-white', onClick: () => void transitionStatus('AUSENCIA_INFORMADA', 'Ausência informada com sucesso.'), icon: <UserX size={14} /> },
+      { label: 'Reagendar', className: 'bg-blue-600 text-white', onClick: openDatesModal, icon: <CalendarDays size={14} /> },
+    );
+  }
+
+  if (statusNome.includes('laudo') && !statusNome.includes('enviado')) {
+    actions.push(
+      { label: 'Abrir Laudo Inteligente', className: 'bg-indigo-600 text-white', onClick: () => navigate(`/laudo-inteligente/${id}`), icon: <Pencil size={14} /> },
+      { label: 'Indireta', className: 'bg-teal-700 text-white', onClick: () => void transitionStatus('LAUDO_INDIRETA', 'Fluxo de laudo indireto iniciado.'), icon: <Send size={14} /> },
+    );
+  }
+
+  if (statusNome.includes('enviado') || statusNome.includes('aguardando')) {
+    actions.push(
+      { label: 'Esclarecimentos', className: 'bg-amber-500 text-white', onClick: () => void transitionStatus('AGUARDANDO_ESCLARECIMENTOS', 'Status atualizado para esclarecimentos.'), icon: <AlertCircle size={14} /> },
+      { label: 'Registrar Pagamento', className: 'bg-emerald-600 text-white', onClick: () => void transitionStatus('PAGAMENTO_REGISTRADO', 'Pagamento registrado com sucesso.'), icon: <CircleDollarSign size={14} /> },
+      { label: 'Finalizar', className: 'bg-slate-700 text-white', onClick: () => void transitionStatus('FINALIZADA', 'Perícia finalizada com sucesso.'), icon: <CheckCircle2 size={14} /> },
+    );
+  }
+
+  if (statusNome.includes('esclarec')) {
+    actions.push(
+      { label: 'Responder Esclarecimento', className: 'bg-indigo-600 text-white', onClick: () => navigate(`/laudo-inteligente/${id}`), icon: <Send size={14} /> },
+      { label: 'Estender Prazo', className: 'bg-amber-500 text-white', onClick: openDatesModal, icon: <CalendarDays size={14} /> },
+    );
+  }
+
+  if (statusNome.includes('parcial')) {
+    actions.push(
+      { label: 'Novo Recebimento', className: 'bg-emerald-600 text-white', onClick: () => setActiveTab('Financeiro'), icon: <CircleDollarSign size={14} /> },
+      { label: 'Finalizar', className: 'bg-slate-700 text-white', onClick: () => void transitionStatus('FINALIZADA', 'Perícia finalizada com sucesso.'), icon: <CheckCircle2 size={14} /> },
+    );
+  }
 
   return (
     <>
@@ -76,15 +155,7 @@ const PericiaDetailPage = () => {
           <>
             <button
               className="inline-flex items-center gap-2 rounded-md border px-3 py-2 text-sm"
-              onClick={() => {
-                setDates({
-                  dataNomeacao: toDateInput(detail.dataNomeacao),
-                  dataAgendamento: toDateInput(detail.dataAgendamento),
-                  dataRealizacao: toDateInput(detail.dataRealizacao),
-                  dataEnvioLaudo: toDateInput(detail.dataEnvioLaudo),
-                });
-                setShowDatesModal(true);
-              }}
+              onClick={openDatesModal}
               type="button"
             >
               <Pencil size={14} /> Editar Datas
@@ -100,17 +171,12 @@ const PericiaDetailPage = () => {
             <span className="rounded-full bg-muted px-2 py-1 text-xs font-semibold text-foreground">{detail.status?.nome ?? detail.status?.codigo ?? 'Sem status'}</span>
           </div>
           <div className="mt-3 flex flex-wrap gap-2">
-            {isTele ? (
-              <>
-                <button className="inline-flex items-center gap-2 rounded-md bg-emerald-600 px-4 py-2 text-sm font-semibold text-white" type="button"><CheckCircle2 size={14} /> Realizada</button>
-                <button className="inline-flex items-center gap-2 rounded-md bg-red-500 px-4 py-2 text-sm font-semibold text-white" type="button"><UserX size={14} /> Ausência</button>
-              </>
-            ) : isLaudoFlow ? (
-              <>
-                <button className="inline-flex items-center gap-2 rounded-md bg-amber-500 px-4 py-2 text-sm font-semibold text-white" type="button"><AlertCircle size={14} /> Esclarecimentos</button>
-                <button className="inline-flex items-center gap-2 rounded-md bg-emerald-600 px-4 py-2 text-sm font-semibold text-white" type="button"><CircleDollarSign size={14} /> Receber</button>
-                <button className="inline-flex items-center gap-2 rounded-md bg-teal-700 px-4 py-2 text-sm font-semibold text-white" onClick={() => setShowLaudoModal(true)} type="button"><Send size={14} /> Laudo Enviado</button>
-              </>
+            {actions.length > 0 ? (
+              actions.map((action) => (
+                <button className={cn('inline-flex items-center gap-2 rounded-md px-4 py-2 text-sm font-semibold', action.className)} key={action.label} onClick={action.onClick} type="button">
+                  {action.icon} {action.label}
+                </button>
+              ))
             ) : (
               <button className="inline-flex items-center gap-2 rounded-md bg-indigo-600 px-4 py-2 text-sm font-semibold text-white" onClick={() => navigate('/assistente')} type="button"><Plus size={14} /> Fluxo Inteligente</button>
             )}
