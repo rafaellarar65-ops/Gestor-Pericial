@@ -1,175 +1,77 @@
 import { useMemo, useState } from 'react';
-import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
-import { AgendaFilters, type AgendaStatusFilter } from '@/components/agenda/agenda-filters';
-import { AgendaHeader, type AgendaView } from '@/components/agenda/agenda-header';
-import { EventDetailSheet, type AgendaSheetEvent } from '@/components/agenda/event-detail-sheet';
-import { ScheduleItemCard } from '@/components/agenda/schedule-item-card';
-import { TimeGridCalendar, type TimeGridEvent } from '@/components/agenda/time-grid-calendar';
 import { Button } from '@/components/ui/button';
 import { Card } from '@/components/ui/card';
-import { Dialog } from '@/components/ui/dialog';
+import { Input } from '@/components/ui/input';
 import { EmptyState, ErrorState, LoadingState } from '@/components/ui/state';
-import { agendaService } from '@/services/agenda-service';
-import type { AgendaEvent } from '@/types/api';
-import { toast } from 'sonner';
+import { useDomainData } from '@/hooks/use-domain-data';
 
-type AgendaRow = TimeGridEvent & {
-  description?: string;
+type AgendaStatus = 'todos' | 'agendado' | 'realizado' | 'cancelado';
+
+type AgendaRow = {
+  id: string;
+  titulo: string;
+  tipo: string;
+  inicio: string;
+  fim: string;
+  local: string;
+  status: Exclude<AgendaStatus, 'todos'>;
 };
 
-const addDays = (date: Date, days: number) => {
-  const next = new Date(date);
-  next.setDate(next.getDate() + days);
-  return next;
+const getValue = (item: Record<string, string | number | undefined>, keys: string[]): string => {
+  for (const key of keys) {
+    const value = item[key];
+    if (value !== undefined && value !== null && String(value).trim()) {
+      return String(value);
+    }
+  }
+  return '';
 };
 
-const toCsvValue = (value: string) => `"${value.replaceAll('"', '""')}"`;
-
-const buildAgendaCsv = (rows: AgendaRow[]) => {
-  const header = ['Título', 'Tipo', 'Início', 'Fim', 'Local', 'Status'];
-  const csvLines = [
-    header,
-    ...rows.map((row) => [row.titulo, row.tipo, row.inicio || '—', row.fim || '—', row.local, row.status]),
-  ].map((line) => line.map((value) => toCsvValue(value)).join(';'));
-
-  return `\uFEFF${csvLines.join('\n')}`;
+const toDateTime = (value: string) => {
+  if (!value) return '—';
+  const date = new Date(value);
+  return Number.isNaN(date.getTime()) ? value : date.toLocaleString('pt-BR');
 };
 
 const inferStatus = (item: Record<string, string | number | undefined>): AgendaRow['status'] => {
   const raw = getValue(item, ['status', 'state']).toLowerCase();
-const inferStatus = (item: AgendaEvent): AgendaStatusFilter => {
-  const raw = String((item as AgendaEvent & { status?: string }).status ?? '').toLowerCase();
   if (raw.includes('realiz')) return 'realizado';
   if (raw.includes('cancel')) return 'cancelado';
   return 'agendado';
 };
 
-const mapAgendaRow = (item: AgendaEvent): AgendaRow => {
-  const start = new Date(item.startAt);
-  const fallbackEnd = new Date(start.getTime() + 60 * 60000).toISOString();
-  return {
-    id: item.id,
-    title: item.title || 'Evento sem título',
-    type: item.type || 'Não informado',
-    startAt: item.startAt,
-    endAt: item.endAt || fallbackEnd,
-    location: item.location || 'Sem recurso',
-    status: inferStatus(item),
-    description: item.description,
-  };
-};
-
-const isOverlapping = (candidate: AgendaRow, events: AgendaRow[]) =>
-  events.some((other) => {
-    if (other.id === candidate.id) return false;
-    if ((other.location || 'Sem recurso') !== (candidate.location || 'Sem recurso')) return false;
-    const aStart = new Date(candidate.startAt).getTime();
-    const aEnd = new Date(candidate.endAt).getTime();
-    const bStart = new Date(other.startAt).getTime();
-    const bEnd = new Date(other.endAt).getTime();
-    return aStart < bEnd && bStart < aEnd;
-  });
+const mapAgendaRow = (item: Record<string, string | number | undefined>, index: number): AgendaRow => ({
+  id: getValue(item, ['id']) || `agenda-${index}`,
+  titulo: getValue(item, ['title', 'titulo']) || 'Evento sem título',
+  tipo: getValue(item, ['type', 'tipo']) || 'Não informado',
+  inicio: getValue(item, ['startAt', 'inicio']),
+  fim: getValue(item, ['endAt', 'fim']),
+  local: getValue(item, ['location', 'local']) || 'Não informado',
+  status: inferStatus(item),
+});
 
 const Page = () => {
-  const queryClient = useQueryClient();
-  const { data = [], isLoading, isError } = useQuery({
-    queryKey: ['agenda-events'],
-    queryFn: agendaService.listEvents,
-  });
-
-  const [view, setView] = useState<AgendaView>('week');
-  const [currentDate, setCurrentDate] = useState(new Date());
-  const [search, setSearch] = useState('');
-  const [dateFilter, setDateFilter] = useState('');
-  const [status, setStatus] = useState<AgendaStatusFilter>('todos');
-  const [locationFilter, setLocationFilter] = useState('');
-  const [selectedEventId, setSelectedEventId] = useState<string | null>(null);
-  const [pendingUpdate, setPendingUpdate] = useState<{ id: string; startAt: string; endAt: string } | null>(null);
-
-  const updateEventMutation = useMutation({
-    mutationFn: ({ id, payload }: { id: string; payload: Partial<AgendaSheetEvent> }) => agendaService.updateEvent(id, payload),
-    onSuccess: () => {
-      void queryClient.invalidateQueries({ queryKey: ['agenda-events'] });
-      toast.success('Evento atualizado com sucesso.');
-    },
-    onError: () => toast.error('Falha ao atualizar o evento.'),
-  });
+  const { data = [], isLoading, isError } = useDomainData('agenda', '/agenda/events');
+  const [busca, setBusca] = useState('');
+  const [periodo, setPeriodo] = useState('');
+  const [status, setStatus] = useState<AgendaStatus>('todos');
 
   const rows = useMemo(() => data.map(mapAgendaRow), [data]);
 
-  const filteredRows = useMemo(() => {
-    const searchTerm = busca.toLowerCase();
-
-    return rows.filter((row) => {
-      const matchesBusca =
-        !busca ||
-        [row.titulo, row.tipo, row.local].some((value) => value.toLowerCase().includes(searchTerm));
-      const matchesStatus = status === 'todos' || row.status === status;
-      const matchesPeriodo = !periodo || row.inicio.startsWith(periodo);
-
-      return matchesBusca && matchesStatus && matchesPeriodo;
-    });
-  }, [rows, busca, status, periodo]);
-
-  const handleExportAgenda = () => {
-    const csvContent = buildAgendaCsv(filteredRows);
-    const blob = new Blob([csvContent], { type: 'text/csv;charset=utf-8;' });
-    const url = URL.createObjectURL(blob);
-    const link = document.createElement('a');
-
-    link.href = url;
-    link.setAttribute('download', `agenda-${periodo || new Date().toISOString().slice(0, 10)}.csv`);
-    document.body.appendChild(link);
-    link.click();
-    document.body.removeChild(link);
-    URL.revokeObjectURL(url);
-  };
   const filteredRows = useMemo(
     () =>
       rows.filter((row) => {
-        const matchesSearch =
-          !search || [row.title, row.type, row.location].some((value) => value.toLowerCase().includes(search.toLowerCase()));
+        const matchesBusca =
+          !busca ||
+          [row.titulo, row.tipo, row.local].some((value) => value.toLowerCase().includes(busca.toLowerCase()));
+
         const matchesStatus = status === 'todos' || row.status === status;
-        const matchesDate = !dateFilter || row.startAt.startsWith(dateFilter);
-        const matchesLocation = !locationFilter || row.location.toLowerCase().includes(locationFilter.toLowerCase());
-        return matchesSearch && matchesStatus && matchesDate && matchesLocation;
+        const matchesPeriodo = !periodo || row.inicio.startsWith(periodo);
+
+        return matchesBusca && matchesStatus && matchesPeriodo;
       }),
-    [rows, search, status, dateFilter, locationFilter],
+    [rows, busca, status, periodo],
   );
-
-  const overlappingIds = useMemo(() => {
-    const ids = new Set<string>();
-    filteredRows.forEach((row) => {
-      if (isOverlapping(row, filteredRows)) ids.add(row.id);
-    });
-    return ids;
-  }, [filteredRows]);
-
-  const selectedEvent = useMemo(
-    () => (selectedEventId ? filteredRows.find((item) => item.id === selectedEventId) ?? null : null),
-    [selectedEventId, filteredRows],
-  );
-
-  const currentDateLabel = useMemo(() => {
-    if (view === 'day') return currentDate.toLocaleDateString('pt-BR', { weekday: 'long', day: '2-digit', month: 'long' });
-    const end = addDays(currentDate, 6);
-    return `${currentDate.toLocaleDateString('pt-BR')} - ${end.toLocaleDateString('pt-BR')}`;
-  }, [currentDate, view]);
-
-  const savePatch = (id: string, payload: Partial<AgendaSheetEvent>) => updateEventMutation.mutate({ id, payload });
-
-  const handleCalendarEventChange = (id: string, startAt: string, endAt: string) => {
-    const current = filteredRows.find((item) => item.id === id);
-    if (!current) return;
-    const candidate = { ...current, startAt, endAt };
-
-    if (isOverlapping(candidate, filteredRows)) {
-      setPendingUpdate({ id, startAt, endAt });
-      return;
-    }
-
-    savePatch(id, { startAt, endAt });
-  };
 
   if (isLoading) return <LoadingState />;
   if (isError) return <ErrorState message="Erro ao carregar agenda." />;
@@ -182,9 +84,7 @@ const Page = () => {
           <p className="text-sm text-muted-foreground">Gerencie eventos, horários e compromissos operacionais.</p>
         </div>
         <div className="flex gap-2">
-          <Button disabled={filteredRows.length === 0} onClick={handleExportAgenda} variant="outline">
-            Exportar agenda
-          </Button>
+          <Button variant="outline">Exportar agenda</Button>
           <Button>Criar evento</Button>
         </div>
       </header>
@@ -205,90 +105,45 @@ const Page = () => {
           </select>
         </div>
       </Card>
-      <AgendaHeader
-        currentDateLabel={currentDateLabel}
-        onGoToToday={() => setCurrentDate(new Date())}
-        onNavigateNext={() => setCurrentDate((prev) => addDays(prev, view === 'day' ? 1 : 7))}
-        onNavigatePrevious={() => setCurrentDate((prev) => addDays(prev, view === 'day' ? -1 : -7))}
-        onViewChange={setView}
-        view={view}
-      />
-
-      <AgendaFilters
-        dateFilter={dateFilter}
-        locationFilter={locationFilter}
-        onDateFilterChange={setDateFilter}
-        onLocationFilterChange={setLocationFilter}
-        onSearchChange={setSearch}
-        onStatusChange={setStatus}
-        search={search}
-        status={status}
-      />
 
       {filteredRows.length === 0 ? (
         <EmptyState title="Nenhum evento encontrado. Criar primeiro registro." />
-      ) : view === 'list' || view === 'cityRoute' ? (
-        <Card className="space-y-3 p-4">
-          {filteredRows
-            .sort((a, b) => new Date(a.startAt).getTime() - new Date(b.startAt).getTime())
-            .map((row) => (
-              <ScheduleItemCard
-                compact={false}
-                endLabel={new Date(row.endAt).toLocaleString('pt-BR')}
-                isOverlapping={overlappingIds.has(row.id)}
-                key={row.id}
-                location={row.location}
-                onClick={() => setSelectedEventId(row.id)}
-                startLabel={new Date(row.startAt).toLocaleString('pt-BR')}
-                status={row.status}
-                title={view === 'cityRoute' ? `${row.location} • ${row.title}` : row.title}
-                type={row.type}
-              />
-            ))}
-        </Card>
       ) : (
-        <TimeGridCalendar
-          currentDate={currentDate}
-          events={filteredRows}
-          onEventChange={handleCalendarEventChange}
-          onSelectEvent={setSelectedEventId}
-          overlappingIds={overlappingIds}
-          view={view}
-        />
-      )}
-
-      <EventDetailSheet
-        event={selectedEvent}
-        onClose={() => setSelectedEventId(null)}
-        onSave={(payload) => {
-          if (!selectedEventId) return;
-          savePatch(selectedEventId, payload);
-        }}
-        open={Boolean(selectedEventId)}
-        saving={updateEventMutation.isPending}
-      />
-
-      <Dialog onClose={() => setPendingUpdate(null)} open={Boolean(pendingUpdate)} title="Conflito de agenda detectado">
-        <div className="space-y-3 text-sm">
-          <p>
-            Já existe outro bloco no mesmo recurso/período. Deseja persistir mesmo assim?
-          </p>
-          <div className="flex justify-end gap-2">
-            <Button onClick={() => setPendingUpdate(null)} variant="outline">
-              Cancelar
-            </Button>
-            <Button
-              onClick={() => {
-                if (!pendingUpdate) return;
-                savePatch(pendingUpdate.id, { startAt: pendingUpdate.startAt, endAt: pendingUpdate.endAt });
-                setPendingUpdate(null);
-              }}
-            >
-              Confirmar mesmo assim
-            </Button>
+        <Card>
+          <div className="overflow-x-auto">
+            <table className="w-full text-sm">
+              <thead>
+                <tr className="border-b">
+                  <th className="px-2 py-2 text-left">Título</th>
+                  <th className="px-2 py-2 text-left">Tipo</th>
+                  <th className="px-2 py-2 text-left">Início</th>
+                  <th className="px-2 py-2 text-left">Fim</th>
+                  <th className="px-2 py-2 text-left">Local</th>
+                  <th className="px-2 py-2 text-left">Status</th>
+                  <th className="px-2 py-2 text-right">Ações</th>
+                </tr>
+              </thead>
+              <tbody>
+                {filteredRows.map((row) => (
+                  <tr className="border-b" key={row.id}>
+                    <td className="px-2 py-2">{row.titulo}</td>
+                    <td className="px-2 py-2">{row.tipo}</td>
+                    <td className="px-2 py-2">{toDateTime(row.inicio)}</td>
+                    <td className="px-2 py-2">{toDateTime(row.fim)}</td>
+                    <td className="px-2 py-2">{row.local}</td>
+                    <td className="px-2 py-2 capitalize">{row.status}</td>
+                    <td className="px-2 py-2 text-right">
+                      <Button size="sm" variant="outline">
+                        Editar
+                      </Button>
+                    </td>
+                  </tr>
+                ))}
+              </tbody>
+            </table>
           </div>
-        </div>
-      </Dialog>
+        </Card>
+      )}
     </div>
   );
 };
