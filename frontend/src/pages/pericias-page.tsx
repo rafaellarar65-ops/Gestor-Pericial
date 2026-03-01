@@ -3,6 +3,8 @@ import { Link, useNavigate, useOutletContext, useSearchParams } from 'react-rout
 import { Bot, Filter, Plus, RotateCw, Upload } from 'lucide-react';
 import { DomainPageTemplate } from '@/components/domain/domain-page-template';
 import { EmptyState } from '@/components/ui/state';
+import { EmptyState, ErrorState, LoadingState } from '@/components/ui/state';
+import { toast } from 'sonner';
 import { usePericiasQuery } from '@/hooks/use-pericias';
 import type { AppShellOutletContext } from '@/layouts/app-shell-context';
 
@@ -64,6 +66,7 @@ export const PericiasPage = () => {
   }, [setHeaderConfig, clearHeaderConfig, navigate]);
 
   const { data, isLoading, isError } = usePericiasQuery(page, {
+  const { data, isLoading, isError, isFetching, refetch } = usePericiasQuery(page, {
     limit: 100,
     search: search.trim().length >= 3 ? search : undefined,
   });
@@ -138,6 +141,124 @@ export const PericiasPage = () => {
             <div className="flex items-end">
               <button className="w-full rounded-md border px-3 py-2 text-sm font-semibold" onClick={() => { setSearch(''); setStatusFilter('todos'); setCityFilter('todas'); setSearchParams(new URLSearchParams(), { replace: true }); }} type="button">Limpar Filtros</button>
             </div>
+    <div className="space-y-4">
+      <div className="flex flex-wrap items-center justify-between gap-3">
+        <h1 className="text-3xl font-semibold text-slate-800">
+          Listagem de Perícias{' '}
+          <span className="rounded-full bg-slate-100 px-3 py-1 text-base text-slate-600">{rows.length}</span>
+        </h1>
+
+        <div className="flex flex-wrap gap-2">
+          <button
+            aria-label="Atualizar perícias"
+            className="inline-flex items-center gap-2 rounded-md border px-3 py-2 text-sm font-semibold"
+            disabled={isFetching}
+            onClick={async () => {
+              const result = await refetch();
+              if (result.isError) {
+                toast.error('Falha ao atualizar a lista de perícias.');
+                return;
+              }
+              toast.success('Lista de perícias atualizada.');
+            }}
+            type="button"
+          >
+            <RotateCw size={14} />
+          </button>
+          <button
+            className="inline-flex cursor-not-allowed items-center gap-2 rounded-md border px-3 py-2 text-sm font-semibold text-purple-700 opacity-70"
+            disabled
+            title="Integração de IA para triagem de perícias ainda não disponível nesta tela."
+            type="button"
+          >
+            <Bot size={14} /> IA (Em breve)
+          </button>
+          <button
+            className="inline-flex cursor-not-allowed items-center gap-2 rounded-md border px-3 py-2 text-sm font-semibold opacity-70"
+            disabled
+            title="Fluxo de importação em lote será habilitado em uma próxima versão."
+            type="button"
+          >
+            <Upload size={14} /> Importar (Em breve)
+          </button>
+          <button
+            className="inline-flex items-center gap-2 rounded-md bg-blue-600 px-3 py-2 text-sm font-semibold text-white"
+            onClick={() => navigate('/pericias/nova')}
+            type="button"
+          >
+            <Plus size={14} /> Nova
+          </button>
+        </div>
+      </div>
+
+      <section className="rounded-xl border bg-white p-4 shadow-sm">
+        <p className="mb-4 inline-flex items-center gap-2 text-sm font-semibold text-slate-700">
+          <Filter size={15} /> Filtros e Busca
+        </p>
+
+        <div className="grid gap-3 md:grid-cols-2 xl:grid-cols-4">
+          <label className="text-xs font-semibold uppercase text-slate-500">
+            Busca (CNJ, autor, réu)
+            <input
+              className="mt-1 w-full rounded-md border px-3 py-2 text-sm"
+              onBlur={() => syncQueryString({ q: search })}
+              onChange={(event) => setSearch(event.target.value)}
+              placeholder="Digite ao menos 3 caracteres..."
+              value={search}
+            />
+          </label>
+
+          <label className="text-xs font-semibold uppercase text-slate-500">
+            Status
+            <select
+              className="mt-1 w-full rounded-md border px-3 py-2 text-sm"
+              onChange={(event) => {
+                const next = event.target.value as StatusFilter;
+                setStatusFilter(next);
+                syncQueryString({ status: next });
+              }}
+              value={statusFilter}
+            >
+              <option value="todos">Todos</option>
+              <option value="avaliar">Avaliar</option>
+              <option value="agendada">Agendada</option>
+              <option value="laudo enviado">Laudo Enviado</option>
+              <option value="finalizada">Finalizada</option>
+            </select>
+          </label>
+
+          <label className="text-xs font-semibold uppercase text-slate-500">
+            Cidade
+            <select
+              className="mt-1 w-full rounded-md border px-3 py-2 text-sm"
+              onChange={(event) => {
+                const next = event.target.value;
+                setCityFilter(next);
+                syncQueryString({ cidade: next });
+              }}
+              value={cityFilter}
+            >
+              {cities.map((city) => (
+                <option key={city} value={city}>
+                  {city === 'todas' ? 'Todas' : city}
+                </option>
+              ))}
+            </select>
+          </label>
+
+          <div className="flex items-end">
+            <button
+              className="w-full rounded-md border px-3 py-2 text-sm font-semibold"
+              onClick={() => {
+                setSearch('');
+                setStatusFilter('todos');
+                setCityFilter('todas');
+                setSearchParams(new URLSearchParams(), { replace: true });
+              }}
+              type="button"
+            >
+              Limpar Filtros
+            </button>
           </div>
         </div>
       }

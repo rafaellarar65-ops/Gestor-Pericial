@@ -1,8 +1,37 @@
 import { useState } from 'react';
 import { Link, Outlet, useLocation, useMatches, useNavigate } from 'react-router-dom';
 import { Bell, ChevronDown, ChevronLeft, ChevronRight, LayoutDashboard, CalendarClock, ClipboardList, MapPin, Scale, Calendar, Video, MessageSquareWarning, BookOpen, FileEdit, Dumbbell, Wallet, Upload, BarChart3, Settings, LogOut } from 'lucide-react';
+import { Link, Outlet, useLocation, useNavigate } from 'react-router-dom';
+import {
+  Bell,
+  ChevronDown,
+  ChevronLeft,
+  ChevronRight,
+  LayoutDashboard,
+  CalendarClock,
+  ClipboardList,
+  MapPin,
+  Scale,
+  Calendar,
+  Video,
+  MessageSquareWarning,
+  BookOpen,
+  FileEdit,
+  Dumbbell,
+  Wallet,
+  Upload,
+  BarChart3,
+  LogOut,
+  CalendarDays,
+  CalendarRange,
+  FileText,
+  HandCoins,
+  Inbox,
+  Briefcase,
+  Receipt,
+} from 'lucide-react';
 import { CommandPalette } from '@/components/domain/command-palette';
-import { sidebarSections } from '@/config/sidebar-config';
+import { sidebarSections, type SidebarItem } from '@/config/sidebar-config';
 import { useAuthStore } from '@/stores/auth-store';
 import { useUiStore } from '@/stores/ui-store';
 import type { AppShellHeaderConfig } from '@/layouts/app-shell-context';
@@ -11,24 +40,31 @@ type MatchHandle = {
   crumb?: string;
 };
 
-const ICON_MAP: Record<string, React.ComponentType<{ size?: number; className?: string }>> = {
-  Dashboard: LayoutDashboard,
-  'Perícias do Dia': CalendarClock,
-  'Todas Perícias': ClipboardList,
-  Cidades: MapPin,
-  Nomeações: Scale,
-  Tarefas: ClipboardList,
-  'Fila de Agendamento': Calendar,
-  Teleperícias: Video,
-  Esclarecimentos: MessageSquareWarning,
-  Agenda: Calendar,
-  'Elaboração de Laudos': FileEdit,
-  'Base de Conhecimento': BookOpen,
-  'Banco de Manobras': Dumbbell,
-  'Central de Cobrança': Wallet,
-  Importações: Upload,
-  'Análise Financeira': BarChart3,
-  Configurações: Settings,
+const ICON_MAP: Record<SidebarItem['href'], React.ComponentType<{ size?: number; className?: string }>> = {
+  '/': LayoutDashboard,
+  '/pericias-hoje': CalendarClock,
+  '/pericias': ClipboardList,
+  '/cidades': MapPin,
+  '/nomeacoes': Scale,
+  '/tarefas': ClipboardList,
+  '/fila-agendamento': Calendar,
+  '/telepericias': Video,
+  '/comunicacao': MessageSquareWarning,
+  '/agenda': Calendar,
+  '/integrations/google-calendar': CalendarDays,
+  '/laudos-pendentes': FileEdit,
+  '/base-conhecimento': BookOpen,
+  '/manobras': Dumbbell,
+  '/cobranca': Wallet,
+  '/importacoes': Upload,
+  '/financeiro': BarChart3,
+  '/analytics-calendar': CalendarRange,
+  '/relatorios-financeiros': FileText,
+  '/pagamentos-nao-vinculados': HandCoins,
+  '/documentacao': FileText,
+  '/inbox-email': Inbox,
+  '/advogados': Briefcase,
+  '/despesas': Receipt,
 };
 
 const TODAY = new Intl.DateTimeFormat('pt-BR', {
@@ -93,7 +129,7 @@ export const AppShell = () => {
                   <ul className="mt-0.5">
                     {sec.items.map((item) => {
                       const isActive = location.pathname === item.href;
-                      const Icon = ICON_MAP[item.label];
+                      const Icon = ICON_MAP[item.href];
                       return (
                         <li key={item.href + item.label}>
                           <Link
