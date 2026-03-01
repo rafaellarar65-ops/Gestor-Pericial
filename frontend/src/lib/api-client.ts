@@ -2,9 +2,20 @@ import axios, { AxiosError } from 'axios';
 import { useAuthStore } from '@/stores/auth-store';
 import type { ApiError, AuthTokens } from '@/types/api';
 
+const ensureApiPrefix = (url: string): string => {
+  const normalized = url.trim().replace(/\/+$/, '');
+  if (!normalized) return '/api';
+
+  if (normalized === '/api' || normalized.endsWith('/api')) {
+    return normalized;
+  }
+
+  return `${normalized}/api`;
+};
+
 const resolveApiUrl = (): string => {
   const fromEnv = import.meta.env.VITE_API_URL ?? import.meta.env.VITE_BACKEND_URL;
-  if (fromEnv) return fromEnv;
+  if (fromEnv) return ensureApiPrefix(fromEnv);
 
   if (
     typeof __API_URL__ === 'string' &&
@@ -12,19 +23,19 @@ const resolveApiUrl = (): string => {
     !__API_URL__.includes('localhost') &&
     !__API_URL__.includes('127.0.0.1')
   ) {
-    return __API_URL__;
+    return ensureApiPrefix(__API_URL__);
   }
 
   if (typeof window !== 'undefined') {
     const { origin, hostname } = window.location;
     if (hostname === 'localhost' || hostname === '127.0.0.1') {
-      return 'http://localhost:3000';
+      return 'http://localhost:3000/api';
     }
 
     return `${origin}/api`;
   }
 
-  return 'http://localhost:3000';
+  return 'http://localhost:3000/api';
 };
 
 const API_URL = resolveApiUrl();
