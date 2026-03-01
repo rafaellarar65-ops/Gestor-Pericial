@@ -1,10 +1,15 @@
 import { useState } from 'react';
-import { Link, Outlet, useLocation, useNavigate } from 'react-router-dom';
+import { Link, Outlet, useLocation, useMatches, useNavigate } from 'react-router-dom';
 import { Bell, ChevronDown, ChevronLeft, ChevronRight, LayoutDashboard, CalendarClock, ClipboardList, MapPin, Scale, Calendar, Video, MessageSquareWarning, BookOpen, FileEdit, Dumbbell, Wallet, Upload, BarChart3, Settings, LogOut } from 'lucide-react';
 import { CommandPalette } from '@/components/domain/command-palette';
 import { sidebarSections } from '@/config/sidebar-config';
 import { useAuthStore } from '@/stores/auth-store';
 import { useUiStore } from '@/stores/ui-store';
+import type { AppShellHeaderConfig } from '@/layouts/app-shell-context';
+
+type MatchHandle = {
+  crumb?: string;
+};
 
 const ICON_MAP: Record<string, React.ComponentType<{ size?: number; className?: string }>> = {
   Dashboard: LayoutDashboard,
@@ -36,9 +41,15 @@ const TODAY = new Intl.DateTimeFormat('pt-BR', {
 export const AppShell = () => {
   const location = useLocation();
   const navigate = useNavigate();
+  const matches = useMatches();
   const { user, logout } = useAuthStore();
   const { setCommandOpen } = useUiStore();
   const [collapsed, setCollapsed] = useState<Record<string, boolean>>({});
+  const [headerConfig, setHeaderConfig] = useState<AppShellHeaderConfig>({});
+
+  const breadcrumbs = matches
+    .map((match) => ({ pathname: match.pathname, crumb: (match.handle as MatchHandle | undefined)?.crumb }))
+    .filter((item): item is { pathname: string; crumb: string } => Boolean(item.crumb));
 
   const toggleSection = (section: string) =>
     setCollapsed((prev) => ({ ...prev, [section]: !prev[section] }));
@@ -53,12 +64,10 @@ export const AppShell = () => {
     : 'U';
 
   return (
-    <div className="flex min-h-screen">
+    <div className="flex min-h-screen bg-background">
       <CommandPalette />
 
-      {/* ───── Dark Sidebar ───── */}
-      <aside className="flex w-[175px] shrink-0 flex-col bg-[#1a1d2e] text-white">
-        {/* Logo */}
+      <aside className="flex w-[210px] shrink-0 flex-col bg-[#1a1d2e] text-white">
         <div className="border-b border-white/10 px-4 py-4">
           <div className="flex items-center gap-2">
             <div className="flex h-7 w-7 items-center justify-center rounded bg-blue-500 text-xs font-bold">P</div>
@@ -67,7 +76,6 @@ export const AppShell = () => {
           <p className="mt-1 truncate text-[10px] text-white/50">{user?.email ?? ''}</p>
         </div>
 
-        {/* Navigation */}
         <nav className="flex-1 overflow-y-auto py-3">
           {sidebarSections.map((sec) => {
             const isOpen = collapsed[sec.section] !== true;
@@ -109,7 +117,6 @@ export const AppShell = () => {
           })}
         </nav>
 
-        {/* Footer */}
         <div className="border-t border-white/10 px-4 py-3">
           <p className="text-[10px] text-white/40">Versão 3.8 (Email)</p>
           <p className="text-[10px] text-green-400">● Conexão Segura</p>
@@ -122,53 +129,74 @@ export const AppShell = () => {
         </div>
       </aside>
 
-      {/* ───── Main area ───── */}
-      <div className="flex flex-1 flex-col overflow-hidden">
-        {/* Topbar */}
-        <header className="flex h-12 shrink-0 items-center justify-between border-b bg-white px-5 shadow-sm">
-          <div className="flex items-center gap-3">
-            <button
-              className="rounded p-1 hover:bg-gray-100"
-              onClick={() => navigate(-1)}
-            >
-              <ChevronLeft size={16} className="text-gray-500" />
-            </button>
-            <span className="text-sm text-gray-600">
-              <span className="font-medium text-gray-900">Hoje:</span>{' '}
-              {TODAY}
-            </span>
-          </div>
-
-          <div className="flex items-center gap-4">
-            <button
-              className="rounded-full p-1 hover:bg-gray-100"
-              onClick={() => setCommandOpen(true)}
-              title="Buscar (Ctrl+K)"
-            >
-              <div className="relative">
-                <Bell size={18} className="text-gray-600" />
-                <span className="absolute -right-1.5 -top-1.5 flex h-4 w-4 items-center justify-center rounded-full bg-red-500 text-[9px] font-bold text-white">
-                  !
+      <div className="flex min-w-0 flex-1 flex-col overflow-hidden">
+        <header className="border-b bg-card px-6 py-3 shadow-sm">
+          <div className="flex flex-wrap items-center justify-between gap-3">
+            <div className="space-y-1">
+              <div className="flex items-center gap-2 text-sm text-muted-foreground">
+                <button className="rounded p-1 hover:bg-muted" onClick={() => navigate(-1)}>
+                  <ChevronLeft size={16} className="text-muted-foreground" />
+                </button>
+                <span>
+                  <span className="font-medium text-foreground">Hoje:</span> {TODAY}
                 </span>
               </div>
-            </button>
+              <nav aria-label="Breadcrumb" className="text-xs text-muted-foreground">
+                <ol className="flex flex-wrap items-center gap-2">
+                  {breadcrumbs.map((crumb, index) => (
+                    <li className="inline-flex items-center gap-2" key={crumb.pathname}>
+                      {index === breadcrumbs.length - 1 ? (
+                        <span aria-current="page" className="font-medium text-foreground">{crumb.crumb}</span>
+                      ) : (
+                        <>
+                          <Link className="hover:text-foreground hover:underline" to={crumb.pathname}>{crumb.crumb}</Link>
+                          <span>/</span>
+                        </>
+                      )}
+                    </li>
+                  ))}
+                </ol>
+              </nav>
+            </div>
 
-            <div className="flex items-center gap-2">
-              <div className="text-right">
-                <p className="text-xs font-medium text-gray-800">{user?.email ?? ''}</p>
-                <p className="text-[10px] font-semibold uppercase text-blue-600">{user?.role ?? 'ADMIN'}</p>
-              </div>
-              <div className="flex h-8 w-8 items-center justify-center rounded-full bg-blue-600 text-xs font-bold text-white">
-                {initials}
+            <div className="flex items-center gap-3">
+              {headerConfig.primaryActions ? <div className="flex items-center gap-2">{headerConfig.primaryActions}</div> : null}
+              <button
+                className="rounded-full p-1 hover:bg-muted"
+                onClick={() => setCommandOpen(true)}
+                title="Buscar (Ctrl+K)"
+              >
+                <div className="relative">
+                  <Bell size={18} className="text-muted-foreground" />
+                  <span className="absolute -right-1.5 -top-1.5 flex h-4 w-4 items-center justify-center rounded-full bg-destructive text-[9px] font-bold text-white">
+                    !
+                  </span>
+                </div>
+              </button>
+
+              <div className="flex items-center gap-2">
+                <div className="text-right">
+                  <p className="text-xs font-medium text-foreground">{user?.email ?? ''}</p>
+                  <p className="text-[10px] font-semibold uppercase text-primary">{user?.role ?? 'ADMIN'}</p>
+                </div>
+                <div className="flex h-8 w-8 items-center justify-center rounded-full bg-primary text-xs font-bold text-primary-foreground">
+                  {initials}
+                </div>
               </div>
             </div>
           </div>
         </header>
 
-        {/* Page content */}
-        <main className="flex-1 overflow-y-auto bg-gray-50 p-5">
-          <Outlet />
-        </main>
+        <div className="flex min-h-0 flex-1">
+          <main className="flex-1 overflow-y-auto bg-background px-6 py-5">
+            <Outlet context={{ setHeaderConfig, clearHeaderConfig: () => setHeaderConfig({}) }} />
+          </main>
+          {headerConfig.contextualAside ? (
+            <aside className="hidden w-[320px] shrink-0 border-l bg-card p-4 xl:block">
+              {headerConfig.contextualAside}
+            </aside>
+          ) : null}
+        </div>
       </div>
     </div>
   );
