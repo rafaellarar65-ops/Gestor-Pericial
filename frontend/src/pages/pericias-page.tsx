@@ -2,6 +2,7 @@ import { useMemo, useState } from 'react';
 import { Link, useNavigate, useSearchParams } from 'react-router-dom';
 import { Bot, Filter, Plus, RotateCw, Upload } from 'lucide-react';
 import { EmptyState, ErrorState, LoadingState } from '@/components/ui/state';
+import { toast } from 'sonner';
 import { usePericiasQuery } from '@/hooks/use-pericias';
 
 type StatusFilter = 'todos' | 'avaliar' | 'agendada' | 'laudo enviado' | 'finalizada';
@@ -50,7 +51,7 @@ export const PericiasPage = () => {
   const [statusFilter, setStatusFilter] = useState<StatusFilter>(statusFromQuery(searchParams.get('status')));
   const [cityFilter, setCityFilter] = useState(searchParams.get('cidade') ?? 'todas');
 
-  const { data, isLoading, isError } = usePericiasQuery(page, {
+  const { data, isLoading, isError, isFetching, refetch } = usePericiasQuery(page, {
     limit: 100,
     search: search.trim().length >= 3 ? search : undefined,
   });
@@ -116,14 +117,37 @@ export const PericiasPage = () => {
         </h1>
 
         <div className="flex flex-wrap gap-2">
-          <button className="inline-flex items-center gap-2 rounded-md border px-3 py-2 text-sm font-semibold" type="button">
+          <button
+            aria-label="Atualizar perícias"
+            className="inline-flex items-center gap-2 rounded-md border px-3 py-2 text-sm font-semibold"
+            disabled={isFetching}
+            onClick={async () => {
+              const result = await refetch();
+              if (result.isError) {
+                toast.error('Falha ao atualizar a lista de perícias.');
+                return;
+              }
+              toast.success('Lista de perícias atualizada.');
+            }}
+            type="button"
+          >
             <RotateCw size={14} />
           </button>
-          <button className="inline-flex items-center gap-2 rounded-md border px-3 py-2 text-sm font-semibold text-purple-700" type="button">
-            <Bot size={14} /> IA
+          <button
+            className="inline-flex cursor-not-allowed items-center gap-2 rounded-md border px-3 py-2 text-sm font-semibold text-purple-700 opacity-70"
+            disabled
+            title="Integração de IA para triagem de perícias ainda não disponível nesta tela."
+            type="button"
+          >
+            <Bot size={14} /> IA (Em breve)
           </button>
-          <button className="inline-flex items-center gap-2 rounded-md border px-3 py-2 text-sm font-semibold" type="button">
-            <Upload size={14} /> Importar
+          <button
+            className="inline-flex cursor-not-allowed items-center gap-2 rounded-md border px-3 py-2 text-sm font-semibold opacity-70"
+            disabled
+            title="Fluxo de importação em lote será habilitado em uma próxima versão."
+            type="button"
+          >
+            <Upload size={14} /> Importar (Em breve)
           </button>
           <button
             className="inline-flex items-center gap-2 rounded-md bg-blue-600 px-3 py-2 text-sm font-semibold text-white"
