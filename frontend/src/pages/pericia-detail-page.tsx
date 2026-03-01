@@ -4,6 +4,7 @@ import { AlertCircle, CalendarDays, CheckCircle2, CircleDollarSign, Landmark, Ma
 import { useQueryClient } from '@tanstack/react-query';
 import { toast } from 'sonner';
 import { DomainPageTemplate } from '@/components/domain/domain-page-template';
+import { Dialog } from '@/components/ui/dialog';
 import { EmptyState, ErrorState, LoadingState } from '@/components/ui/state';
 import {
   usePericiaCnjQuery,
@@ -16,6 +17,7 @@ import {
 import { apiClient } from '@/lib/api-client';
 import { cn } from '@/lib/utils';
 import type { AppShellOutletContext } from '@/layouts/app-shell-context';
+import { financialService } from '@/services/financial-service';
 
 const tabs = ['Visão 360°', 'Documentos', 'Timeline', 'Financeiro', 'CNJ'] as const;
 type TabType = (typeof tabs)[number];
@@ -32,7 +34,14 @@ const PericiaDetailPage = () => {
   const [activeTab, setActiveTab] = useState<TabType>('Visão 360°');
   const [showDatesModal, setShowDatesModal] = useState(false);
   const [showLaudoModal, setShowLaudoModal] = useState(false);
+  const [showRecebimentoDialog, setShowRecebimentoDialog] = useState(false);
   const [dataProtocoloLaudo, setDataProtocoloLaudo] = useState(new Date().toISOString().slice(0, 10));
+  const [fontePagamento, setFontePagamento] = useState('');
+  const [dataRecebimento, setDataRecebimento] = useState(new Date().toISOString().slice(0, 10));
+  const [valorBruto, setValorBruto] = useState('');
+  const [valorLiquido, setValorLiquido] = useState('');
+  const [descricao, setDescricao] = useState('');
+  const [isSubmittingRecebimento, setIsSubmittingRecebimento] = useState(false);
 
   const detailQuery = usePericiaDetailQuery(id);
   const timelineQuery = usePericiaTimelineQuery(id);
@@ -85,6 +94,37 @@ const PericiaDetailPage = () => {
       toast.success(successMessage);
     } catch {
       toast.error('Falha ao atualizar status da perícia.');
+    }
+  };
+
+  const resetRecebimentoForm = () => {
+    setFontePagamento('');
+    setDataRecebimento(new Date().toISOString().slice(0, 10));
+    setValorBruto('');
+    setValorLiquido('');
+    setDescricao('');
+  };
+
+  const handleCreateRecebimento = async (event: React.FormEvent<HTMLFormElement>) => {
+    event.preventDefault();
+    setIsSubmittingRecebimento(true);
+    try {
+      await financialService.createRecebimento({
+        periciaId: id,
+        fontePagamento,
+        dataRecebimento,
+        valorBruto: Number(valorBruto),
+        valorLiquido: valorLiquido ? Number(valorLiquido) : undefined,
+        descricao: descricao || undefined,
+      });
+      await queryClient.invalidateQueries({ queryKey: ['pericia-recebimentos', id] });
+      toast.success('Recebimento cadastrado com sucesso.');
+      setShowRecebimentoDialog(false);
+      resetRecebimentoForm();
+    } catch {
+      toast.error('Falha ao cadastrar recebimento.');
+    } finally {
+      setIsSubmittingRecebimento(false);
     }
   };
 
@@ -239,6 +279,15 @@ const PericiaDetailPage = () => {
                   <div className="rounded-lg border border-emerald-200 bg-emerald-50 p-3"><p className="text-xs">Recebido</p><p className="text-2xl font-bold text-emerald-700">{toMoney(financial.recebido)}</p></div>
                   <div className="rounded-lg border border-red-200 bg-red-50 p-3"><p className="text-xs">Saldo</p><p className="text-2xl font-bold text-red-700">{toMoney(financial.saldo)}</p></div>
                 </div>
+                <div className="flex justify-end">
+                  <button
+                    className="inline-flex items-center gap-2 rounded-md bg-blue-600 px-3 py-2 text-sm font-semibold text-white"
+                    onClick={() => setShowRecebimentoDialog(true)}
+                    type="button"
+                  >
+                    <Plus size={14} /> Novo Recebimento
+                  </button>
+                </div>
                 <div className="space-y-2">
                   {financial.items.map((item) => (
                     <div className="rounded-md border p-3 text-sm" key={item.id}><p className="font-semibold">Recebimento</p><p className="text-muted-foreground">{toMoney(item.valorLiquido ?? item.valorBruto)} • {toDateBR(item.dataRecebimento ?? item.createdAt)}</p></div>
@@ -253,6 +302,58 @@ const PericiaDetailPage = () => {
           </div>
         </section>
       </DomainPageTemplate>
+
+      <Dialog
+        onClose={() => {
+          setShowRecebimentoDialog(false);
+          resetRecebimentoForm();
+        }}
+        open={showRecebimentoDialog}
+        title="Novo Recebimento"
+      >
+        <form className="space-y-3" onSubmit={(event) => void handleCreateRecebimento(event)}>
+          <label className="block text-sm">
+            <span className="mb-1 block text-xs font-semibold uppercase text-muted-foreground">Fonte de pagamento</span>
+            <input className="w-full rounded-md border px-3 py-2" onChange={(e) => setFontePagamento(e.target.value)} required type="text" value={fontePagamento} />
+          </label>
+
+          <label className="block text-sm">
+            <span className="mb-1 block text-xs font-semibold uppercase text-muted-foreground">Data de recebimento</span>
+            <input className="w-full rounded-md border px-3 py-2" onChange={(e) => setDataRecebimento(e.target.value)} required type="date" value={dataRecebimento} />
+          </label>
+
+          <label className="block text-sm">
+            <span className="mb-1 block text-xs font-semibold uppercase text-muted-foreground">Valor bruto</span>
+            <input className="w-full rounded-md border px-3 py-2" min="0" onChange={(e) => setValorBruto(e.target.value)} required step="0.01" type="number" value={valorBruto} />
+          </label>
+
+          <label className="block text-sm">
+            <span className="mb-1 block text-xs font-semibold uppercase text-muted-foreground">Valor líquido</span>
+            <input className="w-full rounded-md border px-3 py-2" min="0" onChange={(e) => setValorLiquido(e.target.value)} step="0.01" type="number" value={valorLiquido} />
+          </label>
+
+          <label className="block text-sm">
+            <span className="mb-1 block text-xs font-semibold uppercase text-muted-foreground">Descrição</span>
+            <textarea className="w-full rounded-md border px-3 py-2" onChange={(e) => setDescricao(e.target.value)} rows={3} value={descricao} />
+          </label>
+
+          <div className="flex justify-end gap-2 pt-2">
+            <button
+              className="rounded-md px-3 py-2 text-sm"
+              onClick={() => {
+                setShowRecebimentoDialog(false);
+                resetRecebimentoForm();
+              }}
+              type="button"
+            >
+              Cancelar
+            </button>
+            <button className="rounded-md bg-blue-600 px-4 py-2 text-sm font-semibold text-white" disabled={isSubmittingRecebimento} type="submit">
+              {isSubmittingRecebimento ? 'Salvando...' : 'Salvar'}
+            </button>
+          </div>
+        </form>
+      </Dialog>
 
       {showDatesModal && (
         <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/40 p-4">
