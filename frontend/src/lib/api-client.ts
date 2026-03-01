@@ -33,6 +33,19 @@ const ensureApiPrefix = (url: string): string => {
 };
 
 const resolveApiUrl = (): string => {
+  // In development/preview environment, use relative /api path to leverage proxy
+  if (typeof window !== 'undefined') {
+    const { origin, hostname } = window.location;
+    // For Emergent preview environment, use relative path to go through proxy
+    if (hostname.includes('emergentagent.com') || hostname.includes('emergentcf.cloud')) {
+      return '/api';
+    }
+    if (hostname === 'localhost' || hostname === '127.0.0.1') {
+      return '/api';
+    }
+    return `${origin}/api`;
+  }
+
   const fromEnv = import.meta.env.VITE_API_URL ?? import.meta.env.VITE_BACKEND_URL;
   if (fromEnv) return ensureApiPrefix(fromEnv);
 
@@ -45,16 +58,7 @@ const resolveApiUrl = (): string => {
     return ensureApiPrefix(__API_URL__);
   }
 
-  if (typeof window !== 'undefined') {
-    const { origin, hostname } = window.location;
-    if (hostname === 'localhost' || hostname === '127.0.0.1') {
-      return 'http://localhost:3000/api';
-    }
-
-    return `${origin}/api`;
-  }
-
-  return 'http://localhost:3000/api';
+  return '/api';
 };
 
 export const API_URL = resolveApiUrl();
