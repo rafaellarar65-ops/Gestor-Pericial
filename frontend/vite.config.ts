@@ -4,6 +4,12 @@ import react from '@vitejs/plugin-react';
 
 export default defineConfig(({ mode }) => {
   const env = loadEnv(mode, process.cwd(), '');
+  const hmrHost = env.VITE_HMR_HOST?.trim();
+  const hmrClientPort = env.VITE_HMR_CLIENT_PORT?.trim();
+  const hmrConfig = {
+    ...(hmrHost ? { host: hmrHost } : {}),
+    ...(hmrClientPort ? { clientPort: Number(hmrClientPort) } : {}),
+  };
 
   return {
     plugins: [react()],
@@ -27,10 +33,7 @@ export default defineConfig(({ mode }) => {
           credentials: 'include',
         },
       },
-      hmr: {
-        clientPort: 3000,
-        host: 'localhost',
-      },
+      hmr: Object.keys(hmrConfig).length > 0 ? hmrConfig : undefined,
     },
     resolve: {
       alias: {
