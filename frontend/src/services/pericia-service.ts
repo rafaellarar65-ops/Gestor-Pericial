@@ -79,6 +79,7 @@ export const periciaService = {
     autorNome?: string;
     reuNome?: string;
     observacoes?: string;
+    periciadoNome?: string;
     honorariosPrevistosJG?: number;
     honorariosPrevistosPartes?: number;
     dataNomeacao?: string;

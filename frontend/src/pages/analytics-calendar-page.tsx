@@ -128,13 +128,29 @@ const AnalyticsCalendarPage = () => {
               <h2 className="mb-3 text-lg font-semibold text-slate-900">Heatmap financeiro diário</h2>
               <div className="grid grid-cols-7 gap-2">
                 {(query.data?.heatmap ?? []).map((day) => {
-                  const bg = `rgba(22, 163, 74, ${Math.max(0.08, day.intensity)})`;
+                  const intensity = Math.max(0, Math.min(1, day.intensity ?? 0));
+                  const bgClass = intensity >= 0.8
+                    ? 'bg-green-900 text-white'
+                    : intensity >= 0.6
+                      ? 'bg-green-700 text-white'
+                      : intensity >= 0.4
+                        ? 'bg-green-500 text-white'
+                        : intensity >= 0.2
+                          ? 'bg-green-300 text-slate-900'
+                          : 'bg-green-100 text-slate-900';
+                  const tooltip = [
+                    `Data: ${new Date(day.date).toLocaleDateString('pt-BR', { day: '2-digit', month: '2-digit' })}`,
+                    `Recebido: ${formatCurrency(day.receivedValue)}`,
+                    `Produção: ${formatCurrency(day.productionValue)}`,
+                    `Eventos: ${day.totalEvents}`,
+                  ].join(' | ');
+
                   return (
-                    <div key={day.date} className="rounded-md border p-2 text-xs" style={{ backgroundColor: bg }}>
-                      <p className="font-medium text-slate-800">{new Date(day.date).toLocaleDateString('pt-BR', { day: '2-digit', month: '2-digit' })}</p>
-                      <p className="text-slate-700">Receb.: {formatCurrency(day.receivedValue)}</p>
-                      <p className="text-slate-700">Prod.: {formatCurrency(day.productionValue)}</p>
-                      <p className="text-slate-600">Eventos: {day.totalEvents}</p>
+                    <div key={day.date} className={`rounded-md border p-2 text-xs ${bgClass}`} title={tooltip}>
+                      <p className="font-medium">{new Date(day.date).toLocaleDateString('pt-BR', { day: '2-digit', month: '2-digit' })}</p>
+                      <p>Receb.: {formatCurrency(day.receivedValue)}</p>
+                      <p>Prod.: {formatCurrency(day.productionValue)}</p>
+                      <p>Eventos: {day.totalEvents}</p>
                     </div>
                   );
                 })}

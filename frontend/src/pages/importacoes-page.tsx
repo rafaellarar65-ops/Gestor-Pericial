@@ -21,6 +21,9 @@ const ImportacoesPage = () => {
   const [csvState, setCsvState] = useState({
     selectedFile: null as File | null,
     validationMessages: [] as string[],
+    previewRows: [] as string[][],
+    isProcessing: false,
+    progress: 0,
   });
 
   const [singleState, setSingleState] = useState({
