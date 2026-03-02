@@ -1,6 +1,30 @@
 import { useEffect, useState, type ComponentType } from 'react';
 import { Outlet, useMatches, useNavigate } from 'react-router-dom';
-import { LayoutDashboard, CalendarClock, ClipboardList, MapPin, Scale, Calendar, Video, MessageSquareWarning, BookOpen, FileEdit, Dumbbell, Wallet, Upload, BarChart3, CalendarDays, CalendarRange, FileText, HandCoins, Inbox, Briefcase, Receipt, AlertTriangle, Settings } from 'lucide-react';
+import {
+  LayoutDashboard,
+  CalendarClock,
+  ClipboardList,
+  MapPin,
+  Scale,
+  Calendar,
+  Video,
+  MessageSquareWarning,
+  BookOpen,
+  FileEdit,
+  Dumbbell,
+  Wallet,
+  Upload,
+  BarChart3,
+  CalendarDays,
+  CalendarRange,
+  FileText,
+  HandCoins,
+  Inbox,
+  Briefcase,
+  Receipt,
+  AlertTriangle,
+  Settings,
+} from 'lucide-react';
 import { CommandPalette } from '@/components/domain/command-palette';
 import { useAuthStore } from '@/stores/auth-store';
 import { useUiStore } from '@/stores/ui-store';

@@ -4,6 +4,7 @@ import { ProtectedRoute } from '@/app/protected-route';
 import { AppRouteError } from '@/components/ui/app-error';
 import { LoadingState } from '@/components/ui/state';
 import { AppShell } from '@/layouts/app-shell';
+import { appPaths, legacyPathRedirects } from '@/config/sidebar-config';
 
 
 const lazyWithRetry = (importer: () => Promise<{ default: ComponentType }>) =>
@@ -76,15 +77,6 @@ const withSuspense = (Element: LazyExoticComponent<ComponentType>) => (
   </Suspense>
 );
 
-const legacyRouteRedirects = [
-  { from: '/fila-agendamento', to: '/agendar' },
-  { from: '/laudos-pendentes', to: '/laudos' },
-  { from: '/base-conhecimento', to: '/conhecimento' },
-  { from: '/cobranca', to: '/financeiro/cobranca' },
-  { from: '/relatorios-financeiros', to: '/relatorios' },
-  { from: '/inbox-email', to: '/email-inbox' },
-] as const;
-
 export const router = createBrowserRouter([
   { path: '/login', handle: { crumb: 'Login' }, element: withSuspense(pages.login), errorElement: <AppRouteError /> },
   {
@@ -95,46 +87,46 @@ export const router = createBrowserRouter([
         element: <AppShell />,
         errorElement: <AppRouteError />,
         children: [
-          { path: '/', handle: { crumb: 'Dashboard' }, element: withSuspense(pages.dashboard) },
-          { path: '/nomeacoes', handle: { crumb: 'Nomeações' }, element: withSuspense(pages.nomeacoes) },
-          { path: '/agenda', handle: { crumb: 'Agenda' }, element: withSuspense(pages.agenda) },
-          { path: '/agenda-geral', handle: { crumb: 'Agenda Geral' }, element: withSuspense(pages.agendaGeral) },
-          { path: '/pericias-hoje', handle: { crumb: 'Perícias do Dia' }, element: withSuspense(pages.periciasHoje) },
-          { path: '/telepericias', handle: { crumb: 'Teleperícias' }, element: withSuspense(pages.telepericias) },
-          { path: '/esclarecimentos', handle: { crumb: 'Esclarecimentos' }, element: withSuspense(pages.esclarecimentos) },
-          { path: '/tarefas', handle: { crumb: 'Tarefas Operacionais' }, element: withSuspense(pages.tarefas) },
-          { path: '/agendar', handle: { crumb: 'Agendar em Lote' }, element: withSuspense(pages.filaAgendamento) },
-          { path: '/pericias', handle: { crumb: 'Perícias' }, element: withSuspense(pages.pericias) },
+          { path: appPaths.dashboard, handle: { crumb: 'Dashboard' }, element: withSuspense(pages.dashboard) },
+          { path: appPaths.nomeacoes, handle: { crumb: 'Nomeações' }, element: withSuspense(pages.nomeacoes) },
+          { path: appPaths.agenda, handle: { crumb: 'Agenda' }, element: withSuspense(pages.agenda) },
+          { path: appPaths.agendaGeral, handle: { crumb: 'Agenda Geral' }, element: withSuspense(pages.agendaGeral) },
+          { path: appPaths.periciasHoje, handle: { crumb: 'Perícias do Dia' }, element: withSuspense(pages.periciasHoje) },
+          { path: appPaths.telepericias, handle: { crumb: 'Teleperícias' }, element: withSuspense(pages.telepericias) },
+          { path: appPaths.esclarecimentos, handle: { crumb: 'Esclarecimentos' }, element: withSuspense(pages.esclarecimentos) },
+          { path: appPaths.tarefas, handle: { crumb: 'Tarefas Operacionais' }, element: withSuspense(pages.tarefas) },
+          { path: appPaths.agendar, handle: { crumb: 'Agendar em Lote' }, element: withSuspense(pages.filaAgendamento) },
+          { path: appPaths.pericias, handle: { crumb: 'Perícias' }, element: withSuspense(pages.pericias) },
           { path: '/pericias/nova', handle: { crumb: 'Nova Perícia' }, element: withSuspense(pages.periciaCreate) },
           { path: '/pericias/:id/editar', handle: { crumb: 'Editar Perícia' }, element: withSuspense(pages.periciaEdit) },
           { path: '/pericias/:id', handle: { crumb: 'Detalhe da Perícia' }, element: withSuspense(pages.periciaDetail) },
-          { path: '/laudos', handle: { crumb: 'Laudos Pendentes' }, element: withSuspense(pages.laudosPendentes) },
+          { path: appPaths.laudos, handle: { crumb: 'Laudos Pendentes' }, element: withSuspense(pages.laudosPendentes) },
           { path: '/laudo-v2', handle: { crumb: 'Laudo V2' }, element: withSuspense(pages.laudoV2) },
           { path: '/laudo-inteligente/:id', handle: { crumb: 'Laudo Inteligente' }, element: withSuspense(pages.laudoInteligente) },
-          { path: '/manobras', handle: { crumb: 'Manobras' }, element: withSuspense(pages.manobras) },
-          { path: '/conhecimento', handle: { crumb: 'Base de Conhecimento' }, element: withSuspense(pages.baseConhecimento) },
-          { path: '/financeiro', handle: { crumb: 'Financeiro' }, element: withSuspense(pages.financeiro) },
-          { path: '/analytics-calendar', handle: { crumb: 'Analytics Calendar' }, element: withSuspense(pages.analyticsCalendar) },
-          { path: '/financeiro/cobranca', handle: { crumb: 'Cobrança' }, element: withSuspense(pages.cobranca) },
-          { path: '/importacoes', handle: { crumb: 'Importações' }, element: withSuspense(pages.importacoes) },
-          { path: '/relatorios', handle: { crumb: 'Relatórios Financeiros' }, element: withSuspense(pages.relatorios) },
-          { path: '/pagamentos-nao-vinculados', handle: { crumb: 'Pagamentos não vinculados' }, element: withSuspense(pages.pagamentosNaoVinculados) },
-          { path: '/despesas', handle: { crumb: 'Despesas' }, element: withSuspense(pages.despesas) },
-          { path: '/conciliacao', handle: { crumb: 'Conciliação' }, element: withSuspense(pages.conciliacao) },
-          { path: '/cidades', handle: { crumb: 'Cidades' }, element: withSuspense(pages.cidades) },
+          { path: appPaths.manobras, handle: { crumb: 'Manobras' }, element: withSuspense(pages.manobras) },
+          { path: appPaths.conhecimento, handle: { crumb: 'Base de Conhecimento' }, element: withSuspense(pages.baseConhecimento) },
+          { path: appPaths.financeiro, handle: { crumb: 'Financeiro' }, element: withSuspense(pages.financeiro) },
+          { path: appPaths.analyticsCalendar, handle: { crumb: 'Analytics Calendar' }, element: withSuspense(pages.analyticsCalendar) },
+          { path: appPaths.financeiroCobranca, handle: { crumb: 'Cobrança' }, element: withSuspense(pages.cobranca) },
+          { path: appPaths.importacoes, handle: { crumb: 'Importações' }, element: withSuspense(pages.importacoes) },
+          { path: appPaths.relatorios, handle: { crumb: 'Relatórios Financeiros' }, element: withSuspense(pages.relatorios) },
+          { path: appPaths.pagamentosNaoVinculados, handle: { crumb: 'Pagamentos não vinculados' }, element: withSuspense(pages.pagamentosNaoVinculados) },
+          { path: appPaths.despesas, handle: { crumb: 'Despesas' }, element: withSuspense(pages.despesas) },
+          { path: appPaths.conciliacao, handle: { crumb: 'Conciliação' }, element: withSuspense(pages.conciliacao) },
+          { path: appPaths.cidades, handle: { crumb: 'Cidades' }, element: withSuspense(pages.cidades) },
           { path: '/cidades/:id', handle: { crumb: 'Detalhe da Cidade' }, element: withSuspense(pages.cidadeDetail) },
-          { path: '/advogados', handle: { crumb: 'Advogados' }, element: withSuspense(pages.advogados) },
-          { path: '/comunicacao', handle: { crumb: 'Comunicação' }, element: withSuspense(pages.comunicacao) },
-          { path: '/email-gerador', handle: { crumb: 'Email Gerador' }, element: withSuspense(pages.emailGerador) },
-          { path: '/email-inbox', handle: { crumb: 'Inbox de Email' }, element: withSuspense(pages.inbox) },
-          ...legacyRouteRedirects.map(({ from, to }) => ({
+          { path: appPaths.advogados, handle: { crumb: 'Advogados' }, element: withSuspense(pages.advogados) },
+          { path: appPaths.comunicacao, handle: { crumb: 'Comunicação' }, element: withSuspense(pages.comunicacao) },
+          { path: appPaths.emailGerador, handle: { crumb: 'Email Gerador' }, element: withSuspense(pages.emailGerador) },
+          { path: appPaths.emailInbox, handle: { crumb: 'Inbox de Email' }, element: withSuspense(pages.inbox) },
+          ...legacyPathRedirects.map(({ from, to }) => ({
             path: from,
             handle: { crumb: 'Redirecionando' },
             element: <Navigate replace to={to} />,
           })),
-          { path: '/configuracoes', handle: { crumb: 'Configurações' }, element: withSuspense(pages.configuracoes) },
-          { path: '/integrations/google-calendar', handle: { crumb: 'Google Calendar' }, element: withSuspense(pages.googleCalendarIntegrations) },
-          { path: '/documentacao', handle: { crumb: 'Documentação' }, element: withSuspense(pages.documentacao) },
+          { path: appPaths.configuracoes, handle: { crumb: 'Configurações' }, element: withSuspense(pages.configuracoes) },
+          { path: appPaths.googleCalendar, handle: { crumb: 'Google Calendar' }, element: withSuspense(pages.googleCalendarIntegrations) },
+          { path: appPaths.documentacao, handle: { crumb: 'Documentação' }, element: withSuspense(pages.documentacao) },
         ],
       },
     ],
