@@ -17,6 +17,7 @@ import { Input } from '@/components/ui/input';
 import { LoadingState, EmptyState, ErrorState } from '@/components/ui/state';
 import { financialService } from '@/services/financial-service';
 import type { Despesa } from '@/types/api';
+import { formatCurrency } from '@/lib/formatters';
 
 const CATEGORIA_OPTIONS = [
   { value: 'ESCRITORIO', label: 'Escritório' },
@@ -64,12 +65,6 @@ const CATEGORIA_LABELS: Record<Categoria | string, string> = {
   IMPOSTO: 'Imposto',
   OUTROS: 'Outros',
 };
-
-function formatCurrency(value: number | string): string {
-  const num = typeof value === 'string' ? parseFloat(value) : value;
-  if (isNaN(num)) return 'R$ 0,00';
-  return new Intl.NumberFormat('pt-BR', { style: 'currency', currency: 'BRL' }).format(num);
-}
 
 function formatDate(dateStr: string): string {
   if (!dateStr) return '—';

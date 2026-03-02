@@ -3,6 +3,7 @@ import { ChevronDown, ChevronUp, Wallet, Scale } from 'lucide-react';
 import { useNavigate } from 'react-router-dom';
 import { LoadingState, EmptyState } from '@/components/ui/state';
 import { useDomainData } from '@/hooks/use-domain-data';
+import { formatCurrency } from '@/lib/formatters';
 
 type RecebimentoItem = Record<string, string | number | undefined>;
 
@@ -22,9 +23,6 @@ type AgingMetric = {
 
 const FALLBACK_VARA_ID = 'sem-vara';
 const FALLBACK_VARA_NOME = 'Sem Vara';
-
-const formatCurrency = (value: number) =>
-  `R$ ${value.toLocaleString('pt-BR', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}`;
 
 const toNumber = (value: string | number | undefined): number => {
   if (typeof value === 'number') return Number.isFinite(value) ? value : 0;

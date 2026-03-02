@@ -8,6 +8,7 @@ import { EmptyState } from '@/components/ui/state';
 import { periciaService } from '@/services/pericia-service';
 import { configService } from '@/services/config-service';
 import type { ConfigItem } from '@/types/api';
+import { formatCurrency } from '@/lib/formatters';
 import { toast } from 'sonner';
 
 type EmailPendingItem = {
@@ -19,9 +20,6 @@ type EmailPendingItem = {
   daysPending: number;
   varaId?: string;
 };
-
-const formatCurrency = (value: number) =>
-  value.toLocaleString('pt-BR', { style: 'currency', currency: 'BRL' });
 
 const formatDate = (value?: string) => {
   if (!value) return '—';
