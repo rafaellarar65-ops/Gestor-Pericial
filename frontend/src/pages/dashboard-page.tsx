@@ -16,6 +16,7 @@ import { DomainPageTemplate } from '@/components/domain/domain-page-template';
 import { Card } from '@/components/ui/card';
 import { useDashboardQuery } from '@/hooks/use-pericias';
 import type { AppShellOutletContext } from '@/layouts/app-shell-context';
+import { appPaths } from '@/config/sidebar-config';
 import type { Pericia } from '@/types/api';
 
 type ActionCard = {
@@ -41,7 +42,7 @@ const ACTION_CARDS: ActionCard[] = [
     title: 'NOVAS NOMEAÇÕES',
     subtitle: 'Central de Triagem: Avaliar, Majorar e Observações',
     badge: 'TRIAGEM INICIAL',
-    href: '/nomeacoes',
+    href: appPaths.nomeacoes,
     tone: 'bg-indigo-500 text-white',
     actionTone: 'bg-indigo-600/90 hover:bg-indigo-700/90',
     kpiKey: 'novas_nomeacoes',
@@ -51,7 +52,7 @@ const ACTION_CARDS: ActionCard[] = [
     title: 'AGENDAR DATA',
     subtitle: 'Pendências de agendamento por cidade',
     badge: 'FILA DE ESPERA',
-    href: '/agendar',
+    href: appPaths.agendar,
     tone: 'bg-yellow-400 text-yellow-900',
     actionTone: 'bg-yellow-500/90 hover:bg-yellow-600/90 text-yellow-950',
     kpiKey: 'agendar_data',
@@ -61,7 +62,7 @@ const ACTION_CARDS: ActionCard[] = [
     title: 'PRÓXIMAS PERÍCIAS',
     subtitle: 'Agenda futura (Presencial e Tele)',
     badge: 'CALENDÁRIO',
-    href: '/pericias-hoje',
+    href: appPaths.periciasHoje,
     tone: 'bg-rose-500 text-white',
     actionTone: 'bg-rose-600/90 hover:bg-rose-700/90',
     kpiKey: 'proximas_pericias',
@@ -71,7 +72,7 @@ const ACTION_CARDS: ActionCard[] = [
     title: 'ENVIAR LAUDOS',
     subtitle: 'Redação e envio de laudos',
     badge: 'PRODUÇÃO',
-    href: '/laudos',
+    href: appPaths.laudos,
     tone: 'bg-teal-600 text-white',
     actionTone: 'bg-teal-700/90 hover:bg-teal-800/90',
     kpiKey: 'enviar_laudos',
@@ -81,7 +82,7 @@ const ACTION_CARDS: ActionCard[] = [
     title: 'ESCLARECIMENTOS',
     subtitle: 'Intimações para complementar laudo',
     badge: 'PRIORIDADE ALTA',
-    href: '/comunicacao',
+    href: appPaths.comunicacao,
     tone: 'bg-orange-500 text-white',
     actionTone: 'bg-orange-600/90 hover:bg-orange-700/90',
     kpiKey: 'esclarecimentos',
@@ -91,7 +92,7 @@ const ACTION_CARDS: ActionCard[] = [
     title: 'A RECEBER',
     subtitle: 'Processos entregues aguardando pagamento (Carteira)',
     badge: 'FINANCEIRO',
-    href: '/financeiro/cobranca',
+    href: appPaths.financeiroCobranca,
     tone: 'bg-green-600 text-white',
     actionTone: 'bg-green-700/90 hover:bg-green-800/90',
     kpiKey: 'a_receber',
@@ -100,8 +101,8 @@ const ACTION_CARDS: ActionCard[] = [
 ];
 
 const NEW_MODULE_CARDS: ActionCard[] = [
-  { title: 'TELEPERÍCIA EM TEMPO REAL', subtitle: 'WebRTC, sala virtual, chat e upload por QR Code', badge: 'NOVA CENTRAL', href: '/telepericias', tone: 'bg-primary text-primary-foreground', Icon: Video },
-  { title: 'COMUNICAÇÃO INTEGRADA', subtitle: 'WhatsApp API, e-mail Uolhost e cobranças por vara', badge: 'OMNICHANNEL', href: '/comunicacao', tone: 'bg-info text-info-foreground', Icon: MessageCircle },
+  { title: 'TELEPERÍCIA EM TEMPO REAL', subtitle: 'WebRTC, sala virtual, chat e upload por QR Code', badge: 'NOVA CENTRAL', href: appPaths.telepericias, tone: 'bg-primary text-primary-foreground', Icon: Video },
+  { title: 'COMUNICAÇÃO INTEGRADA', subtitle: 'WhatsApp API, e-mail Uolhost e cobranças por vara', badge: 'OMNICHANNEL', href: appPaths.comunicacao, tone: 'bg-info text-info-foreground', Icon: MessageCircle },
 ];
 
 const normalizeKpiText = (value: string) =>
@@ -167,7 +168,7 @@ const DashboardPage = () => {
   useEffect(() => {
     setHeaderConfig({
       primaryActions: (
-        <Link className="inline-flex items-center gap-2 rounded-md bg-primary px-3 py-2 text-xs font-semibold text-primary-foreground" to="/pericias">
+        <Link className="inline-flex items-center gap-2 rounded-md bg-primary px-3 py-2 text-xs font-semibold text-primary-foreground" to={appPaths.pericias}>
           Ir para Perícias <ArrowUpRight size={14} />
         </Link>
       ),
@@ -269,7 +270,7 @@ const DashboardPage = () => {
             <SummaryBlock
               title="Cobranças pendentes"
               count={cobrancasPendentes}
-              href="/financeiro/cobranca"
+              href={appPaths.financeiroCobranca}
               description="Casos com pagamento pendente há mais de 60 dias."
             />
           </div>

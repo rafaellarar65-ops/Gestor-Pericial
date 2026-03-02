@@ -2,7 +2,7 @@ import { useState } from 'react';
 import { Link, Outlet, useLocation, useMatches, useNavigate } from 'react-router-dom';
 import { Bell, ChevronDown, ChevronLeft, ChevronRight, LayoutDashboard, CalendarClock, ClipboardList, MapPin, Scale, Calendar, Video, MessageSquareWarning, BookOpen, FileEdit, Dumbbell, Wallet, Upload, BarChart3, LogOut, CalendarDays, CalendarRange, FileText, HandCoins, Inbox, Briefcase, Receipt, AlertTriangle, Settings } from 'lucide-react';
 import { CommandPalette } from '@/components/domain/command-palette';
-import { sidebarSections, type SidebarItem } from '@/config/sidebar-config';
+import { appPaths, sidebarSections, type SidebarItem } from '@/config/sidebar-config';
 import { useAuthStore } from '@/stores/auth-store';
 import { useUiStore } from '@/stores/ui-store';
 import type { AppShellHeaderConfig } from '@/layouts/app-shell-context';
@@ -12,33 +12,33 @@ type MatchHandle = {
 };
 
 const ICON_MAP: Record<SidebarItem['href'], React.ComponentType<{ size?: number; className?: string }>> = {
-  '/': LayoutDashboard,
-  '/pericias-hoje': CalendarClock,
-  '/pericias': ClipboardList,
-  '/cidades': MapPin,
-  '/nomeacoes': Scale,
-  '/tarefas': ClipboardList,
-  '/agendar': Calendar,
-  '/telepericias': Video,
-  '/esclarecimentos': AlertTriangle,
-  '/comunicacao': MessageSquareWarning,
-  '/agenda': Calendar,
-  '/agenda-geral': CalendarDays,
-  '/integrations/google-calendar': CalendarDays,
-  '/laudos': FileEdit,
-  '/conhecimento': BookOpen,
-  '/manobras': Dumbbell,
-  '/financeiro/cobranca': Wallet,
-  '/importacoes': Upload,
-  '/financeiro': BarChart3,
-  '/analytics-calendar': CalendarRange,
-  '/relatorios': FileText,
-  '/pagamentos-nao-vinculados': HandCoins,
-  '/configuracoes': Settings,
-  '/documentacao': FileText,
-  '/email-inbox': Inbox,
-  '/advogados': Briefcase,
-  '/despesas': Receipt,
+  [appPaths.dashboard]: LayoutDashboard,
+  [appPaths.periciasHoje]: CalendarClock,
+  [appPaths.pericias]: ClipboardList,
+  [appPaths.cidades]: MapPin,
+  [appPaths.nomeacoes]: Scale,
+  [appPaths.tarefas]: ClipboardList,
+  [appPaths.agendar]: Calendar,
+  [appPaths.telepericias]: Video,
+  [appPaths.esclarecimentos]: AlertTriangle,
+  [appPaths.comunicacao]: MessageSquareWarning,
+  [appPaths.agenda]: Calendar,
+  [appPaths.agendaGeral]: CalendarDays,
+  [appPaths.googleCalendar]: CalendarDays,
+  [appPaths.laudos]: FileEdit,
+  [appPaths.conhecimento]: BookOpen,
+  [appPaths.manobras]: Dumbbell,
+  [appPaths.financeiroCobranca]: Wallet,
+  [appPaths.importacoes]: Upload,
+  [appPaths.financeiro]: BarChart3,
+  [appPaths.analyticsCalendar]: CalendarRange,
+  [appPaths.relatorios]: FileText,
+  [appPaths.pagamentosNaoVinculados]: HandCoins,
+  [appPaths.configuracoes]: Settings,
+  [appPaths.documentacao]: FileText,
+  [appPaths.emailInbox]: Inbox,
+  [appPaths.advogados]: Briefcase,
+  [appPaths.despesas]: Receipt,
 };
 
 const TODAY = new Intl.DateTimeFormat('pt-BR', {
