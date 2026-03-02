@@ -79,7 +79,9 @@ const applyTokens = (tokens: AuthTokens | null): void => {
 
 apiClient.interceptors.request.use((config) => {
   const { tokens, user } = useAuthStore.getState();
-  const persistedToken = typeof window === 'undefined' ? null : localStorage.getItem('auth-token');
+  const hasHydrated = useAuthStore.persist.hasHydrated();
+  const persistedToken =
+    typeof window === 'undefined' || hasHydrated ? null : localStorage.getItem('auth-token');
   const accessToken = tokens?.accessToken ?? persistedToken;
 
   if (accessToken) {
