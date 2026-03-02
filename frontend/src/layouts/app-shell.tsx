@@ -28,6 +28,7 @@ import {
 import { CommandPalette } from '@/components/domain/command-palette';
 import { useAuthStore } from '@/stores/auth-store';
 import { useUiStore } from '@/stores/ui-store';
+import { NotificationBell } from '@/components/domain/notification-bell';
 import type { AppShellHeaderConfig } from '@/layouts/app-shell-context';
 import { AppSidebar } from '@/layouts/app-sidebar';
 import { AppHeader } from '@/layouts/app-header';
