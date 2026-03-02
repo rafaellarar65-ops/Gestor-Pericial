@@ -4,6 +4,7 @@ import { AlertCircle, CalendarDays, CheckCircle2, CircleDollarSign, Landmark, Ma
 import { useQueryClient } from '@tanstack/react-query';
 import { toast } from 'sonner';
 import { DomainPageTemplate } from '@/components/domain/domain-page-template';
+import { PrazoBadge } from '@/components/domain/prazo-badge';
 import { Dialog } from '@/components/ui/dialog';
 import { EmptyState, ErrorState, LoadingState } from '@/components/ui/state';
 import {
@@ -18,25 +19,19 @@ import { financialService } from '@/services/financial-service';
 import { apiClient } from '@/lib/api-client';
 import { cn } from '@/lib/utils';
 import type { AppShellOutletContext } from '@/layouts/app-shell-context';
+import { formatCNJ, formatCurrency } from '@/lib/formatters';
 
 const tabs = ['Visão 360°', 'Documentos', 'Timeline', 'Financeiro', 'CNJ'] as const;
 type TabType = (typeof tabs)[number];
 
 const toDateInput = (iso?: string) => (iso ? new Date(iso).toISOString().slice(0, 10) : '');
 const toDateBR = (iso?: string) => (iso ? new Date(iso).toLocaleDateString('pt-BR') : '—');
-const toMoney = (value?: number | string) => Number(value ?? 0).toLocaleString('pt-BR', { style: 'currency', currency: 'BRL' });
+const toMoney = (value?: number | string) => formatCurrency(value);
 const withFallback = (value?: string | number | null) => {
   if (value === null || value === undefined) return '—';
   const stringValue = String(value).trim();
   return stringValue.length > 0 ? stringValue : '—';
 };
-const formatCNJ = (cnj?: string) => {
-  if (!cnj) return '—';
-  const digits = cnj.replace(/\D/g, '');
-  if (digits.length !== 20) return cnj;
-  return digits.replace(/(\d{7})(\d{2})(\d{4})(\d)(\d{2})(\d{4})/, '$1-$2.$3.$4.$5.$6');
-};
-
 const PericiaDetailPage = () => {
   const { setHeaderConfig, clearHeaderConfig } = useOutletContext<AppShellOutletContext>();
   const navigate = useNavigate();
@@ -94,17 +89,9 @@ const PericiaDetailPage = () => {
     today.setHours(0, 0, 0, 0);
     const diffDays = Math.ceil((deadlineDate.getTime() - today.getTime()) / (1000 * 60 * 60 * 24));
 
-    const levelClass = diffDays < 0
-      ? 'text-red-600'
-      : diffDays <= 3
-        ? 'text-amber-600'
-        : 'text-emerald-600';
-
     return {
       prazo,
       deadline: toDateBR(deadlineDate.toISOString()),
-      diasRestantes: `${diffDays} dia${Math.abs(diffDays) === 1 ? '' : 's'}`,
-      levelClass,
     };
   }, [detail?.esclarecimentos?.dataIntimacao, detail?.esclarecimentos?.prazoDias]);
 
@@ -375,7 +362,7 @@ const PericiaDetailPage = () => {
                       <li className="flex justify-between gap-2"><span>Data de intimação</span><span>{toDateBR(detail.esclarecimentos?.dataIntimacao)}</span></li>
                       <li className="flex justify-between gap-2"><span>Prazo (dias)</span><span>{detail.esclarecimentos?.prazoDias ?? '—'}</span></li>
                       <li className="flex justify-between gap-2"><span>Deadline</span><span>{esclarecimentosMeta?.deadline ?? '—'}</span></li>
-                      <li className="flex justify-between gap-2"><span>Dias restantes</span><span className={cn('font-semibold', esclarecimentosMeta?.levelClass)}>{esclarecimentosMeta?.diasRestantes ?? '—'}</span></li>
+                      <li className="flex justify-between gap-2"><span>Dias restantes</span><PrazoBadge dataIntimacao={detail.esclarecimentos?.dataIntimacao} prazoDias={detail.esclarecimentos?.prazoDias} /></li>
                     </ul>
                   </div>
                 )}

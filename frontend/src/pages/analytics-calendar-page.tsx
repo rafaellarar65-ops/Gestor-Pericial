@@ -1,6 +1,7 @@
 import { useMemo, useState } from 'react';
 import { useQuery } from '@tanstack/react-query';
 import { apiClient } from '@/lib/api-client';
+import { formatCurrency } from '@/lib/formatters';
 import {
   ANALYTICS_CALENDAR_LAYERS,
   ANALYTICS_EVENT_TYPE_COLORS,
@@ -17,11 +18,6 @@ const LAYER_LABELS: Record<AnalyticsCalendarLayer, string> = {
   ESCLARECIMENTOS: 'Esclarecimentos',
   FINANCEIRO_PRODUCAO_RECEBIMENTO: 'Financeiro Produção/Recebimento',
 };
-
-const formatCurrency = (value: number | null) =>
-  value === null
-    ? '—'
-    : new Intl.NumberFormat('pt-BR', { style: 'currency', currency: 'BRL', maximumFractionDigits: 2 }).format(value);
 
 const formatDateTime = (value: string | null) => {
   if (!value) return '—';
@@ -140,16 +136,16 @@ const AnalyticsCalendarPage = () => {
                           : 'bg-green-100 text-slate-900';
                   const tooltip = [
                     `Data: ${new Date(day.date).toLocaleDateString('pt-BR', { day: '2-digit', month: '2-digit' })}`,
-                    `Recebido: ${formatCurrency(day.receivedValue)}`,
-                    `Produção: ${formatCurrency(day.productionValue)}`,
+                    `Recebido: ${day.receivedValue === null ? "—" : formatCurrency(day.receivedValue)}`,
+                    `Produção: ${day.productionValue === null ? "—" : formatCurrency(day.productionValue)}`,
                     `Eventos: ${day.totalEvents}`,
                   ].join(' | ');
 
                   return (
                     <div key={day.date} className={`rounded-md border p-2 text-xs ${bgClass}`} title={tooltip}>
                       <p className="font-medium">{new Date(day.date).toLocaleDateString('pt-BR', { day: '2-digit', month: '2-digit' })}</p>
-                      <p>Receb.: {formatCurrency(day.receivedValue)}</p>
-                      <p>Prod.: {formatCurrency(day.productionValue)}</p>
+                      <p>Receb.: {day.receivedValue === null ? "—" : formatCurrency(day.receivedValue)}</p>
+                      <p>Prod.: {day.productionValue === null ? "—" : formatCurrency(day.productionValue)}</p>
                       <p>Eventos: {day.totalEvents}</p>
                     </div>
                   );
@@ -173,7 +169,7 @@ const AnalyticsCalendarPage = () => {
                     </div>
                     <p className="mt-1 text-sm font-medium text-slate-800">{event.cnjId}</p>
                     <p className="text-xs text-slate-600">Cidade: {event.city}</p>
-                    <p className="text-xs text-slate-600">Valor: {formatCurrency(event.value)}</p>
+                    <p className="text-xs text-slate-600">Valor: {event.value === null ? "—" : formatCurrency(event.value)}</p>
                     <p className="text-xs text-slate-600">Deadline: {formatDateTime(event.deadline)}</p>
                     <p className="text-xs text-slate-600">Status: {event.status ?? '—'}</p>
                   </div>

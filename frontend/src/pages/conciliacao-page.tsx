@@ -9,9 +9,7 @@ import { apiClient } from '@/lib/api-client';
 import { financialService } from '@/services/financial-service';
 import { periciaService } from '@/services/pericia-service';
 import type { Pericia, UnmatchedPayment } from '@/types/api';
-
-const formatCurrency = (value?: string | number | null) =>
-  new Intl.NumberFormat('pt-BR', { style: 'currency', currency: 'BRL' }).format(Number(value ?? 0));
+import { formatCurrency } from '@/lib/formatters';
 
 const displayDate = (value?: string | null) => (value ? new Date(value).toLocaleDateString('pt-BR') : '-');
 

@@ -25,6 +25,7 @@ import { LoadingState, EmptyState, ErrorState } from '@/components/ui/state';
 import { Tabs } from '@/components/ui/tabs';
 import { financialService } from '@/services/financial-service';
 import type { FinancialAnalytics, Recebimento } from '@/types/api';
+import { formatCurrency } from '@/lib/formatters';
 
 const FONTE_OPTIONS = [
   { value: 'TJ', label: 'Tribunal de Justiça (TJ)' },
@@ -62,12 +63,6 @@ const FONTE_LABELS: Record<FontePagamento | string, string> = {
   SEGURADORA: 'Seguradora',
   OUTRO: 'Outro',
 };
-
-function formatCurrency(value: number | string): string {
-  const num = typeof value === 'string' ? parseFloat(value) : value;
-  if (isNaN(num)) return 'R$ 0,00';
-  return new Intl.NumberFormat('pt-BR', { style: 'currency', currency: 'BRL' }).format(num);
-}
 
 function formatDate(dateStr: string): string {
   if (!dateStr) return '—';

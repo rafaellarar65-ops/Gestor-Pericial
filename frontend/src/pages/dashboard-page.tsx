@@ -15,6 +15,7 @@ import {
 import { DomainPageTemplate } from '@/components/domain/domain-page-template';
 import { Card } from '@/components/ui/card';
 import { useDashboardQuery } from '@/hooks/use-pericias';
+import { formatCurrency } from '@/lib/formatters';
 import type { AppShellOutletContext } from '@/layouts/app-shell-context';
 import { appPaths } from '@/config/sidebar-config';
 import type { Pericia } from '@/types/api';
@@ -114,13 +115,6 @@ const parseNumberValue = (value?: string) => {
   const parsed = Number(normalized);
   return Number.isFinite(parsed) ? parsed : null;
 };
-
-const formatCurrency = (value: number) =>
-  new Intl.NumberFormat('pt-BR', {
-    style: 'currency',
-    currency: 'BRL',
-    maximumFractionDigits: 2,
-  }).format(value);
 
 const getPericiaStatusName = (pericia: Pericia) => {
   const rawStatus = pericia.status;

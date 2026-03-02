@@ -9,11 +9,9 @@ import { LoadingState } from '@/components/ui/state';
 import { financialService } from '@/services/financial-service';
 import { periciaService } from '@/services/pericia-service';
 import type { UnmatchedPayment, UnmatchedPaymentOrigin } from '@/types/api';
+import { formatCurrency } from '@/lib/formatters';
 
 const ORIGIN_OPTIONS: UnmatchedPaymentOrigin[] = ['AI_PRINT', 'MANUAL_CSV', 'INDIVIDUAL'];
-
-const formatCurrency = (value?: string | number | null) =>
-  new Intl.NumberFormat('pt-BR', { style: 'currency', currency: 'BRL' }).format(Number(value ?? 0));
 
 const normalize = (value?: string | null) => (value ?? '').toLowerCase();
 const isValidCNJ = (cnj?: string | null) => Boolean(cnj && /^\d{7}-\d{2}\.\d{4}\.\d\.\d{2}\.\d{4}$/.test(cnj.trim()));
