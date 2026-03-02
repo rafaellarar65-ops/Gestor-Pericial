@@ -224,8 +224,13 @@ const EmailGeradorPage = () => {
             <h2 className="text-lg font-semibold">Template gerado</h2>
             <div className="flex gap-2">
               <Button onClick={handleCopy} type="button" variant="outline"><Copy size={14} /> Copiar</Button>
-              <a href={mailtoHref}>
-                <Button type="button"><Mail size={14} /> Abrir Email</Button>
+              <a
+                className="inline-flex h-10 items-center justify-center gap-2 rounded-md bg-primary px-4 text-sm font-medium text-primary-foreground transition-colors hover:opacity-90 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
+                href={mailtoHref}
+                rel="noopener noreferrer"
+                target="_blank"
+              >
+                <Mail size={14} /> Abrir Email
               </a>
             </div>
           </div>
