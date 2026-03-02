@@ -265,8 +265,10 @@ function VaraTabContent() {
           <div className="flex gap-2">
             <Button onClick={handleCopy} disabled={!generatedTemplate.trim()}>Copiar</Button>
             <a
-              className="inline-flex items-center justify-center rounded-md border border-border bg-background px-4 h-10 text-sm font-medium transition-colors hover:bg-muted"
+              className="inline-flex h-10 items-center justify-center rounded-md border border-border bg-background px-4 text-sm font-medium transition-colors hover:bg-muted"
               href={mailtoLink}
+              rel="noopener noreferrer"
+              target="_blank"
             >
               Abrir Email
             </a>
