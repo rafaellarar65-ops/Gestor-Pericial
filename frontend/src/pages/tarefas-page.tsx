@@ -1,6 +1,7 @@
 import { useState } from 'react';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import { Plus, CheckCircle2, Circle, Clock, AlertTriangle } from 'lucide-react';
+import { Link } from 'react-router-dom';
 import { toast } from 'sonner';
 import { Button } from '@/components/ui/button';
 import { Card } from '@/components/ui/card';
@@ -18,10 +19,10 @@ const STATUS_CONFIG = {
 } as const;
 
 const PRIORITY_MAP = {
-  1: { label: 'Baixa', badge: 'bg-slate-100 text-slate-600' },
-  2: { label: 'Média', badge: 'bg-blue-100 text-blue-700' },
-  3: { label: 'Alta', badge: 'bg-orange-100 text-orange-700' },
-  4: { label: 'Urgente', badge: 'bg-red-100 text-red-700' },
+  1: { label: 'Baixa', badge: 'bg-slate-100 text-slate-600', border: 'border-l-4 border-green-500' },
+  2: { label: 'Média', badge: 'bg-blue-100 text-blue-700', border: 'border-l-4 border-yellow-500' },
+  3: { label: 'Alta', badge: 'bg-orange-100 text-orange-700', border: 'border-l-4 border-red-500' },
+  4: { label: 'Urgente', badge: 'bg-red-100 text-red-700', border: 'border-l-4 border-red-500' },
 } as const;
 
 function formatDueDate(dateStr?: string): string {
@@ -121,7 +122,7 @@ const TarefasPage = () => {
             const due = formatDueDate(task.dueAt);
             const overdue = due.startsWith('Atrasado');
             return (
-              <Card key={task.id} className="flex items-start gap-3 p-4">
+              <Card key={task.id} className={`flex items-start gap-3 p-4 ${prio.border}`}>
                 <Icon className={`mt-0.5 h-5 w-5 flex-shrink-0 ${cfg.color}`} />
                 <div className="min-w-0 flex-1">
                   <p className={`font-medium ${task.status === 'DONE' ? 'line-through text-muted-foreground' : ''}`}>{task.title}</p>
@@ -129,7 +130,11 @@ const TarefasPage = () => {
                   <div className="mt-1.5 flex flex-wrap items-center gap-2 text-xs">
                     <span className={`rounded-full px-2 py-0.5 font-semibold ${prio.badge}`}>{prio.label}</span>
                     {due && <span className={overdue ? 'font-semibold text-red-600' : 'text-slate-500'}>Prazo: {due}</span>}
-                    {task.periciaId && <span className="text-slate-400">Perícia: {task.periciaId.slice(0, 8)}…</span>}
+                    {task.periciaId && (
+                      <Link className="font-medium text-blue-600 hover:underline" to={`/pericias/${task.periciaId}`}>
+                        Ver perícia
+                      </Link>
+                    )}
                   </div>
                 </div>
                 <span className={`text-xs font-medium ${cfg.color}`}>{cfg.label}</span>

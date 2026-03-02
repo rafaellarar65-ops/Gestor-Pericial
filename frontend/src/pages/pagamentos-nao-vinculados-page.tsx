@@ -7,6 +7,7 @@ import { Dialog } from '@/components/ui/dialog';
 import { Input } from '@/components/ui/input';
 import { LoadingState } from '@/components/ui/state';
 import { financialService } from '@/services/financial-service';
+import { periciaService } from '@/services/pericia-service';
 import type { UnmatchedPayment, UnmatchedPaymentOrigin } from '@/types/api';
 
 const ORIGIN_OPTIONS: UnmatchedPaymentOrigin[] = ['AI_PRINT', 'MANUAL_CSV', 'INDIVIDUAL'];
@@ -33,6 +34,11 @@ const PagamentosNaoVinculadosPage = () => {
   const { data, isLoading } = useQuery({
     queryKey: ['financial-unmatched-payments'],
     queryFn: () => financialService.listUnmatchedPayments(),
+  });
+
+  const periciasQuery = useQuery({
+    queryKey: ['pericias-sugestoes-unmatched'],
+    queryFn: () => periciaService.list(1, { limit: 500 }),
   });
 
   const [search, setSearch] = useState('');
@@ -145,6 +151,20 @@ const PagamentosNaoVinculadosPage = () => {
     });
   };
 
+  const pericias = periciasQuery.data?.items ?? [];
+
+  const findSuggestedPericiaId = (cnj?: string | null) => {
+    const cleanCnj = (cnj ?? '').replace(/\D/g, '');
+    if (!cleanCnj) return null;
+
+    const similar = pericias.find((pericia) => {
+      const periciaCnj = String(pericia.processoCNJ ?? '').replace(/\D/g, '');
+      return periciaCnj && (periciaCnj.includes(cleanCnj) || cleanCnj.includes(periciaCnj));
+    });
+
+    return similar?.id ?? null;
+  };
+
   if (isLoading) return <LoadingState />;
 
   return (
@@ -195,6 +215,7 @@ const PagamentosNaoVinculadosPage = () => {
                 <th className="px-2 py-2">Fonte</th>
                 <th className="px-2 py-2">Origem</th>
                 <th className="px-2 py-2">Status</th>
+                <th className="px-2 py-2">Sugestão</th>
                 <th className="px-2 py-2">Ações</th>
               </tr>
             </thead>
@@ -210,6 +231,25 @@ const PagamentosNaoVinculadosPage = () => {
                   <td className="px-2 py-2">{item.source ?? '-'}</td>
                   <td className="px-2 py-2">{item.origin ?? 'INDIVIDUAL'}</td>
                   <td className="px-2 py-2">{item.ignored ? 'DISCARDED' : item.matchStatus}</td>
+                  <td className="px-2 py-2">
+                    {item.cnj ? (
+                      (() => {
+                        const suggestedPericiaId = findSuggestedPericiaId(item.cnj);
+                        if (!suggestedPericiaId) return <span className="text-xs text-muted-foreground">Sem sugestão</span>;
+                        return (
+                          <button
+                            className="text-xs font-medium text-blue-600 hover:underline"
+                            onClick={() => linkMutation.mutate({ id: item.id, periciaId: suggestedPericiaId })}
+                            type="button"
+                          >
+                            Vincular sugerido ({suggestedPericiaId.slice(0, 8)}…)
+                          </button>
+                        );
+                      })()
+                    ) : (
+                      <span className="text-xs text-muted-foreground">Sem CNJ</span>
+                    )}
+                  </td>
                   <td className="px-2 py-2">
                     <div className="flex flex-wrap gap-2">
                       <Button

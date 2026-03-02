@@ -1,5 +1,6 @@
 import { useMemo, useState } from 'react';
 import { useParams } from 'react-router-dom';
+import { Bold, Heading1, Heading2, Italic } from 'lucide-react';
 import { Card } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
@@ -42,6 +43,23 @@ const LaudoInteligentePage = () => {
     await laudoInteligenteService.generateReport(id, { nomePericiado, exameFisico, discussao });
   };
 
+  const applyFormat = (target: 'exame' | 'discussao', pattern: (value: string) => string) => {
+    if (target === 'exame') {
+      setExameFisico((prev) => pattern(prev));
+      return;
+    }
+    setDiscussao((prev) => pattern(prev));
+  };
+
+  const Toolbar = ({ target }: { target: 'exame' | 'discussao' }) => (
+    <div className="mb-2 flex flex-wrap gap-2 border-b pb-2">
+      <Button size="sm" type="button" variant="outline" onClick={() => applyFormat(target, (value) => `**${value}**`)}><Bold className="h-4 w-4" /></Button>
+      <Button size="sm" type="button" variant="outline" onClick={() => applyFormat(target, (value) => `*${value}*`)}><Italic className="h-4 w-4" /></Button>
+      <Button size="sm" type="button" variant="outline" onClick={() => applyFormat(target, (value) => `# ${value}`)}><Heading1 className="h-4 w-4" /></Button>
+      <Button size="sm" type="button" variant="outline" onClick={() => applyFormat(target, (value) => `## ${value}`)}><Heading2 className="h-4 w-4" /></Button>
+    </div>
+  );
+
   return (
     <div className="space-y-4">
       <h1 className="text-2xl font-semibold">Módulo de Edição de Laudo Inteligente</h1>
@@ -58,47 +76,61 @@ const LaudoInteligentePage = () => {
 
       <Card className="space-y-3 p-4">
         <p className="text-sm font-medium">2) Exame Físico com autocomplete técnico</p>
-        <div className="relative">
-          <textarea
-            className="min-h-40 w-full rounded-md border p-3 font-mono"
-            value={exameFisico}
-            onChange={(e) => setExameFisico(e.target.value)}
-            onKeyDown={(e) => {
-              if (e.key === 'Tab' && exameCompletion.ghostText) {
-                e.preventDefault();
-                setExameFisico(exameCompletion.acceptWithTab());
-              }
-            }}
-          />
-          {exameCompletion.ghostText && (
-            <div className="pointer-events-none absolute inset-0 p-3 font-mono text-slate-400">
-              <span className="opacity-0">{exameFisico}</span>
-              <span>{exameCompletion.ghostText}</span>
-            </div>
-          )}
+        <div className="grid gap-4 lg:grid-cols-2">
+          <div className="relative">
+            <Toolbar target="exame" />
+            <textarea
+              className="min-h-40 w-full rounded-md border p-3 font-mono"
+              value={exameFisico}
+              onChange={(e) => setExameFisico(e.target.value)}
+              onKeyDown={(e) => {
+                if (e.key === 'Tab' && exameCompletion.ghostText) {
+                  e.preventDefault();
+                  setExameFisico(exameCompletion.acceptWithTab());
+                }
+              }}
+            />
+            {exameCompletion.ghostText && (
+              <div className="pointer-events-none absolute inset-0 p-3 font-mono text-slate-400">
+                <span className="opacity-0">{exameFisico}</span>
+                <span>{exameCompletion.ghostText}</span>
+              </div>
+            )}
+          </div>
+          <div className="hidden min-h-40 rounded-md border bg-slate-50 p-3 lg:block">
+            <p className="mb-2 text-xs font-semibold uppercase text-slate-500">Preview</p>
+            <pre className="whitespace-pre-wrap text-sm text-slate-700">{exameFisico || 'Sem conteúdo para pré-visualizar.'}</pre>
+          </div>
         </div>
       </Card>
 
       <Card className="space-y-3 p-4">
         <p className="text-sm font-medium">3) Discussão Técnica + Reprocessar análise multimodal</p>
-        <div className="relative">
-          <textarea
-            className="min-h-40 w-full rounded-md border p-3 font-mono"
-            value={discussao}
-            onChange={(e) => setDiscussao(e.target.value)}
-            onKeyDown={(e) => {
-              if (e.key === 'Tab' && discussaoCompletion.ghostText) {
-                e.preventDefault();
-                setDiscussao(discussaoCompletion.acceptWithTab());
-              }
-            }}
-          />
-          {discussaoCompletion.ghostText && (
-            <div className="pointer-events-none absolute inset-0 p-3 font-mono text-slate-400">
-              <span className="opacity-0">{discussao}</span>
-              <span>{discussaoCompletion.ghostText}</span>
-            </div>
-          )}
+        <div className="grid gap-4 lg:grid-cols-2">
+          <div className="relative">
+            <Toolbar target="discussao" />
+            <textarea
+              className="min-h-40 w-full rounded-md border p-3 font-mono"
+              value={discussao}
+              onChange={(e) => setDiscussao(e.target.value)}
+              onKeyDown={(e) => {
+                if (e.key === 'Tab' && discussaoCompletion.ghostText) {
+                  e.preventDefault();
+                  setDiscussao(discussaoCompletion.acceptWithTab());
+                }
+              }}
+            />
+            {discussaoCompletion.ghostText && (
+              <div className="pointer-events-none absolute inset-0 p-3 font-mono text-slate-400">
+                <span className="opacity-0">{discussao}</span>
+                <span>{discussaoCompletion.ghostText}</span>
+              </div>
+            )}
+          </div>
+          <div className="hidden min-h-40 rounded-md border bg-slate-50 p-3 lg:block">
+            <p className="mb-2 text-xs font-semibold uppercase text-slate-500">Preview</p>
+            <pre className="whitespace-pre-wrap text-sm text-slate-700">{discussao || 'Sem conteúdo para pré-visualizar.'}</pre>
+          </div>
         </div>
         <Button onClick={onReprocess}>Reprocessar Análise</Button>
       </Card>

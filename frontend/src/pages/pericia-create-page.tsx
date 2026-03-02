@@ -2,10 +2,31 @@ import { useMemo, useState } from 'react';
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 import { ArrowLeft, Save, Scale, Sparkles } from 'lucide-react';
 import { Link, useNavigate } from 'react-router-dom';
+import { toast } from 'sonner';
 import { ErrorState, LoadingState } from '@/components/ui/state';
 import { configService } from '@/services/config-service';
 import { periciaService } from '@/services/pericia-service';
 import type { ConfigItem } from '@/types/api';
+
+const cnjMask = (value: string) => {
+  const digits = value.replace(/\D/g, '').slice(0, 20);
+  const parts = [
+    digits.slice(0, 7),
+    digits.slice(7, 9),
+    digits.slice(9, 13),
+    digits.slice(13, 14),
+    digits.slice(14, 16),
+    digits.slice(16, 20),
+  ];
+
+  let masked = parts[0];
+  if (parts[1]) masked += `-${parts[1]}`;
+  if (parts[2]) masked += `.${parts[2]}`;
+  if (parts[3]) masked += `.${parts[3]}`;
+  if (parts[4]) masked += `.${parts[4]}`;
+  if (parts[5]) masked += `.${parts[5]}`;
+  return masked;
+};
 
 const PericiaCreatePage = () => {
   const navigate = useNavigate();
@@ -15,6 +36,7 @@ const PericiaCreatePage = () => {
     juizNome: '',
     autorNome: '',
     reuNome: '',
+    periciadoNome: '',
     cidadeId: '',
     varaId: '',
     tipoPericiaId: '',
@@ -39,6 +61,7 @@ const PericiaCreatePage = () => {
         juizNome: form.juizNome || undefined,
         autorNome: form.autorNome || undefined,
         reuNome: form.reuNome || undefined,
+        periciadoNome: form.periciadoNome || undefined,
         cidadeId: form.cidadeId || undefined,
         varaId: form.varaId || undefined,
         tipoPericiaId: form.tipoPericiaId || undefined,
@@ -95,6 +118,9 @@ const PericiaCreatePage = () => {
     </label>
   );
 
+  const cnjValido = /^\d{7}-\d{2}\.\d{4}\.\d\.\d{2}\.\d{4}$/.test(form.processoCNJ);
+  const canSubmit = Boolean(form.cidadeId.trim() && cnjValido);
+
   return (
     <div className="mx-auto max-w-5xl space-y-4">
       <div className="flex items-center justify-between">
@@ -122,7 +148,7 @@ const PericiaCreatePage = () => {
             <span className="mb-1 block text-xs font-semibold uppercase text-slate-500">Número CNJ *</span>
             <input
               className="w-full rounded-md border px-3 py-2"
-              onChange={(e) => setForm((prev) => ({ ...prev, processoCNJ: e.target.value }))}
+              onChange={(e) => setForm((prev) => ({ ...prev, processoCNJ: cnjMask(e.target.value) }))}
               placeholder="0000000-00.0000.0.00.0000"
               value={form.processoCNJ}
             />
@@ -139,13 +165,17 @@ const PericiaCreatePage = () => {
             <span className="mb-1 block text-xs font-semibold uppercase text-slate-500">Réu *</span>
             <input className="w-full rounded-md border px-3 py-2" onChange={(e) => setForm((prev) => ({ ...prev, reuNome: e.target.value }))} value={form.reuNome} />
           </label>
+          <label className="text-sm md:col-span-2">
+            <span className="mb-1 block text-xs font-semibold uppercase text-slate-500">Periciado *</span>
+            <input className="w-full rounded-md border px-3 py-2" onChange={(e) => setForm((prev) => ({ ...prev, periciadoNome: e.target.value }))} value={form.periciadoNome} />
+          </label>
         </div>
       </section>
 
       <section className="rounded-xl border bg-white p-4">
         <h2 className="mb-4 text-2xl font-semibold text-slate-800">Detalhes da Nomeação</h2>
         <div className="grid gap-3 md:grid-cols-3">
-          <SelectConfig label="Cidade" items={cidadesQuery.data ?? []} onChange={(value) => setForm((prev) => ({ ...prev, cidadeId: value, varaId: '' }))} value={form.cidadeId} />
+          <SelectConfig label="Cidade *" items={cidadesQuery.data ?? []} onChange={(value) => setForm((prev) => ({ ...prev, cidadeId: value, varaId: '' }))} value={form.cidadeId} />
           <SelectConfig label="Vara" items={varasFiltradas} onChange={(value) => setForm((prev) => ({ ...prev, varaId: value }))} value={form.varaId} />
           <label className="text-sm">
             <span className="mb-1 block text-xs font-semibold uppercase text-slate-500">Data Nomeação</span>
@@ -178,12 +208,21 @@ const PericiaCreatePage = () => {
         </label>
       </section>
 
+      {!cnjValido && form.processoCNJ.trim() && <p className="text-sm font-medium text-red-600">Informe um CNJ válido no formato 0000000-00.0000.0.00.0000.</p>}
+      {!form.cidadeId && <p className="text-sm font-medium text-red-600">Cidade é obrigatória.</p>}
+
       <div className="flex justify-end gap-2 pb-8">
         <button className="rounded-md border px-4 py-2 text-sm" onClick={() => navigate('/pericias')} type="button">Cancelar</button>
         <button
           className="inline-flex items-center gap-2 rounded-md bg-blue-600 px-4 py-2 text-sm font-semibold text-white disabled:opacity-60"
-          disabled={createMutation.isPending || !form.processoCNJ.trim()}
-          onClick={() => createMutation.mutate()}
+          disabled={createMutation.isPending || !canSubmit}
+          onClick={() => {
+            if (!canSubmit) {
+              toast.error('Preencha CNJ válido e cidade antes de salvar.');
+              return;
+            }
+            createMutation.mutate();
+          }}
           type="button"
         >
           <Save size={14} /> {createMutation.isPending ? 'Salvando...' : 'Salvar Perícia'}

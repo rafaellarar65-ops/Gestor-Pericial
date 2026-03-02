@@ -6,6 +6,9 @@ import { Input } from '@/components/ui/input';
 type CsvTabState = {
   selectedFile: File | null;
   validationMessages: string[];
+  previewRows: string[][];
+  isProcessing: boolean;
+  progress: number;
 };
 
 type TabCsvProps = {
@@ -36,19 +39,54 @@ function validateCsvFile(file: File | null): string[] {
   return messages;
 }
 
+async function readPreviewRows(file: File | null): Promise<string[][]> {
+  if (!file) return [];
+  const content = await file.text();
+  return content
+    .split(/\r?\n/)
+    .filter((line) => line.trim())
+    .slice(0, 5)
+    .map((line) => line.split(';').length > 1 ? line.split(';') : line.split(','));
+}
+
 export const TabCsv = ({ state, onChange }: TabCsvProps) => {
-  const onFileChange = (file: File | null) => {
+  const onFileChange = async (file: File | null) => {
+    const validationMessages = validateCsvFile(file);
+    const previewRows = validationMessages.length === 0 ? await readPreviewRows(file) : [];
+
     onChange({
+      ...state,
       selectedFile: file,
-      validationMessages: validateCsvFile(file),
+      validationMessages,
+      previewRows,
+      progress: 0,
+      isProcessing: false,
     });
   };
 
-  const onValidate = () => {
+  const onValidate = async () => {
+    const validationMessages = validateCsvFile(state.selectedFile);
+    const previewRows = validationMessages.length === 0 ? await readPreviewRows(state.selectedFile) : [];
+
     onChange({
       ...state,
-      validationMessages: validateCsvFile(state.selectedFile),
+      validationMessages,
+      previewRows,
     });
+  };
+
+  const onConfirmImport = () => {
+    if (!state.selectedFile || state.validationMessages.length > 0) return;
+
+    onChange({ ...state, isProcessing: true, progress: 35 });
+
+    window.setTimeout(() => {
+      onChange({ ...state, isProcessing: true, progress: 75 });
+    }, 400);
+
+    window.setTimeout(() => {
+      onChange({ ...state, isProcessing: false, progress: 100 });
+    }, 1000);
   };
 
   return (
@@ -66,7 +104,9 @@ export const TabCsv = ({ state, onChange }: TabCsvProps) => {
           id="csv-file"
           type="file"
           accept=".csv"
-          onChange={(event) => onFileChange(event.target.files?.[0] ?? null)}
+          onChange={(event) => {
+            void onFileChange(event.target.files?.[0] ?? null);
+          }}
         />
         {state.selectedFile && (
           <p className="text-xs text-muted-foreground">
@@ -98,10 +138,46 @@ export const TabCsv = ({ state, onChange }: TabCsvProps) => {
         )
       )}
 
-      <Button onClick={onValidate}>
-        <FileSpreadsheet className="mr-2 h-4 w-4" />
-        Validar CSV
-      </Button>
+      {state.previewRows.length > 0 && (
+        <div className="space-y-2 rounded-md border bg-slate-50 p-3">
+          <p className="text-sm font-medium text-slate-700">Preview das 5 primeiras linhas</p>
+          <div className="overflow-x-auto">
+            <table className="w-full text-xs">
+              <tbody>
+                {state.previewRows.map((row, idx) => (
+                  <tr key={`${row.join('-')}-${idx}`} className="border-b last:border-0">
+                    {row.map((cell, cellIdx) => (
+                      <td key={`${cell}-${cellIdx}`} className="px-2 py-1 text-slate-600">{cell || '—'}</td>
+                    ))}
+                  </tr>
+                ))}
+              </tbody>
+            </table>
+          </div>
+        </div>
+      )}
+
+      {state.isProcessing && (
+        <div className="space-y-1">
+          <div className="flex justify-between text-xs text-slate-600">
+            <span>Processando importação...</span>
+            <span>{state.progress}%</span>
+          </div>
+          <div className="h-2 w-full rounded-full bg-slate-200">
+            <div className="h-full rounded-full bg-blue-600 transition-all" style={{ width: `${state.progress}%` }} />
+          </div>
+        </div>
+      )}
+
+      <div className="flex flex-wrap gap-2">
+        <Button onClick={() => void onValidate()}>
+          <FileSpreadsheet className="mr-2 h-4 w-4" />
+          Validar CSV
+        </Button>
+        <Button variant="outline" onClick={onConfirmImport} disabled={!state.selectedFile || state.validationMessages.length > 0 || state.isProcessing}>
+          Confirmar importação
+        </Button>
+      </div>
     </Card>
   );
 };
