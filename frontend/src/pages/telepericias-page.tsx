@@ -102,8 +102,8 @@ const FilaTab = ({
   urgentMutation,
 }: {
   rows: TelepericiaQueueItem[];
-  attemptMutation: ReturnType<typeof useMutation>;
-  urgentMutation: ReturnType<typeof useMutation>;
+  attemptMutation: { isPending: boolean; mutate: (vars: { id: string; status?: string }) => void };
+  urgentMutation: { isPending: boolean; mutate: (vars: { id: string; isUrgent: boolean }) => void };
 }) => {
   if (rows.length === 0) {
     return <EmptyState title="Sem perícias em modalidade teleperícia na fila." />;
