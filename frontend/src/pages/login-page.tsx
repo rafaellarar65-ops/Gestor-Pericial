@@ -123,6 +123,11 @@ const LoginPage = () => {
             <h2 className="text-xl font-bold text-slate-900">Entrar</h2>
           </div>
 
+          <div className="mb-6 hidden text-center sm:block md:hidden">
+            <h2 className="text-2xl font-bold text-slate-900">Entrar no Gestor Pericial</h2>
+            <p className="mt-1 text-sm text-slate-600">Acesse sua conta para continuar.</p>
+          </div>
+
           <Card>
             <form className="space-y-4" onSubmit={handleSubmit(onSubmit)}>
               <div>
