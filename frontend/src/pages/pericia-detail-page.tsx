@@ -18,7 +18,6 @@ import { financialService } from '@/services/financial-service';
 import { apiClient } from '@/lib/api-client';
 import { cn } from '@/lib/utils';
 import type { AppShellOutletContext } from '@/layouts/app-shell-context';
-import { financialService } from '@/services/financial-service';
 
 const tabs = ['Visão 360°', 'Documentos', 'Timeline', 'Financeiro', 'CNJ'] as const;
 type TabType = (typeof tabs)[number];
@@ -238,7 +237,6 @@ const PericiaDetailPage = () => {
               Editar
             </Link>
             <button
-              className="inline-flex items-center gap-2 rounded-md border px-3 py-2 text-sm font-medium text-foreground transition-colors hover:bg-muted focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-indigo-500 focus-visible:ring-offset-2"
               className="inline-flex items-center gap-2 rounded-md border px-3 py-2 text-sm font-medium text-foreground transition-colors hover:bg-muted focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-indigo-600 focus-visible:ring-offset-2"
               onClick={openDatesModal}
               type="button"
@@ -246,13 +244,12 @@ const PericiaDetailPage = () => {
               <Pencil size={14} /> Editar Datas
             </button>
             <Link
-              className="inline-flex items-center gap-2 rounded-md border px-3 py-2 text-sm font-medium text-foreground transition-colors hover:bg-muted focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-indigo-500 focus-visible:ring-offset-2"
+              className="inline-flex items-center gap-2 rounded-md border px-3 py-2 text-sm font-medium text-foreground transition-colors hover:bg-muted focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-indigo-600 focus-visible:ring-offset-2"
               to={`/pericias/${id}/editar`}
             >
               Editar
             </Link>
-            <Link className="inline-flex items-center gap-2 rounded-md border px-3 py-2 text-sm font-medium text-foreground transition-colors hover:bg-muted focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-indigo-500 focus-visible:ring-offset-2" to={`/laudo-inteligente/${id}`}>Laudo Inteligente</Link>
-            <Link className="inline-flex items-center gap-2 rounded-md border px-3 py-2 text-sm font-medium text-foreground transition-colors hover:bg-muted focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-indigo-500 focus-visible:ring-offset-2" to="/laudo-v2">CNJ</Link>
+            <Link
               className="inline-flex items-center gap-2 rounded-md border px-3 py-2 text-sm font-medium text-foreground transition-colors hover:bg-muted focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-indigo-600 focus-visible:ring-offset-2"
               to={`/laudo-inteligente/${id}`}
             >
@@ -562,24 +559,6 @@ const PericiaDetailPage = () => {
         </div>
       )}
 
-      {showRecebimentoModal && (
-        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/40 p-4">
-          <div className="w-full max-w-xl rounded-xl bg-white shadow-xl">
-            <div className="flex items-center justify-between rounded-t-xl bg-slate-900 px-4 py-3 text-white"><p className="font-semibold">Novo Recebimento</p><button onClick={() => setShowRecebimentoModal(false)} type="button">×</button></div>
-            <div className="grid gap-3 p-4 md:grid-cols-2">
-              <label className="block text-sm md:col-span-2"><span className="mb-1 block text-xs font-semibold uppercase text-muted-foreground">Fonte de Pagamento</span><input className="w-full rounded-md border px-3 py-2" onChange={(e) => setFontePagamento(e.target.value)} placeholder="Ex.: Tribunal de Justiça" type="text" value={fontePagamento} /></label>
-              <label className="block text-sm"><span className="mb-1 block text-xs font-semibold uppercase text-muted-foreground">Data de Recebimento</span><input className="w-full rounded-md border px-3 py-2" onChange={(e) => setDataRecebimento(e.target.value)} type="date" value={dataRecebimento} /></label>
-              <label className="block text-sm"><span className="mb-1 block text-xs font-semibold uppercase text-muted-foreground">Valor Bruto</span><input className="w-full rounded-md border px-3 py-2" min="0" onChange={(e) => setValorBruto(e.target.value)} placeholder="0,00" step="0.01" type="number" value={valorBruto} /></label>
-              <label className="block text-sm md:col-span-2"><span className="mb-1 block text-xs font-semibold uppercase text-muted-foreground">Valor Líquido</span><input className="w-full rounded-md border px-3 py-2" min="0" onChange={(e) => setValorLiquido(e.target.value)} placeholder="0,00" step="0.01" type="number" value={valorLiquido} /></label>
-              <label className="block text-sm md:col-span-2"><span className="mb-1 block text-xs font-semibold uppercase text-muted-foreground">Descrição</span><textarea className="w-full rounded-md border px-3 py-2" onChange={(e) => setDescricao(e.target.value)} placeholder="Observações do recebimento" rows={3} value={descricao} /></label>
-              <div className="flex justify-end gap-2 pt-2 md:col-span-2">
-                <button className="rounded-md px-3 py-2 text-sm" onClick={() => setShowRecebimentoModal(false)} type="button">Cancelar</button>
-                <button className="rounded-md bg-blue-600 px-4 py-2 text-sm font-semibold text-white" disabled={isCreatingRecebimento} onClick={() => void handleCreateRecebimento()} type="button">{isCreatingRecebimento ? 'Salvando...' : 'Salvar recebimento'}</button>
-              </div>
-            </div>
-          </div>
-        </div>
-      )}
     </>
   );
 };
