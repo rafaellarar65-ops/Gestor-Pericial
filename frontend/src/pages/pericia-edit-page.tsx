@@ -8,6 +8,7 @@ import { EmptyState } from '@/components/ui/state';
 import { usePericiaDetailQuery } from '@/hooks/use-pericias';
 import { apiClient } from '@/lib/api-client';
 import { configService } from '@/services/config-service';
+import type { PericiaDetail } from '@/types/api';
 
 const toDateInput = (value?: string) => {
   if (!value) return '';
@@ -26,12 +27,80 @@ const toTimeInput = (value?: string) => {
 const labelClass = 'text-xs font-semibold uppercase text-muted-foreground mb-1 block';
 const inputClass = 'w-full rounded-md border px-3 py-2 text-sm';
 
+interface PericiaEditFormValues {
+  processoCNJ: string;
+  tipoPericiaId: string;
+  modalidadeId: string;
+  autorNome: string;
+  reuNome: string;
+  periciadoNome: string;
+  juizNome: string;
+  cidadeId: string;
+  varaId: string;
+  statusId: string;
+  dataNomeacao: string;
+  dataAgendamento: string;
+  horaAgendamento: string;
+  dataRealizacao: string;
+  dataEnvioLaudo: string;
+  honorariosPrevistosJG: number | string;
+  honorariosPrevistosPartes: number | string;
+  pagamentoStatus: string;
+  observacoes: string;
+  observacaoExtra: string;
+}
+
+const EMPTY_FORM_VALUES: PericiaEditFormValues = {
+  processoCNJ: '',
+  tipoPericiaId: '',
+  modalidadeId: '',
+  autorNome: '',
+  reuNome: '',
+  periciadoNome: '',
+  juizNome: '',
+  cidadeId: '',
+  varaId: '',
+  statusId: '',
+  dataNomeacao: '',
+  dataAgendamento: '',
+  horaAgendamento: '',
+  dataRealizacao: '',
+  dataEnvioLaudo: '',
+  honorariosPrevistosJG: '',
+  honorariosPrevistosPartes: '',
+  pagamentoStatus: '',
+  observacoes: '',
+  observacaoExtra: '',
+};
+
+const normalizePericiaToFormValues = (detail: PericiaDetail): PericiaEditFormValues => ({
+  processoCNJ: detail.processoCNJ ?? '',
+  tipoPericiaId: detail.tipoPericia?.id ?? '',
+  modalidadeId: detail.modalidade?.id ?? '',
+  autorNome: detail.autorNome ?? '',
+  reuNome: detail.reuNome ?? '',
+  periciadoNome: detail.periciadoNome ?? '',
+  juizNome: detail.juizNome ?? '',
+  cidadeId: detail.cidade?.id ?? '',
+  varaId: detail.vara?.id ?? '',
+  statusId: detail.status?.id ?? '',
+  dataNomeacao: toDateInput(detail.dataNomeacao),
+  dataAgendamento: toDateInput(detail.dataAgendamento),
+  horaAgendamento: toTimeInput(detail.horaAgendamento),
+  dataRealizacao: toDateInput(detail.dataRealizacao),
+  dataEnvioLaudo: toDateInput(detail.dataEnvioLaudo),
+  honorariosPrevistosJG: detail.honorariosPrevistosJG ?? '',
+  honorariosPrevistosPartes: detail.honorariosPrevistosPartes ?? '',
+  pagamentoStatus: detail.pagamentoStatus ?? '',
+  observacoes: detail.observacoes ?? '',
+  observacaoExtra: detail.observacaoExtra ?? '',
+});
+
 const PericiaEditPage = () => {
   const { id = '' } = useParams();
   const navigate = useNavigate();
   const queryClient = useQueryClient();
-  // eslint-disable-next-line @typescript-eslint/no-explicit-any
-  const [form, setForm] = useState<Record<string, any>>({});
+  const [form, setForm] = useState<PericiaEditFormValues>(EMPTY_FORM_VALUES);
   const [isSaving, setIsSaving] = useState(false);
 
   const detailQuery = usePericiaDetailQuery(id);
@@ -43,30 +112,12 @@ const PericiaEditPage = () => {
 
   useEffect(() => {
     if (!detailQuery.data) return;
-    const detail = detailQuery.data;
-    setForm({
-      processoCNJ: detail.processoCNJ ?? '',
-      tipoPericiaId: detail.tipoPericia?.id ?? '',
-      modalidadeId: detail.modalidade?.id ?? '',
-      autorNome: detail.autorNome ?? '',
-      reuNome: detail.reuNome ?? '',
-      periciadoNome: detail.periciadoNome ?? '',
-      juizNome: detail.juizNome ?? '',
-      cidadeId: detail.cidade?.id ?? '',
-      varaId: detail.vara?.id ?? '',
-      statusId: detail.status?.id ?? '',
-      dataNomeacao: toDateInput(detail.dataNomeacao),
-      dataAgendamento: toDateInput(detail.dataAgendamento),
-      horaAgendamento: toTimeInput(detail.horaAgendamento),
-      dataRealizacao: toDateInput(detail.dataRealizacao),
-      dataEnvioLaudo: toDateInput(detail.dataEnvioLaudo),
-      honorariosPrevistosJG: detail.honorariosPrevistosJG ?? '',
-      honorariosPrevistosPartes: detail.honorariosPrevistosPartes ?? '',
-      pagamentoStatus: detail.pagamentoStatus ?? '',
-      observacoes: detail.observacoes ?? '',
-      observacaoExtra: detail.observacaoExtra ?? '',
-    });
+    setForm(normalizePericiaToFormValues(detailQuery.data));
   }, [detailQuery.data]);
+
+  const setFormField = <K extends keyof PericiaEditFormValues>(field: K, value: PericiaEditFormValues[K]) => {
+    setForm((prev) => ({ ...prev, [field]: value }));
+  };
 
   const varasFiltradas = useMemo(() => {
     const cidadeId = form.cidadeId;
@@ -137,11 +188,11 @@ const PericiaEditPage = () => {
             <div className="grid gap-3 md:grid-cols-3">
               <label>
                 <span className={labelClass}>Processo CNJ</span>
-                <input className={inputClass} onChange={(e) => setForm((prev) => ({ ...prev, processoCNJ: e.target.value }))} type="text" value={form.processoCNJ ?? ''} />
+                <input className={inputClass} onChange={(e) => setFormField('processoCNJ', e.target.value)} type="text" value={form.processoCNJ} />
               </label>
               <label>
                 <span className={labelClass}>Tipo de Perícia</span>
-                <select className={inputClass} onChange={(e) => setForm((prev) => ({ ...prev, tipoPericiaId: e.target.value }))} value={form.tipoPericiaId ?? ''}>
+                <select className={inputClass} onChange={(e) => setFormField('tipoPericiaId', e.target.value)} value={form.tipoPericiaId}>
                   <option value="">Selecionar</option>
                   {(tiposQuery.data ?? []).map((item) => (
                     <option key={item.id} value={item.id}>{item.nome}</option>
@@ -150,7 +201,7 @@ const PericiaEditPage = () => {
               </label>
               <label>
                 <span className={labelClass}>Modalidade</span>
-                <select className={inputClass} onChange={(e) => setForm((prev) => ({ ...prev, modalidadeId: e.target.value }))} value={form.modalidadeId ?? ''}>
+                <select className={inputClass} onChange={(e) => setFormField('modalidadeId', e.target.value)} value={form.modalidadeId}>
                   <option value="">Selecionar</option>
                   {(modalidadesQuery.data ?? []).map((item) => (
                     <option key={item.id} value={item.id}>{item.nome}</option>
@@ -163,10 +214,10 @@ const PericiaEditPage = () => {
           <Card className="space-y-3">
             <h2 className="mb-3 font-semibold">Partes</h2>
             <div className="grid gap-3 md:grid-cols-2">
-              <label><span className={labelClass}>Autor</span><input className={inputClass} onChange={(e) => setForm((prev) => ({ ...prev, autorNome: e.target.value }))} type="text" value={form.autorNome ?? ''} /></label>
-              <label><span className={labelClass}>Réu</span><input className={inputClass} onChange={(e) => setForm((prev) => ({ ...prev, reuNome: e.target.value }))} type="text" value={form.reuNome ?? ''} /></label>
-              <label><span className={labelClass}>Periciado</span><input className={inputClass} onChange={(e) => setForm((prev) => ({ ...prev, periciadoNome: e.target.value }))} type="text" value={form.periciadoNome ?? ''} /></label>
-              <label><span className={labelClass}>Juiz</span><input className={inputClass} onChange={(e) => setForm((prev) => ({ ...prev, juizNome: e.target.value }))} type="text" value={form.juizNome ?? ''} /></label>
+              <label><span className={labelClass}>Autor</span><input className={inputClass} onChange={(e) => setFormField('autorNome', e.target.value)} type="text" value={form.autorNome} /></label>
+              <label><span className={labelClass}>Réu</span><input className={inputClass} onChange={(e) => setFormField('reuNome', e.target.value)} type="text" value={form.reuNome} /></label>
+              <label><span className={labelClass}>Periciado</span><input className={inputClass} onChange={(e) => setFormField('periciadoNome', e.target.value)} type="text" value={form.periciadoNome} /></label>
+              <label><span className={labelClass}>Juiz</span><input className={inputClass} onChange={(e) => setFormField('juizNome', e.target.value)} type="text" value={form.juizNome} /></label>
             </div>
           </Card>
 
@@ -178,7 +229,7 @@ const PericiaEditPage = () => {
                 <select
                   className={inputClass}
                   onChange={(e) => setForm((prev) => ({ ...prev, cidadeId: e.target.value, varaId: '' }))}
-                  value={form.cidadeId ?? ''}
+                  value={form.cidadeId}
                 >
                   <option value="">Selecionar</option>
                   {(cidadesQuery.data ?? []).map((item) => (
@@ -188,7 +239,7 @@ const PericiaEditPage = () => {
               </label>
               <label>
                 <span className={labelClass}>Vara</span>
-                <select className={inputClass} onChange={(e) => setForm((prev) => ({ ...prev, varaId: e.target.value }))} value={form.varaId ?? ''}>
+                <select className={inputClass} onChange={(e) => setFormField('varaId', e.target.value)} value={form.varaId}>
                   <option value="">Selecionar</option>
                   {varasFiltradas.map((item) => (
                     <option key={item.id} value={item.id}>{item.nome}</option>
@@ -203,18 +254,18 @@ const PericiaEditPage = () => {
             <div className="grid gap-3 md:grid-cols-3">
               <label>
                 <span className={labelClass}>Status</span>
-                <select className={inputClass} onChange={(e) => setForm((prev) => ({ ...prev, statusId: e.target.value }))} value={form.statusId ?? ''}>
+                <select className={inputClass} onChange={(e) => setFormField('statusId', e.target.value)} value={form.statusId}>
                   <option value="">Selecionar</option>
                   {(statusQuery.data ?? []).map((item) => (
                     <option key={item.id} value={item.id}>{item.nome}</option>
                   ))}
                 </select>
               </label>
-              <label><span className={labelClass}>Data Nomeação</span><input className={inputClass} onChange={(e) => setForm((prev) => ({ ...prev, dataNomeacao: e.target.value }))} type="date" value={form.dataNomeacao ?? ''} /></label>
-              <label><span className={labelClass}>Data Agendamento</span><input className={inputClass} onChange={(e) => setForm((prev) => ({ ...prev, dataAgendamento: e.target.value }))} type="date" value={form.dataAgendamento ?? ''} /></label>
-              <label><span className={labelClass}>Hora Agendamento</span><input className={inputClass} onChange={(e) => setForm((prev) => ({ ...prev, horaAgendamento: e.target.value }))} type="time" value={form.horaAgendamento ?? ''} /></label>
-              <label><span className={labelClass}>Data Realização</span><input className={inputClass} onChange={(e) => setForm((prev) => ({ ...prev, dataRealizacao: e.target.value }))} type="date" value={form.dataRealizacao ?? ''} /></label>
-              <label><span className={labelClass}>Data Envio Laudo</span><input className={inputClass} onChange={(e) => setForm((prev) => ({ ...prev, dataEnvioLaudo: e.target.value }))} type="date" value={form.dataEnvioLaudo ?? ''} /></label>
+              <label><span className={labelClass}>Data Nomeação</span><input className={inputClass} onChange={(e) => setFormField('dataNomeacao', e.target.value)} type="date" value={form.dataNomeacao} /></label>
+              <label><span className={labelClass}>Data Agendamento</span><input className={inputClass} onChange={(e) => setFormField('dataAgendamento', e.target.value)} type="date" value={form.dataAgendamento} /></label>
+              <label><span className={labelClass}>Hora Agendamento</span><input className={inputClass} onChange={(e) => setFormField('horaAgendamento', e.target.value)} type="time" value={form.horaAgendamento} /></label>
+              <label><span className={labelClass}>Data Realização</span><input className={inputClass} onChange={(e) => setFormField('dataRealizacao', e.target.value)} type="date" value={form.dataRealizacao} /></label>
+              <label><span className={labelClass}>Data Envio Laudo</span><input className={inputClass} onChange={(e) => setFormField('dataEnvioLaudo', e.target.value)} type="date" value={form.dataEnvioLaudo} /></label>
             </div>
           </Card>
 
@@ -223,15 +274,15 @@ const PericiaEditPage = () => {
             <div className="grid gap-3 md:grid-cols-3">
               <label>
                 <span className={labelClass}>Honorários previstos JG</span>
-                <input className={inputClass} onChange={(e) => setForm((prev) => ({ ...prev, honorariosPrevistosJG: e.target.value }))} step="0.01" type="number" value={form.honorariosPrevistosJG ?? ''} />
+                <input className={inputClass} onChange={(e) => setFormField('honorariosPrevistosJG', e.target.value)} step="0.01" type="number" value={form.honorariosPrevistosJG} />
               </label>
               <label>
                 <span className={labelClass}>Honorários previstos partes</span>
-                <input className={inputClass} onChange={(e) => setForm((prev) => ({ ...prev, honorariosPrevistosPartes: e.target.value }))} step="0.01" type="number" value={form.honorariosPrevistosPartes ?? ''} />
+                <input className={inputClass} onChange={(e) => setFormField('honorariosPrevistosPartes', e.target.value)} step="0.01" type="number" value={form.honorariosPrevistosPartes} />
               </label>
               <label>
                 <span className={labelClass}>Pagamento status</span>
-                <select className={inputClass} onChange={(e) => setForm((prev) => ({ ...prev, pagamentoStatus: e.target.value }))} value={form.pagamentoStatus ?? ''}>
+                <select className={inputClass} onChange={(e) => setFormField('pagamentoStatus', e.target.value)} value={form.pagamentoStatus}>
                   <option value="">Selecionar</option>
                   <option value="SIM">SIM</option>
                   <option value="NÃO">NÃO</option>
@@ -246,11 +297,11 @@ const PericiaEditPage = () => {
             <div className="grid gap-3">
               <label>
                 <span className={labelClass}>Observações</span>
-                <textarea className={inputClass} onChange={(e) => setForm((prev) => ({ ...prev, observacoes: e.target.value }))} rows={4} value={form.observacoes ?? ''} />
+                <textarea className={inputClass} onChange={(e) => setFormField('observacoes', e.target.value)} rows={4} value={form.observacoes} />
               </label>
               <label>
                 <span className={labelClass}>Observação Extra</span>
-                <textarea className={inputClass} onChange={(e) => setForm((prev) => ({ ...prev, observacaoExtra: e.target.value }))} rows={3} value={form.observacaoExtra ?? ''} />
+                <textarea className={inputClass} onChange={(e) => setFormField('observacaoExtra', e.target.value)} rows={3} value={form.observacaoExtra} />
               </label>
             </div>
           </Card>
