@@ -51,7 +51,7 @@ const ACTION_CARDS: ActionCard[] = [
     title: 'AGENDAR DATA',
     subtitle: 'Pendências de agendamento por cidade',
     badge: 'FILA DE ESPERA',
-    href: '/fila-agendamento',
+    href: '/agendar',
     tone: 'bg-yellow-400 text-yellow-900',
     actionTone: 'bg-yellow-500/90 hover:bg-yellow-600/90 text-yellow-950',
     kpiKey: 'agendar_data',
@@ -71,7 +71,7 @@ const ACTION_CARDS: ActionCard[] = [
     title: 'ENVIAR LAUDOS',
     subtitle: 'Redação e envio de laudos',
     badge: 'PRODUÇÃO',
-    href: '/laudos-pendentes',
+    href: '/laudos',
     tone: 'bg-teal-600 text-white',
     actionTone: 'bg-teal-700/90 hover:bg-teal-800/90',
     kpiKey: 'enviar_laudos',
@@ -91,7 +91,7 @@ const ACTION_CARDS: ActionCard[] = [
     title: 'A RECEBER',
     subtitle: 'Processos entregues aguardando pagamento (Carteira)',
     badge: 'FINANCEIRO',
-    href: '/cobranca',
+    href: '/financeiro/cobranca',
     tone: 'bg-green-600 text-white',
     actionTone: 'bg-green-700/90 hover:bg-green-800/90',
     kpiKey: 'a_receber',
@@ -269,7 +269,7 @@ const DashboardPage = () => {
             <SummaryBlock
               title="Cobranças pendentes"
               count={cobrancasPendentes}
-              href="/cobranca"
+              href="/financeiro/cobranca"
               description="Casos com pagamento pendente há mais de 60 dias."
             />
           </div>

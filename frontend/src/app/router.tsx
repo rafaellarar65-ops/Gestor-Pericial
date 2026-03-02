@@ -1,5 +1,5 @@
 import { lazy, Suspense, type ComponentType, type LazyExoticComponent } from 'react';
-import { createBrowserRouter } from 'react-router-dom';
+import { Navigate, createBrowserRouter } from 'react-router-dom';
 import { ProtectedRoute } from '@/app/protected-route';
 import { AppRouteError } from '@/components/ui/app-error';
 import { LoadingState } from '@/components/ui/state';
@@ -76,6 +76,15 @@ const withSuspense = (Element: LazyExoticComponent<ComponentType>) => (
   </Suspense>
 );
 
+const legacyRouteRedirects = [
+  { from: '/fila-agendamento', to: '/agendar' },
+  { from: '/laudos-pendentes', to: '/laudos' },
+  { from: '/base-conhecimento', to: '/conhecimento' },
+  { from: '/cobranca', to: '/financeiro/cobranca' },
+  { from: '/relatorios-financeiros', to: '/relatorios' },
+  { from: '/inbox-email', to: '/email-inbox' },
+] as const;
+
 export const router = createBrowserRouter([
   { path: '/login', handle: { crumb: 'Login' }, element: withSuspense(pages.login), errorElement: <AppRouteError /> },
   {
@@ -94,21 +103,21 @@ export const router = createBrowserRouter([
           { path: '/telepericias', handle: { crumb: 'Teleperícias' }, element: withSuspense(pages.telepericias) },
           { path: '/esclarecimentos', handle: { crumb: 'Esclarecimentos' }, element: withSuspense(pages.esclarecimentos) },
           { path: '/tarefas', handle: { crumb: 'Tarefas Operacionais' }, element: withSuspense(pages.tarefas) },
-          { path: '/fila-agendamento', handle: { crumb: 'Fila de Agendamento' }, element: withSuspense(pages.filaAgendamento) },
+          { path: '/agendar', handle: { crumb: 'Agendar em Lote' }, element: withSuspense(pages.filaAgendamento) },
           { path: '/pericias', handle: { crumb: 'Perícias' }, element: withSuspense(pages.pericias) },
           { path: '/pericias/nova', handle: { crumb: 'Nova Perícia' }, element: withSuspense(pages.periciaCreate) },
           { path: '/pericias/:id/editar', handle: { crumb: 'Editar Perícia' }, element: withSuspense(pages.periciaEdit) },
           { path: '/pericias/:id', handle: { crumb: 'Detalhe da Perícia' }, element: withSuspense(pages.periciaDetail) },
-          { path: '/laudos-pendentes', handle: { crumb: 'Laudos Pendentes' }, element: withSuspense(pages.laudosPendentes) },
+          { path: '/laudos', handle: { crumb: 'Laudos Pendentes' }, element: withSuspense(pages.laudosPendentes) },
           { path: '/laudo-v2', handle: { crumb: 'Laudo V2' }, element: withSuspense(pages.laudoV2) },
           { path: '/laudo-inteligente/:id', handle: { crumb: 'Laudo Inteligente' }, element: withSuspense(pages.laudoInteligente) },
           { path: '/manobras', handle: { crumb: 'Manobras' }, element: withSuspense(pages.manobras) },
-          { path: '/base-conhecimento', handle: { crumb: 'Base de Conhecimento' }, element: withSuspense(pages.baseConhecimento) },
+          { path: '/conhecimento', handle: { crumb: 'Base de Conhecimento' }, element: withSuspense(pages.baseConhecimento) },
           { path: '/financeiro', handle: { crumb: 'Financeiro' }, element: withSuspense(pages.financeiro) },
           { path: '/analytics-calendar', handle: { crumb: 'Analytics Calendar' }, element: withSuspense(pages.analyticsCalendar) },
-          { path: '/cobranca', handle: { crumb: 'Cobrança' }, element: withSuspense(pages.cobranca) },
+          { path: '/financeiro/cobranca', handle: { crumb: 'Cobrança' }, element: withSuspense(pages.cobranca) },
           { path: '/importacoes', handle: { crumb: 'Importações' }, element: withSuspense(pages.importacoes) },
-          { path: '/relatorios-financeiros', handle: { crumb: 'Relatórios Financeiros' }, element: withSuspense(pages.relatorios) },
+          { path: '/relatorios', handle: { crumb: 'Relatórios Financeiros' }, element: withSuspense(pages.relatorios) },
           { path: '/pagamentos-nao-vinculados', handle: { crumb: 'Pagamentos não vinculados' }, element: withSuspense(pages.pagamentosNaoVinculados) },
           { path: '/despesas', handle: { crumb: 'Despesas' }, element: withSuspense(pages.despesas) },
           { path: '/conciliacao', handle: { crumb: 'Conciliação' }, element: withSuspense(pages.conciliacao) },
@@ -117,7 +126,12 @@ export const router = createBrowserRouter([
           { path: '/advogados', handle: { crumb: 'Advogados' }, element: withSuspense(pages.advogados) },
           { path: '/comunicacao', handle: { crumb: 'Comunicação' }, element: withSuspense(pages.comunicacao) },
           { path: '/email-gerador', handle: { crumb: 'Email Gerador' }, element: withSuspense(pages.emailGerador) },
-          { path: '/inbox-email', handle: { crumb: 'Inbox de Email' }, element: withSuspense(pages.inbox) },
+          { path: '/email-inbox', handle: { crumb: 'Inbox de Email' }, element: withSuspense(pages.inbox) },
+          ...legacyRouteRedirects.map(({ from, to }) => ({
+            path: from,
+            handle: { crumb: 'Redirecionando' },
+            element: <Navigate replace to={to} />,
+          })),
           { path: '/configuracoes', handle: { crumb: 'Configurações' }, element: withSuspense(pages.configuracoes) },
           { path: '/integrations/google-calendar', handle: { crumb: 'Google Calendar' }, element: withSuspense(pages.googleCalendarIntegrations) },
           { path: '/documentacao', handle: { crumb: 'Documentação' }, element: withSuspense(pages.documentacao) },
