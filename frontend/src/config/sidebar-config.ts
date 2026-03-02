@@ -49,6 +49,7 @@ export const sidebarSections: SidebarSection[] = [
       { label: 'Análise Financeira', href: '/relatorios-financeiros' },
       { label: 'Analytics Calendar', href: '/analytics-calendar' },
       { label: 'Pagamentos não vinculados', href: '/pagamentos-nao-vinculados' },
+      { label: 'Conciliação', href: '/conciliacao' },
       { label: 'Despesas', href: '/despesas' },
     ],
   },
