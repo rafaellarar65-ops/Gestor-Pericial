@@ -9,13 +9,31 @@ type AuthState = {
   logout: () => void;
 };
 
+const persistAuthToken = (token: string): void => {
+  if (typeof window !== 'undefined') {
+    localStorage.setItem('auth-token', token);
+  }
+};
+
+const clearAuthToken = (): void => {
+  if (typeof window !== 'undefined') {
+    localStorage.removeItem('auth-token');
+  }
+};
+
 export const useAuthStore = create<AuthState>()(
   persist(
     (set) => ({
       user: null,
       tokens: null,
-      setSession: (payload) => set({ user: payload.user, tokens: payload.tokens }),
-      logout: () => set({ user: null, tokens: null }),
+      setSession: (payload) => {
+        persistAuthToken(payload.tokens.accessToken);
+        set({ user: payload.user, tokens: payload.tokens });
+      },
+      logout: () => {
+        clearAuthToken();
+        set({ user: null, tokens: null });
+      },
     }),
     { name: 'gp-auth-store' },
   ),
