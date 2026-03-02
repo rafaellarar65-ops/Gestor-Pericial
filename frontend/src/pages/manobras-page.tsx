@@ -47,6 +47,7 @@ export default function ManobrasPag() {
   const [form, setForm] = useState<FormData>(INITIAL_FORM);
   const [activeCategory, setActiveCategory] = useState<string>('ALL');
   const [expandedIds, setExpandedIds] = useState<Set<string>>(new Set());
+  const [search, setSearch] = useState('');
 
   const { data: maneuvers = [], isLoading, isError, error } = useQuery<PhysicalManeuver[]>({
     queryKey: ['maneuvers'],
@@ -92,10 +93,38 @@ export default function ManobrasPag() {
     });
   };
 
-  const filtered =
-    activeCategory === 'ALL'
-      ? maneuvers
-      : maneuvers.filter((m) => m.category === activeCategory);
+  const handleCopyToReport = async (maneuver: PhysicalManeuver) => {
+    const fallback = 'Não informado';
+    const content = [
+      `MANOBRA: ${maneuver.name?.trim() || fallback}`,
+      `PROCEDIMENTO: ${maneuver.procedure?.trim() || fallback}`,
+      `ACHADO: ${maneuver.summary?.trim() || fallback}`,
+      `EVIDÊNCIA: ${maneuver.evidence?.trim() || fallback}`,
+    ].join('\n');
+
+    try {
+      await navigator.clipboard.writeText(content);
+      toast.success('Texto copiado para o laudo.');
+    } catch {
+      toast.error('Não foi possível copiar o texto.');
+    }
+  };
+
+  const normalizedSearch = search.trim().toLowerCase();
+  const filtered = maneuvers.filter((maneuver) => {
+    const matchesCategory = activeCategory === 'ALL' || maneuver.category === activeCategory;
+    if (!matchesCategory) return false;
+    if (!normalizedSearch) return true;
+
+    const searchableFields = [
+      maneuver.name,
+      maneuver.summary,
+      maneuver.procedure,
+      ...(maneuver.tags ?? []),
+    ];
+
+    return searchableFields.some((field) => field?.toLowerCase().includes(normalizedSearch));
+  });
 
   const categoryLabel = (cat?: string) =>
     CATEGORIES.find((c) => c.value === cat)?.label ?? cat ?? 'Geral';
@@ -132,6 +161,14 @@ export default function ManobrasPag() {
       </div>
 
       <div className="mx-auto max-w-6xl px-6 py-6">
+        <div className="mb-4">
+          <Input
+            value={search}
+            onChange={(e) => setSearch(e.target.value)}
+            placeholder="Buscar por nome, resumo, tags ou procedimento..."
+          />
+        </div>
+
         {/* Category filter */}
         <div className="mb-6 flex flex-wrap gap-2">
           <button
@@ -189,6 +226,18 @@ export default function ManobrasPag() {
                     {maneuver.summary && (
                       <p className="text-sm leading-relaxed text-gray-600">{maneuver.summary}</p>
                     )}
+
+                    <div className="mt-4">
+                      <Button
+                        type="button"
+                        variant="outline"
+                        size="sm"
+                        onClick={() => handleCopyToReport(maneuver)}
+                        className="w-full"
+                      >
+                        Copiar para Laudo
+                      </Button>
+                    </div>
                   </div>
 
                   {maneuver.procedure && (
