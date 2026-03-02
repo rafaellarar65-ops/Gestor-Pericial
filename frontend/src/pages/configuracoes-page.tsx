@@ -1,18 +1,18 @@
 import { useEffect, useState } from 'react';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
-import { Plus, Pencil, Trash2, Building2, Scale, Tag, LayoutGrid, Settings, SlidersHorizontal, Save } from 'lucide-react';
+import { Plus, Pencil, Trash2, Building2, Scale, Tag, LayoutGrid, Settings, SlidersHorizontal, Save, Users, ListChecks, PlugZap } from 'lucide-react';
 import { toast } from 'sonner';
 import { Button } from '@/components/ui/button';
 import { Card } from '@/components/ui/card';
 import { Input } from '@/components/ui/input';
 import { Dialog } from '@/components/ui/dialog';
 import { LoadingState, EmptyState, ErrorState } from '@/components/ui/state';
-import { configService } from '@/services/config-service';
-import type { ConfigItem, DashboardSystemSettings } from '@/types/api';
+import { configService, getResourceEndpoint } from '@/services/config-service';
+import type { ConfigItem, DashboardSystemSettings, IntegrationSettings, UserRole } from '@/types/api';
 
-type Resource = 'cidades' | 'varas' | 'status' | 'tipos-pericia' | 'modalidades' | 'sistema';
+type Resource = 'cidades' | 'varas' | 'status' | 'tipos-pericia' | 'modalidades' | 'sistema' | 'usuarios' | 'regras' | 'integracoes';
 
-type FieldMeta = { key: string; label: string; required?: boolean };
+type FieldMeta = { key: string; label: string; required?: boolean; type?: 'text' | 'select' | 'checkbox'; options?: Array<{ label: string; value: string }> };
 
 type ResourceMeta = {
   label: string;
@@ -59,6 +59,41 @@ const RESOURCE_CONFIG: Record<Resource, ResourceMeta> = {
     icon: <Settings className="h-4 w-4" />,
     fields: [{ key: 'nome', label: 'Nome', required: true }],
   },
+  usuarios: {
+    label: 'Usuários',
+    icon: <Users className="h-4 w-4" />,
+    fields: [
+      { key: 'nome', label: 'Nome', required: true },
+      { key: 'email', label: 'E-mail', required: true },
+      {
+        key: 'role',
+        label: 'Perfil',
+        required: true,
+        type: 'select',
+        options: [
+          { label: 'ADMIN', value: 'ADMIN' },
+          { label: 'ASSISTANT', value: 'ASSISTANT' },
+        ],
+      },
+      { key: 'ativo', label: 'Ativo', type: 'checkbox' },
+    ],
+  },
+  regras: {
+    label: 'Regras',
+    icon: <ListChecks className="h-4 w-4" />,
+    fields: [
+      { key: 'nome', label: 'Nome', required: true },
+      { key: 'descricao', label: 'Descrição' },
+      { key: 'campoAlvo', label: 'Campo alvo', required: true },
+      { key: 'operador', label: 'Operador', required: true },
+      { key: 'valor', label: 'Valor', required: true },
+      { key: 'acao', label: 'Ação', required: true },
+    ],
+  },
+  integracoes: {
+    label: 'Integrações',
+    icon: <PlugZap className="h-4 w-4" />,
+  },
   sistema: {
     label: 'Configurações do Sistema',
     icon: <SlidersHorizontal className="h-4 w-4" />,
@@ -78,15 +113,17 @@ const Page = () => {
   const [activeTab, setActiveTab] = useState<Resource>('cidades');
   const [dialogOpen, setDialogOpen] = useState(false);
   const [editing, setEditing] = useState<ConfigItem | null>(null);
-  const [form, setForm] = useState<Record<string, string>>({});
+  const [form, setForm] = useState<Record<string, string | boolean>>({});
 
   const cfg = RESOURCE_CONFIG[activeTab];
   const isSystemTab = activeTab === 'sistema';
+  const isIntegrationsTab = activeTab === 'integracoes';
+  const resourceQueryKey = ['config', activeTab, getResourceEndpoint(activeTab)];
 
   const { data: items = [], isLoading, isError } = useQuery<ConfigItem[]>({
-    queryKey: ['config', activeTab],
+    queryKey: resourceQueryKey,
     queryFn: () => configService.list(activeTab),
-    enabled: !isSystemTab,
+    enabled: !isSystemTab && !isIntegrationsTab,
   });
 
   const { data: dashboardSettings, isLoading: isLoadingSystem } = useQuery({
@@ -95,7 +132,14 @@ const Page = () => {
     enabled: isSystemTab,
   });
 
+  const { data: integrations, isLoading: isLoadingIntegrations } = useQuery({
+    queryKey: ['config', 'integracoes', getResourceEndpoint('integracoes')],
+    queryFn: () => configService.getIntegrations(),
+    enabled: isIntegrationsTab,
+  });
+
   const [systemForm, setSystemForm] = useState<Record<string, string>>({});
+  const [integrationsForm, setIntegrationsForm] = useState<Record<string, string>>({});
 
   const fillSystemForm = (settings: DashboardSystemSettings) => {
     setSystemForm({
@@ -112,10 +156,18 @@ const Page = () => {
     });
   };
 
+  const fillIntegrationsForm = (settings: IntegrationSettings) => {
+    setIntegrationsForm({
+      smtp: settings.smtp ?? '',
+      whatsappApi: settings.whatsappApi ?? '',
+      googleCalendarLink: settings.googleCalendarLink ?? '',
+    });
+  };
+
   const createMutation = useMutation({
     mutationFn: (payload: Record<string, unknown>) => configService.create(activeTab, payload),
     onSuccess: () => {
-      void queryClient.invalidateQueries({ queryKey: ['config', activeTab] });
+      void queryClient.invalidateQueries({ queryKey: resourceQueryKey });
       toast.success('Item criado!');
       closeDialog();
     },
@@ -125,7 +177,7 @@ const Page = () => {
   const updateMutation = useMutation({
     mutationFn: ({ id, payload }: { id: string; payload: Record<string, unknown> }) => configService.update(activeTab, id, payload),
     onSuccess: () => {
-      void queryClient.invalidateQueries({ queryKey: ['config', activeTab] });
+      void queryClient.invalidateQueries({ queryKey: resourceQueryKey });
       toast.success('Item atualizado!');
       closeDialog();
     },
@@ -143,10 +195,20 @@ const Page = () => {
     onError: () => toast.error('Erro ao salvar configurações do sistema.'),
   });
 
+  const updateIntegrationsMutation = useMutation({
+    mutationFn: (payload: IntegrationSettings) => configService.updateIntegrations(payload),
+    onSuccess: (saved) => {
+      fillIntegrationsForm(saved);
+      void queryClient.invalidateQueries({ queryKey: ['config', 'integracoes', getResourceEndpoint('integracoes')] });
+      toast.success('Integrações atualizadas.');
+    },
+    onError: () => toast.error('Erro ao salvar integrações.'),
+  });
+
   const deleteMutation = useMutation({
     mutationFn: (id: string) => configService.remove(activeTab, id),
     onSuccess: () => {
-      void queryClient.invalidateQueries({ queryKey: ['config', activeTab] });
+      void queryClient.invalidateQueries({ queryKey: resourceQueryKey });
       toast.success('Item removido!');
     },
     onError: () => toast.error('Erro ao remover.'),
@@ -155,14 +217,22 @@ const Page = () => {
   function openCreate() {
     if (!cfg.fields) return;
     setEditing(null);
-    setForm(Object.fromEntries(cfg.fields.map((f) => [f.key, ''])));
+    setForm(Object.fromEntries(cfg.fields.map((f) => [f.key, f.type === 'checkbox' ? false : ''])));
     setDialogOpen(true);
   }
 
   function openEdit(item: ConfigItem) {
     if (!cfg.fields) return;
     setEditing(item);
-    setForm(Object.fromEntries(cfg.fields.map((f) => [f.key, ((item as Record<string, unknown>)[f.key] as string) ?? ''])));
+    setForm(
+      Object.fromEntries(
+        cfg.fields.map((f) => {
+          const value = (item as Record<string, unknown>)[f.key];
+          if (f.type === 'checkbox') return [f.key, Boolean(value)];
+          return [f.key, (value as string) ?? ''];
+        }),
+      ),
+    );
     setDialogOpen(true);
   }
 
@@ -176,6 +246,10 @@ const Page = () => {
     e.preventDefault();
     const payload: Record<string, unknown> = {};
     for (const [k, v] of Object.entries(form)) {
+      if (typeof v === 'boolean') {
+        payload[k] = v;
+        continue;
+      }
       if (v) payload[k] = v;
     }
     if (editing) updateMutation.mutate({ id: editing.id, payload });
@@ -184,12 +258,17 @@ const Page = () => {
 
   const isPending = createMutation.isPending || updateMutation.isPending;
 
-
   useEffect(() => {
     if (isSystemTab && dashboardSettings && Object.keys(systemForm).length === 0) {
       fillSystemForm(dashboardSettings);
     }
   }, [isSystemTab, dashboardSettings, systemForm]);
+
+  useEffect(() => {
+    if (isIntegrationsTab && integrations && Object.keys(integrationsForm).length === 0) {
+      fillIntegrationsForm(integrations);
+    }
+  }, [isIntegrationsTab, integrations, integrationsForm]);
 
   const submitSystemSettings = () => {
     const payload: DashboardSystemSettings = {
@@ -211,6 +290,14 @@ const Page = () => {
       },
     };
     updateSystemMutation.mutate(payload);
+  };
+
+  const submitIntegrationsSettings = () => {
+    updateIntegrationsMutation.mutate({
+      smtp: integrationsForm.smtp ?? '',
+      whatsappApi: integrationsForm.whatsappApi ?? '',
+      googleCalendarLink: integrationsForm.googleCalendarLink ?? '',
+    });
   };
 
   return (
@@ -308,6 +395,30 @@ const Page = () => {
             </Button>
           </div>
         </div>
+      ) : isIntegrationsTab ? (
+        <div className="space-y-4">
+          {isLoadingIntegrations ? <LoadingState /> : null}
+          <Card className="space-y-3 p-4">
+            <h2 className="text-base font-semibold">Integrações</h2>
+            <p className="text-xs text-muted-foreground">Configure os provedores integrados da plataforma.</p>
+            {[
+              ['smtp', 'SMTP'],
+              ['whatsappApi', 'WhatsApp API'],
+              ['googleCalendarLink', 'Link do Google Calendar'],
+            ].map(([key, label]) => (
+              <div key={key}>
+                <label className="mb-1 block text-sm font-medium">{label}</label>
+                <Input value={integrationsForm[key] ?? ''} onChange={(e) => setIntegrationsForm((prev) => ({ ...prev, [key]: e.target.value }))} />
+              </div>
+            ))}
+          </Card>
+          <div className="flex justify-end">
+            <Button onClick={submitIntegrationsSettings} disabled={updateIntegrationsMutation.isPending}>
+              <Save className="mr-1 h-4 w-4" />
+              {updateIntegrationsMutation.isPending ? 'Salvando...' : 'Salvar integrações'}
+            </Button>
+          </div>
+        </div>
       ) : (
         <>
           <div className="flex items-center justify-between">
@@ -343,7 +454,11 @@ const Page = () => {
                       <tr key={item.id} className="border-b hover:bg-slate-50">
                         {cfg.fields?.map((f) => (
                           <td key={f.key} className="px-3 py-2">
-                            {((item as Record<string, unknown>)[f.key] as string) ?? '—'}
+                            {f.key === 'ativo'
+                              ? (item as Record<string, unknown>)[f.key]
+                                ? 'Ativo'
+                                : 'Inativo'
+                              : String((item as Record<string, unknown>)[f.key] ?? '—')}
                           </td>
                         ))}
                         <td className="px-3 py-2 text-right">
@@ -379,7 +494,32 @@ const Page = () => {
                   <label className="mb-1 block text-sm font-medium">
                     {f.label} {f.required && <span className="text-red-500">*</span>}
                   </label>
-                  <Input value={form[f.key] ?? ''} onChange={(e) => setForm((prev) => ({ ...prev, [f.key]: e.target.value }))} required={f.required} />
+                  {f.type === 'select' ? (
+                    <select
+                      className="h-10 w-full rounded-md border bg-background px-3 py-2 text-sm"
+                      value={(form[f.key] as UserRole | '') ?? ''}
+                      onChange={(e) => setForm((prev) => ({ ...prev, [f.key]: e.target.value as UserRole }))}
+                      required={f.required}
+                    >
+                      <option value="">Selecione</option>
+                      {f.options?.map((opt) => (
+                        <option key={opt.value} value={opt.value}>
+                          {opt.label}
+                        </option>
+                      ))}
+                    </select>
+                  ) : f.type === 'checkbox' ? (
+                    <label className="flex items-center gap-2 text-sm">
+                      <input
+                        type="checkbox"
+                        checked={Boolean(form[f.key])}
+                        onChange={(e) => setForm((prev) => ({ ...prev, [f.key]: e.target.checked }))}
+                      />
+                      Usuário ativo
+                    </label>
+                  ) : (
+                    <Input value={String(form[f.key] ?? '')} onChange={(e) => setForm((prev) => ({ ...prev, [f.key]: e.target.value }))} required={f.required} />
+                  )}
                 </div>
               ))}
               <div className="flex justify-end gap-2 pt-1">
