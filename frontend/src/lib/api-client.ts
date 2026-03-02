@@ -79,8 +79,11 @@ const applyTokens = (tokens: AuthTokens | null): void => {
 
 apiClient.interceptors.request.use((config) => {
   const { tokens, user } = useAuthStore.getState();
-  if (tokens?.accessToken) {
-    config.headers.Authorization = `Bearer ${tokens.accessToken}`;
+  const persistedToken = typeof window === 'undefined' ? null : localStorage.getItem('auth-token');
+  const accessToken = tokens?.accessToken ?? persistedToken;
+
+  if (accessToken) {
+    config.headers.Authorization = `Bearer ${accessToken}`;
   }
 
   if (!config.headers['x-tenant-id']) {
