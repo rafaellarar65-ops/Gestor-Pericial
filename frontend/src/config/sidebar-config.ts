@@ -24,7 +24,7 @@ export const sidebarSections: SidebarSection[] = [
     items: [
       { label: 'Nomeações', href: '/nomeacoes' },
       { label: 'Tarefas', href: '/tarefas' },
-      { label: 'Fila de Agendamento', href: '/fila-agendamento' },
+      { label: 'Fila de Agendamento', href: '/agendar' },
       { label: 'Teleperícias', href: '/telepericias' },
       { label: 'Esclarecimentos', href: '/esclarecimentos' },
       { label: 'Agenda', href: '/agenda' },
@@ -35,18 +35,18 @@ export const sidebarSections: SidebarSection[] = [
   {
     section: 'CENTRAL TÉCNICA',
     items: [
-      { label: 'Elaboração de Laudos', href: '/laudos-pendentes' },
-      { label: 'Base de Conhecimento', href: '/base-conhecimento' },
+      { label: 'Elaboração de Laudos', href: '/laudos' },
+      { label: 'Base de Conhecimento', href: '/conhecimento' },
       { label: 'Banco de Manobras', href: '/manobras' },
     ],
   },
   {
     section: 'FINANCEIRO',
     items: [
-      { label: 'Central de Cobrança', href: '/cobranca' },
+      { label: 'Central de Cobrança', href: '/financeiro/cobranca' },
       { label: 'Importações', href: '/importacoes' },
       { label: 'Recebimentos', href: '/financeiro' },
-      { label: 'Análise Financeira', href: '/relatorios-financeiros' },
+      { label: 'Análise Financeira', href: '/relatorios' },
       { label: 'Analytics Calendar', href: '/analytics-calendar' },
       { label: 'Pagamentos não vinculados', href: '/pagamentos-nao-vinculados' },
       { label: 'Conciliação', href: '/conciliacao' },
@@ -57,7 +57,7 @@ export const sidebarSections: SidebarSection[] = [
     section: 'COMUNICAÇÃO',
     items: [
       { label: 'Central de Comunicação', href: '/comunicacao' },
-      { label: 'Inbox de Email', href: '/inbox-email' },
+      { label: 'Inbox de Email', href: '/email-inbox' },
       { label: 'Advogados', href: '/advogados' },
     ],
   },
