@@ -11,14 +11,7 @@ export default defineConfig(({ mode }) => {
       host: '0.0.0.0',
       port: 3000,
       strictPort: true,
-      // @ts-ignore - Disable host check for Emergent preview
-      disableHostCheck: true,
-      allowedHosts: [
-        'all',
-        '.preview.emergentcf.cloud',
-        'app-publisher-57.cluster-10.preview.emergentcf.cloud',
-        'localhost'
-      ],
+      allowedHosts: true,
       proxy: {
         '/api': {
           target: 'http://localhost:8001',
