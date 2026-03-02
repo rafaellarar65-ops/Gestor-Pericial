@@ -283,14 +283,27 @@ export type TeleSlot = {
 export type ConfigItem = {
   id: string;
   nome: string;
+  email?: string;
+  role?: UserRole;
   codigo?: string;
   uf?: string;
   ativo?: boolean;
   cor?: string;
   sigla?: string;
   esfera?: string;
+  descricao?: string;
+  campoAlvo?: string;
+  operador?: string;
+  valor?: string;
+  acao?: string;
   cidadeId?: string;
   tribunalId?: string;
+};
+
+export type IntegrationSettings = {
+  smtp?: string;
+  whatsappApi?: string;
+  googleCalendarLink?: string;
 };
 
 export type DashboardSystemSettings = {
