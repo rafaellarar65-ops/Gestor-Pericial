@@ -19,6 +19,7 @@ type AgendaRow = {
   fim: string;
   local: string;
   status: Exclude<AgendaStatus, 'todos'>;
+  syncStatus: 'PENDING' | 'SYNCED' | 'WARNING' | 'CONFLICT' | 'ERROR';
 };
 
 const getValue = (item: Record<string, string | number | undefined>, keys: string[]): string => {
@@ -44,6 +45,14 @@ const inferStatus = (item: Record<string, string | number | undefined>): AgendaR
   return 'agendado';
 };
 
+
+const syncIndicator = (status: AgendaRow['syncStatus']) => {
+  if (status === 'SYNCED') return '✅';
+  if (status === 'CONFLICT') return '🔀';
+  if (status === 'WARNING' || status === 'ERROR') return '⚠️';
+  return '⏳';
+};
+
 const mapAgendaRow = (item: Record<string, string | number | undefined>, index: number): AgendaRow => ({
   id: getValue(item, ['id']) || `agenda-${index}`,
   titulo: getValue(item, ['title', 'titulo']) || 'Evento sem título',
@@ -52,6 +61,7 @@ const mapAgendaRow = (item: Record<string, string | number | undefined>, index: 
   fim: getValue(item, ['endAt', 'fim']),
   local: getValue(item, ['location', 'local']) || 'Não informado',
   status: inferStatus(item),
+  syncStatus: (getValue(item, ['syncStatus', 'sync_status']).toUpperCase() as AgendaRow['syncStatus']) || 'PENDING',
 });
 
 const usageTone = (value: number) => (value > 95 ? 'bg-red-500' : value > 85 ? 'bg-amber-500' : 'bg-emerald-500');
