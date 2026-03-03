@@ -15,6 +15,7 @@ import {
   IsIn,
   IsInt,
   IsNotEmpty,
+  IsObject,
   IsOptional,
   IsString,
   IsUUID,
@@ -353,6 +354,11 @@ export class BatchScheduleMetadataDto {
 }
 
 export class BatchScheduleDto {
+  @ApiPropertyOptional({ type: BatchScheduleMetadataDto })
+  @IsOptional()
+  @IsObject()
+  metadata?: BatchScheduleMetadataDto;
+
   @ApiProperty({ type: [BatchScheduleItemDto] })
   @IsArray()
   @ValidateNested({ each: true })

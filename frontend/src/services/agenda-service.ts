@@ -86,6 +86,20 @@ type SchedulingBatchResponse = {
   items: SchedulingBatchItem[];
 };
 
+export type ScheduleLotPayload = {
+  items: Array<{ periciaId: string; startAt: string }>;
+  metadata: {
+    cityNames: string[];
+    date: string;
+    startTime: string;
+    durationMinutes: number;
+    intervalMinutes: number;
+    location?: string;
+    modalidade?: string;
+    source: 'CSV' | 'WORD';
+  };
+};
+
 export const agendaService = {
   listEvents: async (): Promise<AgendaEvent[]> => {
     const { data } = await apiClient.get<AgendaEvent[]>('/agenda/events');
@@ -230,5 +244,22 @@ export const agendaService = {
       params: { includeRoute },
     });
     return data;
+  },
+
+  scheduleLot: async (payload: ScheduleLotPayload): Promise<void> => {
+    await apiClient.post('/agenda/batch-scheduling', {
+      metadata: payload.metadata,
+      items: payload.items.map((item) => ({
+        periciaId: item.periciaId,
+        title: 'Perícia agendada em lote',
+        type: 'PERICIA',
+        startAt: item.startAt,
+      })),
+    });
+  },
+
+  listSchedulingBatches: async (): Promise<SchedulingBatchHistory[]> => {
+    const { data } = await apiClient.get<SchedulingBatchHistory[]>('/agenda/batch-scheduling');
+    return Array.isArray(data) ? data : [];
   },
 };
