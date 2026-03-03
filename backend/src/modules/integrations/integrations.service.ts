@@ -1,4 +1,4 @@
-import { HttpException, HttpStatus, Injectable } from '@nestjs/common';
+import { HttpException, HttpStatus, Injectable, Logger } from '@nestjs/common';
 import { CalendarSyncDirection, CalendarSyncMode, CalendarSyncStatus, CalendarSyncType, CnjSyncStatus, Prisma } from '@prisma/client';
 import { calendar_v3, google } from 'googleapis';
 import { RequestContextService } from '../../common/request-context.service';
@@ -22,6 +22,7 @@ type AgendaEntitySnapshot = Record<string, unknown>;
 
 @Injectable()
 export class IntegrationsService {
+  private readonly logger = new Logger(IntegrationsService.name);
   private readonly cache = new Map<string, { expiresAt: number; value: Record<string, unknown> }>();
   private readonly rlMap = new Map<string, { windowStart: number; count: number }>();
   private readonly googleOAuthClient: InstanceType<typeof google.auth.OAuth2>;
@@ -229,9 +230,16 @@ export class IntegrationsService {
 
   async runGoogleSync(dto: GoogleSyncRunDto) {
     const tenantId = this.context.get('tenantId') ?? '';
-    const integration = await this.prisma.calendarIntegration.findUnique({ where: { tenantId_provider: { tenantId, provider: 'GOOGLE' } } });
-    if (!integration?.active) {
-      throw new HttpException('Integração Google Calendar não está ativa.', HttpStatus.BAD_REQUEST);
+    return this.runGoogleSyncForTenant(tenantId, dto.direction);
+  }
+
+  async processGoogleWebhookNotification(headers: GoogleWebhookHeaders, payload: Record<string, unknown>) {
+    const parsedHeaders = this.normalizeWebhookHeaders(headers);
+    const identified = await this.identifyGoogleWebhookTarget(parsedHeaders);
+
+    if (!identified) {
+      this.logger.warn(`Webhook Google ignorado: canal não reconhecido. channelId=${parsedHeaders.channelId ?? 'n/a'}`);
+      return { accepted: true, queued: false, ignored: true };
     }
 
     const [events, tasks] = await Promise.all([
@@ -335,7 +343,8 @@ export class IntegrationsService {
       else synced += 1;
     }
 
-    await this.prisma.calendarIntegration.update({ where: { id: integration.id }, data: { lastSyncAt: new Date() } });
+    const shouldSync = ['exists', 'not_exists', 'update', 'sync'].includes(parsedHeaders.resourceState);
+    let jobId: string | null = null;
 
     return {
       synced,
@@ -786,6 +795,10 @@ export class IntegrationsService {
 
   private setCache(key: string, value: Record<string, unknown>, ttlMs: number) {
     this.cache.set(key, { value, expiresAt: Date.now() + ttlMs });
+  }
+
+  private toJson(value: unknown): Prisma.InputJsonValue {
+    return value as Prisma.InputJsonValue;
   }
 
   private assertRateLimit(provider: string, windowSeconds: number, max: number) {

@@ -1,5 +1,6 @@
 import { Body, Controller, Delete, Get, Param, Patch, Post, Query } from '@nestjs/common';
 import { ApiBearerAuth, ApiOperation, ApiTags } from '@nestjs/swagger';
+import { Public } from '../../common/decorators/public.decorator';
 import {
   DatajudCnjDto,
   DatajudSyncDto,
@@ -67,6 +68,33 @@ export class IntegrationsController {
   @Post('google/sync')
   runGoogleSync(@Body() dto: GoogleSyncRunDto) {
     return this.service.runGoogleSync(dto);
+  }
+
+  @Public()
+  @Post('google/webhook')
+  @ApiOperation({ summary: 'Webhook público do Google Calendar para notificações de mudanças de recurso.' })
+  googleWebhook(
+    @Headers('x-goog-channel-id') channelId: string | undefined,
+    @Headers('x-goog-resource-id') resourceId: string | undefined,
+    @Headers('x-goog-resource-state') resourceState: string | undefined,
+    @Headers('x-goog-resource-uri') resourceUri: string | undefined,
+    @Headers('x-goog-message-number') messageNumber: string | undefined,
+    @Headers('x-goog-channel-expiration') channelExpiration: string | undefined,
+    @Headers('x-goog-channel-token') channelToken: string | undefined,
+    @Body() payload: Record<string, unknown>,
+  ) {
+    return this.service.processGoogleWebhookNotification(
+      {
+        channelId,
+        resourceId,
+        resourceState,
+        resourceUri,
+        messageNumber,
+        channelExpiration,
+        channelToken,
+      },
+      payload,
+    );
   }
 
   @Get('google/sync-audit')
