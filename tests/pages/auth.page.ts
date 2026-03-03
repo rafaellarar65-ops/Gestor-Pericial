@@ -5,13 +5,13 @@ export class AuthPage {
 
   async gotoLogin() {
     await this.page.goto('/login');
-    await expect(this.page.getByRole('heading', { name: /entrar/i })).toBeVisible();
+    await expect(this.page.getByTestId('email-input')).toBeVisible();
   }
 
   async login(email: string, password: string) {
-    await this.page.getByLabel(/email/i).fill(email);
-    await this.page.getByLabel(/senha/i).fill(password);
-    await this.page.getByRole('button', { name: /entrar/i }).click();
+    await this.page.getByTestId('email-input').fill(email);
+    await this.page.getByTestId('password-input').fill(password);
+    await this.page.getByTestId('login-button').click();
   }
 
   async logout() {

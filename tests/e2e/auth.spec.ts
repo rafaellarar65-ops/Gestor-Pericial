@@ -7,6 +7,7 @@ test.describe('E2E Auth', () => {
     const auth = new AuthPage(page);
     await auth.gotoLogin();
     await auth.login(process.env.E2E_USER_EMAIL ?? 'qa.admin@example.test', process.env.E2E_USER_PASSWORD ?? 'Str0ng!Pass123');
+    await expect(page.getByTestId('dashboard')).toBeVisible();
     await expect(page).toHaveURL(/\/$/);
   });
 
@@ -36,6 +37,7 @@ test.describe('E2E Auth', () => {
     await auth.login(process.env.E2E_USER_EMAIL ?? 'qa.admin@example.test', process.env.E2E_USER_PASSWORD ?? 'Str0ng!Pass123');
     await auth.logout();
     await expect(page).toHaveURL(/\/login/);
+    await expect(page.getByTestId('email-input')).toBeVisible();
   });
 
   test('refresh token mantém sessão ativa', async ({ page, request }) => {
@@ -58,5 +60,6 @@ test.describe('E2E Auth', () => {
     await page.context().clearCookies();
     await page.goto('/pericias');
     await expect(page).toHaveURL(/\/login/);
+    await expect(page.getByTestId('email-input')).toBeVisible();
   });
 });
