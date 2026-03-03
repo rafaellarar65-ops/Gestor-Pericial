@@ -122,14 +122,14 @@ const LoginPage = () => {
             <form className="space-y-4" onSubmit={(event) => void submit(event)}>
               <div>
                 <label className="mb-1 block text-sm font-medium" htmlFor="email">Email</label>
-                <Input autoFocus id="email" onChange={(event) => setForm((prev) => ({ ...prev, email: event.target.value }))} placeholder="seu@email.com" required type="email" value={form.email} />
+                <Input autoFocus data-testid="email-input" id="email" onChange={(event) => setForm((prev) => ({ ...prev, email: event.target.value }))} placeholder="seu@email.com" required type="email" value={form.email} />
                 {errors.email ? <p className="mt-1 text-xs text-destructive">{errors.email}</p> : null}
               </div>
 
               <div>
                 <label className="mb-1 block text-sm font-medium" htmlFor="password">Senha</label>
                 <div className="relative">
-                  <Input id="password" onChange={(event) => setForm((prev) => ({ ...prev, password: event.target.value }))} required type={showPassword ? 'text' : 'password'} value={form.password} />
+                  <Input data-testid="password-input" id="password" onChange={(event) => setForm((prev) => ({ ...prev, password: event.target.value }))} required type={showPassword ? 'text' : 'password'} value={form.password} />
                   <button aria-label="Mostrar ou esconder senha" className="absolute right-2 top-2 rounded p-1 text-muted-foreground hover:bg-muted" onClick={() => setShowPassword((value) => !value)} type="button">
                     {showPassword ? <EyeOff size={16} /> : <Eye size={16} />}
                   </button>
@@ -144,7 +144,7 @@ const LoginPage = () => {
 
               {serverMessage() ? <div className="rounded-md border border-destructive/30 bg-destructive/10 p-2 text-sm text-destructive">{serverMessage()}</div> : null}
 
-              <Button className="w-full gap-2" disabled={loginMutation.isPending} type="submit">
+              <Button className="w-full gap-2" data-testid="login-button" disabled={loginMutation.isPending} type="submit">
                 {loginMutation.isPending ? <Loader2 className="animate-spin" size={16} /> : null}
                 {loginMutation.isPending ? 'Entrando...' : 'Entrar'}
               </Button>

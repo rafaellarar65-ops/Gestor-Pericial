@@ -11,6 +11,17 @@ Garantir qualidade funcional, segurança (LGPD/RBAC), confiabilidade e conformid
   - Dados de teste anonimizados e isolados por tenant/usuário QA.
   - CI total < 10 min com paralelismo e retry controlado.
 
+
+## Convenção de `data-testid` para fluxos críticos
+- Priorize seletores canônicos via `getByTestId` nos fluxos de autenticação e navegação crítica (login, logout, redirecionamento pós-login).
+- Use nomes estáveis e semânticos no formato `kebab-case`, evitando acoplamento a texto visível, placeholder ou rótulos traduzíveis.
+- Padrões atuais de autenticação:
+  - `email-input` para o campo de email no login.
+  - `password-input` para o campo de senha no login.
+  - `login-button` para o botão de submit no login.
+  - `dashboard` para o container raiz visível após autenticação bem-sucedida.
+- Ao criar novos fluxos críticos, documente os novos `data-testid` neste guia e atualize os testes E2E para consumir esses seletores antes de depender de `getByText`/`getByLabel`.
+
 ## Escopo por módulo — Casos de teste
 
 > Legenda: Severidade = Critical / High / Medium / Low. Automatizável = S/N.

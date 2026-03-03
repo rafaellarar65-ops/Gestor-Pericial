@@ -237,7 +237,7 @@ const DashboardPage = () => {
       isError={isError}
       contentClassName="space-y-6"
     >
-      <div className="flex items-center justify-between">
+      <div className="flex items-center justify-between" data-testid="dashboard">
         <div>
           <h1 className="text-2xl font-bold text-slate-800">Visão Geral</h1>
           <p className="text-sm text-slate-500">Selecione uma central operacional para iniciar os trabalhos.</p>
