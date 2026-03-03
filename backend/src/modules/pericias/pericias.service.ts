@@ -856,57 +856,6 @@ export class PericiasService {
     };
   }
 
-
-  async updateUrgent(id: string, isUrgent: boolean) {
-    await this.findOne(id);
-    return this.prisma.pericia.update({
-      where: { id },
-      data: { isUrgent, urgentCheckedAt: new Date() },
-    });
-  }
-
-  async registerTelepericiaAttempt(id: string, whatsappStatus?: string) {
-    await this.findOne(id);
-    return this.prisma.pericia.update({
-      where: { id },
-      data: {
-        telepericiaLastAttemptAt: new Date(),
-        ...(whatsappStatus ? { whatsappStatus } : {}),
-      },
-    });
-  }
-
-  async telepericiaQueue(query: TelepericiaQueueQueryDto) {
-    const where: Prisma.PericiaWhereInput = {
-      modalidade: { codigo: 'telepericia' },
-      ...(query.whatsappStatus ? { whatsappStatus: query.whatsappStatus } : {}),
-      ...(query.search
-        ? {
-            OR: [
-              { processoCNJ: { contains: query.search, mode: 'insensitive' } },
-              { periciadoNome: { contains: query.search, mode: 'insensitive' } },
-            ],
-          }
-        : {}),
-    };
-
-    const [items, total] = await this.prisma.$transaction([
-      this.prisma.pericia.findMany({
-        where,
-        include: { cidade: true, status: true },
-        orderBy: { updatedAt: 'desc' },
-        skip: (query.page - 1) * query.limit,
-        take: query.limit,
-      }),
-      this.prisma.pericia.count({ where }),
-    ]);
-
-    return {
-      items,
-      pagination: { page: query.page, limit: query.limit, total },
-    };
-  }
-
   private buildCityOverview(
     cidade: { id: string; nome: string; uf: string | null },
     pericias: Array<{

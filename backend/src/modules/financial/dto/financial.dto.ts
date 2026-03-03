@@ -107,25 +107,6 @@ export class CreateDespesaDto {
   periciaId?: string;
 }
 
-export class ImportAiPrintDto {
-  @ApiProperty({ description: 'Texto bruto extraído por OCR/IA.' })
-  @IsString()
-  content!: string;
-}
-
-export class FinancialImportAiPrintResponseDto {
-  @ApiProperty()
-  global!: {
-    totalBruto: number;
-    totalLiquido: number;
-    totalImpostos: number;
-    dataPagamento: string;
-  };
-
-  @ApiProperty({ type: [Object] })
-  items!: Array<Record<string, unknown>>;
-}
-
 export class ImportRecebimentoItemDto {
   @ApiProperty()
   @IsString()
@@ -192,9 +173,9 @@ export class ReconcileDto {
   @IsString()
   note?: string;
 
-  @ApiPropertyOptional({ enum: [PaymentMatchStatus.LINKED] })
+  @ApiPropertyOptional({ enum: [PaymentMatchStatus.LINKED, PaymentMatchStatus.DISCARDED] })
   @IsOptional()
-  @IsIn([PaymentMatchStatus.LINKED])
+  @IsIn([PaymentMatchStatus.LINKED, PaymentMatchStatus.DISCARDED])
   status?: PaymentMatchStatus;
 
   @ApiPropertyOptional()
@@ -389,73 +370,4 @@ export class ImportUnmatchedTransactionsDto {
   @ValidateNested({ each: true })
   @Type(() => ImportUnmatchedTransactionDto)
   rows!: ImportUnmatchedTransactionDto[];
-}
-
-export class SplitInstallmentDto {
-  @ApiProperty()
-  @IsUUID()
-  periciaId!: string;
-
-  @ApiProperty()
-  @Type(() => Number)
-  @IsNumber({ maxDecimalPlaces: 2 })
-  @Min(0.01)
-  amount!: number;
-
-  @ApiPropertyOptional()
-  @IsOptional()
-  @IsString()
-  note?: string;
-}
-
-export class SplitUnmatchedPaymentDto {
-  @ApiProperty({ type: [SplitInstallmentDto] })
-  @IsArray()
-  @ArrayMinSize(2)
-  @ValidateNested({ each: true })
-  @Type(() => SplitInstallmentDto)
-  installments!: SplitInstallmentDto[];
-}
-
-export class UpdateUnmatchedPaymentDto {
-  @ApiPropertyOptional()
-  @IsOptional()
-  @Type(() => Number)
-  @IsNumber({ maxDecimalPlaces: 2 })
-  amount?: number;
-
-  @ApiPropertyOptional()
-  @IsOptional()
-  @IsDateString()
-  receivedAt?: string;
-
-  @ApiPropertyOptional()
-  @IsOptional()
-  @IsString()
-  payerName?: string;
-
-  @ApiPropertyOptional()
-  @IsOptional()
-  @IsString()
-  cnj?: string;
-
-  @ApiPropertyOptional()
-  @IsOptional()
-  @IsString()
-  description?: string;
-
-  @ApiPropertyOptional()
-  @IsOptional()
-  @IsString()
-  source?: string;
-
-  @ApiPropertyOptional({ enum: ['AI_PRINT', 'MANUAL_CSV', 'INDIVIDUAL'] })
-  @IsOptional()
-  @IsEnum(['AI_PRINT', 'MANUAL_CSV', 'INDIVIDUAL'])
-  origin?: 'AI_PRINT' | 'MANUAL_CSV' | 'INDIVIDUAL';
-
-  @ApiPropertyOptional()
-  @IsOptional()
-  @IsString()
-  notes?: string;
 }

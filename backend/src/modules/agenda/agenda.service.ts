@@ -519,76 +519,6 @@ export class AgendaService {
     };
   }
 
-  async weeklyWorkload(startDate?: string) {
-    const weekStart = this.getWeekStart(startDate);
-    const weekEnd = new Date(weekStart);
-    weekEnd.setDate(weekEnd.getDate() + 7);
-
-    const events = await this.prisma.agendaEvent.findMany({
-      where: {
-        startAt: { gte: weekStart, lt: weekEnd },
-      },
-      orderBy: { startAt: 'asc' },
-    });
-
-    const byDay = new Map<string, WeeklyDaySummary>();
-    for (let i = 0; i < 7; i += 1) {
-      const date = new Date(weekStart);
-      date.setDate(date.getDate() + i);
-      const key = this.toYmd(date);
-      const weekday = date.getDay();
-      byDay.set(key, {
-        date: key,
-        allocated_minutes: 0,
-        work_window_minutes: weekday === 0 || weekday === 6 ? 240 : 480,
-        utilization: 0,
-        conflicts: 0,
-      });
-    }
-
-    const eventsByDay = new Map<string, typeof events>();
-    for (const event of events) {
-      const key = this.toYmd(event.startAt);
-      const day = byDay.get(key);
-      if (!day) continue;
-      const endAt = event.endAt ?? new Date(event.startAt.getTime() + 60 * 60 * 1000);
-      const minutes = Math.max(15, Math.round((endAt.getTime() - event.startAt.getTime()) / 60000));
-      day.allocated_minutes += minutes;
-      const list = eventsByDay.get(key) ?? [];
-      list.push(event);
-      eventsByDay.set(key, list);
-    }
-
-    for (const [key, day] of byDay.entries()) {
-      const dayEvents = (eventsByDay.get(key) ?? []).sort((a, b) => a.startAt.getTime() - b.startAt.getTime());
-      let overlaps = 0;
-      for (let i = 0; i < dayEvents.length; i += 1) {
-        for (let j = i + 1; j < dayEvents.length; j += 1) {
-          const aEnd = dayEvents[i].endAt ?? new Date(dayEvents[i].startAt.getTime() + 60 * 60 * 1000);
-          if (aEnd <= dayEvents[j].startAt) break;
-          overlaps += 1;
-        }
-      }
-      day.conflicts = overlaps;
-      day.utilization = day.work_window_minutes > 0 ? Number(((day.allocated_minutes / day.work_window_minutes) * 100).toFixed(1)) : 0;
-    }
-
-    const days = Array.from(byDay.values());
-    const totals = {
-      allocated_minutes: days.reduce((sum, d) => sum + d.allocated_minutes, 0),
-      work_window_minutes: days.reduce((sum, d) => sum + d.work_window_minutes, 0),
-      conflicts: days.reduce((sum, d) => sum + d.conflicts, 0),
-    };
-
-    return {
-      week_start: this.toYmd(weekStart),
-      week_end: this.toYmd(new Date(weekEnd.getTime() - 86400000)),
-      days,
-      ...totals,
-      utilization: totals.work_window_minutes > 0 ? Number(((totals.allocated_minutes / totals.work_window_minutes) * 100).toFixed(1)) : 0,
-    };
-  }
-
   async exportWeeklyPdf(dto: ExportWeeklyPdfDto) {
     const week = await this.weeklyWorkload(dto.startDate);
     const weekStart = this.getWeekStart(dto.startDate);
@@ -720,45 +650,26 @@ export class AgendaService {
       const items = Array.isArray(result.items) ? result.items : [];
 
       return {
-        title: `Bloco de Laudo #${index + 1}`,
-        type: AgendaEventType.BLOCO_TRABALHO,
-        startAt: date.toISOString(),
-        endAt: endDate.toISOString(),
-        aiSuggested: true,
-        conflict,
+        id: row.id,
+        createdAt: row.createdAt,
+        cityNames: Array.isArray(criteria.cityNames) ? (criteria.cityNames as string[]) : [],
+        date: typeof criteria.date === 'string' ? criteria.date : '',
+        startTime: typeof criteria.startTime === 'string' ? criteria.startTime : '',
+        durationMinutes: typeof criteria.durationMinutes === 'number' ? criteria.durationMinutes : 0,
+        intervalMinutes: typeof criteria.intervalMinutes === 'number' ? criteria.intervalMinutes : 0,
+        location: typeof criteria.location === 'string' ? criteria.location : undefined,
+        modalidade: typeof criteria.modalidade === 'string' ? criteria.modalidade : undefined,
+        source: criteria.source === 'WORD' ? 'WORD' : 'CSV',
+        status: 'CONFIRMADO',
+        items: items.map((item) => {
+          const entry = item as Record<string, unknown>;
+          return {
+            periciaId: typeof entry.periciaId === 'string' ? entry.periciaId : '',
+            scheduledAt: typeof entry.scheduledAt === 'string' ? entry.scheduledAt : '',
+          };
+        }),
       };
     });
-
-    return {
-      assumptions: {
-        avg_minutes_per_laudo: dto.avg_minutes_per_laudo,
-        backlog: dto.backlog,
-        required_minutes: requiredMinutes,
-        min_buffer_minutes: dto.min_buffer_minutes,
-      },
-      suggestions,
-    };
-  }
-
-  async applyLaudoBlocks(items: Array<{ title: string; startAt: string; endAt: string; periciaId?: string }>) {
-    const tenantId = this.context.get('tenantId') as string;
-    const created = await this.prisma.$transaction(
-      items.map((item) =>
-        this.prisma.agendaEvent.create({
-          data: {
-            tenantId,
-            title: item.title,
-            startAt: new Date(item.startAt),
-            endAt: new Date(item.endAt),
-            type: AgendaEventType.BLOCO_TRABALHO,
-            ...(item.periciaId ? { periciaId: item.periciaId } : {}),
-            metadata: { aiSuggested: true } as Prisma.InputJsonValue,
-          },
-        }),
-      ),
-    );
-
-    return { created: created.length };
   }
 
   calendarSync() {
