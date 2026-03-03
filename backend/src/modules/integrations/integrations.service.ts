@@ -1,5 +1,7 @@
 import { HttpException, HttpStatus, Injectable } from '@nestjs/common';
+import { createHmac, randomUUID, timingSafeEqual } from 'crypto';
 import { CalendarSyncDirection, CalendarSyncMode, CalendarSyncStatus, CalendarSyncType, CnjSyncStatus, Prisma } from '@prisma/client';
+import { google } from 'googleapis';
 import { RequestContextService } from '../../common/request-context.service';
 import { PrismaService } from '../../prisma/prisma.service';
 import {
@@ -21,6 +23,9 @@ import {
 export class IntegrationsService {
   private readonly cache = new Map<string, { expiresAt: number; value: Record<string, unknown> }>();
   private readonly rlMap = new Map<string, { windowStart: number; count: number }>();
+  private readonly googleClientId = process.env.GOOGLE_CLIENT_ID ?? '';
+  private readonly googleClientSecret = process.env.GOOGLE_CLIENT_SECRET ?? '';
+  private readonly googleRedirectUri = process.env.GOOGLE_REDIRECT_URI ?? '';
 
   constructor(
     private readonly prisma: PrismaService,
@@ -45,37 +50,63 @@ export class IntegrationsService {
 
   googleOAuthConnect(dto: GoogleOAuthConnectDto) {
     const tenantId = this.context.get('tenantId') ?? '';
-    const redirect = dto.redirectUri ?? `${process.env.APP_URL ?? 'http://localhost:3000'}/integrations/google-calendar`;
-    const state = Buffer.from(`${tenantId}:${Date.now()}`).toString('base64url');
+    const redirectUri = dto.redirectUri ?? process.env.GOOGLE_REDIRECT_URI ?? `${process.env.APP_URL ?? 'http://localhost:3000'}/integrations/google-calendar`;
+    const nonce = randomUUID();
+    const expiresAt = Date.now() + 10 * 60 * 1000;
+    const payload = { tenantId, nonce, expiresAt, redirectUri };
+    const payloadEncoded = Buffer.from(JSON.stringify(payload)).toString('base64url');
+    const signature = createHmac('sha256', this.getOAuthStateSecret()).update(payloadEncoded).digest('base64url');
+    const state = `${payloadEncoded}.${signature}`;
+
+    this.setCache(this.getOAuthStateCacheKey(tenantId, nonce), payload, 10 * 60 * 1000);
+
+    const oauth2Client = this.createGoogleOAuthClient(redirectUri);
 
     return {
       provider: 'GOOGLE',
-      authUrl: `https://accounts.google.com/o/oauth2/v2/auth?client_id=${process.env.GOOGLE_CLIENT_ID ?? 'stub-client'}&redirect_uri=${encodeURIComponent(
-        redirect,
-      )}&response_type=code&scope=${encodeURIComponent('openid email profile https://www.googleapis.com/auth/calendar')}&access_type=offline&prompt=consent&state=${state}`,
+      authUrl: oauth2Client.generateAuthUrl({
+        access_type: 'offline',
+        scope: ['openid', 'email', 'profile', 'https://www.googleapis.com/auth/calendar'],
+        prompt: 'consent',
+        state,
+      }),
       state,
     };
   }
 
   async googleOAuthCallback(dto: GoogleOAuthCallbackDto) {
     const tenantId = this.context.get('tenantId') ?? '';
+    const statePayload = this.validateOAuthState(dto.state, tenantId);
+
+    const oauth2Client = this.createGoogleOAuthClient(statePayload.redirectUri);
+    const { tokens } = await this.withRetry(() => oauth2Client.getToken(dto.code));
+
+    if (!tokens.access_token) {
+      throw new HttpException('Falha ao obter access_token do Google OAuth.', HttpStatus.BAD_REQUEST);
+    }
+
+    oauth2Client.setCredentials(tokens);
+
+    const oauth2 = google.oauth2({ version: 'v2', auth: oauth2Client });
+    const userInfo = await this.withRetry(() => oauth2.userinfo.get());
+    const email = dto.email ?? userInfo.data.email ?? null;
 
     return this.prisma.calendarIntegration.upsert({
       where: { tenantId_provider: { tenantId, provider: 'GOOGLE' } },
       create: {
         tenantId,
         provider: 'GOOGLE',
-        email: dto.email ?? 'google-user@example.com',
-        accessToken: `token-${dto.code.slice(0, 8)}`,
-        refreshToken: `refresh-${dto.code.slice(0, 8)}`,
-        tokenExpiresAt: new Date(Date.now() + 60 * 60 * 1000),
+        email,
+        accessToken: tokens.access_token,
+        refreshToken: tokens.refresh_token ?? null,
+        tokenExpiresAt: tokens.expiry_date ? new Date(tokens.expiry_date) : null,
         active: true,
       },
       update: {
-        email: dto.email ?? undefined,
-        accessToken: `token-${dto.code.slice(0, 8)}`,
-        refreshToken: `refresh-${dto.code.slice(0, 8)}`,
-        tokenExpiresAt: new Date(Date.now() + 60 * 60 * 1000),
+        email: email ?? undefined,
+        accessToken: tokens.access_token,
+        refreshToken: tokens.refresh_token ?? undefined,
+        tokenExpiresAt: tokens.expiry_date ? new Date(tokens.expiry_date) : undefined,
         active: true,
       },
     });
@@ -140,6 +171,8 @@ export class IntegrationsService {
     if (!integration?.active) {
       throw new HttpException('Integração Google Calendar não está ativa.', HttpStatus.BAD_REQUEST);
     }
+
+    await this.refreshGoogleTokenIfNeeded(integration);
 
     const [events, tasks] = await Promise.all([
       integration.syncEvents
@@ -327,6 +360,86 @@ export class IntegrationsService {
   tjmgUtils(dto: TjmgUtilsDto) {
     const onlyDigits = dto.cnj.replace(/\D/g, '');
     return { original: dto.cnj, normalized: onlyDigits, validLength: onlyDigits.length === 20 };
+  }
+
+  private createGoogleOAuthClient(redirectUri?: string) {
+    return new google.auth.OAuth2(this.googleClientId, this.googleClientSecret, redirectUri ?? this.googleRedirectUri);
+  }
+
+  private getOAuthStateSecret() {
+    return process.env.GOOGLE_OAUTH_STATE_SECRET ?? process.env.JWT_SECRET ?? 'dev-google-oauth-state-secret';
+  }
+
+  private getOAuthStateCacheKey(tenantId: string, nonce: string) {
+    return `google-oauth-state:${tenantId}:${nonce}`;
+  }
+
+  private validateOAuthState(state: string, tenantId: string) {
+    const [payloadEncoded, signature] = state.split('.');
+    if (!payloadEncoded || !signature) {
+      throw new HttpException('State OAuth inválido.', HttpStatus.BAD_REQUEST);
+    }
+
+    const expectedSignature = createHmac('sha256', this.getOAuthStateSecret()).update(payloadEncoded).digest('base64url');
+    const signatureBuffer = Buffer.from(signature);
+    const expectedBuffer = Buffer.from(expectedSignature);
+    if (signatureBuffer.length !== expectedBuffer.length || !timingSafeEqual(signatureBuffer, expectedBuffer)) {
+      throw new HttpException('Assinatura do state OAuth inválida.', HttpStatus.BAD_REQUEST);
+    }
+
+    const payload = JSON.parse(Buffer.from(payloadEncoded, 'base64url').toString('utf-8')) as {
+      tenantId: string;
+      nonce: string;
+      expiresAt: number;
+      redirectUri: string;
+    };
+
+    if (payload.tenantId !== tenantId) {
+      throw new HttpException('State OAuth não pertence ao tenant atual.', HttpStatus.BAD_REQUEST);
+    }
+
+    if (Date.now() > payload.expiresAt) {
+      throw new HttpException('State OAuth expirado.', HttpStatus.BAD_REQUEST);
+    }
+
+    const cacheKey = this.getOAuthStateCacheKey(payload.tenantId, payload.nonce);
+    const cached = this.getCache(cacheKey);
+    if (!cached) {
+      throw new HttpException('State OAuth inexistente ou já utilizado.', HttpStatus.BAD_REQUEST);
+    }
+
+    this.cache.delete(cacheKey);
+
+    return payload;
+  }
+
+  private async refreshGoogleTokenIfNeeded(integration: { id: string; accessToken: string | null; refreshToken: string | null; tokenExpiresAt: Date | null }) {
+    if (!integration.refreshToken) return;
+
+    const isExpired = !integration.tokenExpiresAt || integration.tokenExpiresAt.getTime() <= Date.now() + 60 * 1000;
+    if (!isExpired) return;
+
+    const oauth2Client = this.createGoogleOAuthClient();
+
+    oauth2Client.setCredentials({
+      access_token: integration.accessToken ?? undefined,
+      refresh_token: integration.refreshToken,
+      expiry_date: integration.tokenExpiresAt?.getTime(),
+    });
+
+    const { credentials } = await this.withRetry(() => oauth2Client.refreshAccessToken());
+    if (!credentials.access_token) {
+      throw new HttpException('Falha ao renovar token Google.', HttpStatus.BAD_GATEWAY);
+    }
+
+    await this.prisma.calendarIntegration.update({
+      where: { id: integration.id },
+      data: {
+        accessToken: credentials.access_token,
+        refreshToken: credentials.refresh_token ?? integration.refreshToken,
+        tokenExpiresAt: credentials.expiry_date ? new Date(credentials.expiry_date) : null,
+      },
+    });
   }
 
   private calculateSyncStatus(localUpdatedAt: Date, externalLastModifiedAt: Date | null, lastSyncAt: Date | null) {
