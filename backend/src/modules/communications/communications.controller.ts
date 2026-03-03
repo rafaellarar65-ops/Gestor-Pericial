@@ -1,11 +1,13 @@
-import { Body, Controller, Delete, Get, Param, Patch, Post, Query } from '@nestjs/common';
+import { Body, Controller, Delete, Get, Param, Patch, Post, Query, Res } from '@nestjs/common';
 import { ApiBearerAuth, ApiOperation, ApiTags } from '@nestjs/swagger';
 import { CommunicationsService } from './communications.service';
+import { Response } from 'express';
 import {
   AutomaticVaraChargeDto,
   BulkGrantOptInDto,
   BulkLinkInboundDto,
   BulkResendTemplateDto,
+  DownloadInboxAttachmentQueryDto,
   CreateEmailTemplateDto,
   CreateLawyerDto,
   CreateMessageTemplateDto,
@@ -77,6 +79,16 @@ export class CommunicationsController {
     return this.service.listInbox(query);
   }
 
+
+  @Get('inbox/:id')
+  fetchFullEmail(@Param('id') id: string) {
+    return this.service.fetchFullEmail(id);
+  }
+
+  @Get('inbox/attachments/download')
+  downloadAttachment(@Query() query: DownloadInboxAttachmentQueryDto, @Res({ passthrough: true }) res: Response) {
+    return this.service.downloadInboxAttachment(query.token, res);
+  }
   @Post('inbox/actions/resend-template')
   resendTemplate(@Body() dto: BulkResendTemplateDto) {
     return this.service.bulkResendTemplate(dto);

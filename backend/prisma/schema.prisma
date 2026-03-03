@@ -220,6 +220,8 @@ model Tenant {
   dailyUsage          DailyUsage[]
   emailConfigs        EmailConfig[]
   emailTemplates      EmailTemplate[]
+  emailInboxMessages  EmailInboxMessage[]
+  emailInboxAttachments EmailInboxAttachment[]
   messageTemplates    MessageTemplate[]
   integrationSettings IntegrationSettings[]
   notificationConfigs NotificationConfig[]
@@ -1261,6 +1263,51 @@ model EmailTemplate {
   @@unique([tenantId, key])
 }
 
+model EmailInboxMessage {
+  id             String   @id @default(uuid()) @db.Uuid
+  tenantId       String   @db.Uuid
+  uid            Int
+  messageId      String
+  from           String
+  subject        String
+  date           DateTime
+  flags          Json?
+  snippet        String?
+  hasAttachments Boolean  @default(false)
+  htmlBody       String?
+  textBody       String?
+  createdAt      DateTime @default(now())
+  updatedAt      DateTime @updatedAt
+  createdBy      String?  @db.Uuid
+  updatedBy      String?  @db.Uuid
+
+  tenant      Tenant                 @relation(fields: [tenantId], references: [id], onDelete: Cascade)
+  attachments EmailInboxAttachment[]
+
+  @@unique([tenantId, uid])
+  @@index([tenantId, date])
+  @@index([tenantId, uid])
+  @@index([tenantId, from])
+  @@index([tenantId, subject])
+}
+
+model EmailInboxAttachment {
+  id          String   @id @default(uuid()) @db.Uuid
+  tenantId    String   @db.Uuid
+  messageId   String   @db.Uuid
+  filename    String
+  contentType String?
+  size        Int?
+  storageKey  String
+  createdAt   DateTime @default(now())
+  updatedAt   DateTime @updatedAt
+
+  tenant  Tenant            @relation(fields: [tenantId], references: [id], onDelete: Cascade)
+  message EmailInboxMessage @relation(fields: [messageId], references: [id], onDelete: Cascade)
+
+  @@index([tenantId, messageId])
+}
+
 
 model IntegrationSettings {
   id            String   @id @default(uuid()) @db.Uuid
@@ -1383,4 +1430,3 @@ model CnjSync {
 
   @@index([tenantId, status, nextSyncAt])
 }
-

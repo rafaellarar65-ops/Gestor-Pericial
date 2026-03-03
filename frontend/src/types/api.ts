@@ -165,14 +165,23 @@ export type TemplatePreview = {
 
 export type InboxItem = {
   id: string;
-  message?: string;
-  tags?: string[];
+  uid?: number;
+  messageId?: string;
   from?: string;
-  to?: string;
-  channel?: string;
-  status?: string;
-  body?: string;
+  subject?: string;
+  snippet?: string;
+  date?: string;
+  flags?: string[];
+  hasAttachments?: boolean;
   createdAt?: string;
+};
+
+export type InboxListResponse = {
+  items: InboxItem[];
+  page: number;
+  limit: number;
+  nextCursor?: string | null;
+  hasNextPage: boolean;
 };
 
 export type AgendaEvent = {

@@ -4,11 +4,13 @@ import {
   IsBoolean,
   IsDateString,
   IsIn,
+  IsInt,
   IsNotEmpty,
   IsObject,
   IsOptional,
   IsString,
   IsUUID,
+  Min,
   ArrayNotEmpty,
 } from 'class-validator';
 
@@ -270,6 +272,25 @@ export class PreviewTemplateDto {
   periciaId?: string;
 }
 
+export class InboxPaginationDto {
+  @ApiPropertyOptional({ minimum: 1, default: 1 })
+  @IsOptional()
+  @IsInt()
+  @Min(1)
+  page?: number;
+
+  @ApiPropertyOptional({ minimum: 1, default: 20 })
+  @IsOptional()
+  @IsInt()
+  @Min(1)
+  limit?: number;
+
+  @ApiPropertyOptional({ description: 'Cursor no formato <dateISO>|<id>' })
+  @IsOptional()
+  @IsString()
+  cursor?: string;
+}
+
 export const INBOX_FILTERS = [
   'nao_confirmados',
   'pediram_reagendamento',
@@ -278,13 +299,32 @@ export const INBOX_FILTERS = [
   'inbound_nao_vinculado',
 ] as const;
 
-export class InboxFilterDto {
+export class InboxFilterDto extends InboxPaginationDto {
   @ApiPropertyOptional({ enum: INBOX_FILTERS })
   @IsOptional()
   @IsString()
   @IsIn(INBOX_FILTERS)
   filter?: (typeof INBOX_FILTERS)[number];
+
+  @ApiPropertyOptional()
+  @IsOptional()
+  @IsString()
+  from?: string;
+
+  @ApiPropertyOptional()
+  @IsOptional()
+  @IsString()
+  subject?: string;
 }
+
+export class DownloadInboxAttachmentQueryDto {
+  @ApiProperty()
+  @IsString()
+  @IsNotEmpty()
+  token!: string;
+}
+
+
 
 export class BulkResendTemplateDto {
   @ApiProperty({ type: [String] })

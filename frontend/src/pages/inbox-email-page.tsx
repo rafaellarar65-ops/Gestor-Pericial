@@ -24,11 +24,16 @@ export default function InboxEmailPage() {
   const [selectedIds, setSelectedIds] = useState<string[]>([]);
   const [templateId, setTemplateId] = useState('');
   const [periciaId, setPericiaId] = useState('');
+  const [from, setFrom] = useState('');
+  const [subject, setSubject] = useState('');
+  const [cursor, setCursor] = useState<string | undefined>();
 
-  const { data: items = [], isLoading, isError } = useQuery({
-    queryKey: ['communication-inbox', filter],
-    queryFn: () => communicationInboxService.list(filter || undefined),
+  const { data, isLoading, isError } = useQuery({
+    queryKey: ['communication-inbox', filter, from, subject, cursor],
+    queryFn: () => communicationInboxService.list({ filter: filter || undefined, from: from || undefined, subject: subject || undefined, cursor, limit: 20 }),
   });
+
+  const items = data?.items ?? [];
 
   const { data: templates = [] } = useQuery({
     queryKey: ['message-templates-all'],
@@ -72,13 +77,17 @@ export default function InboxEmailPage() {
         <p className="text-sm text-muted-foreground">Monitore conversas e execute ações em massa.</p>
       </header>
 
-      <Card className="p-3">
+      <Card className="p-3 space-y-3">
         <div className="flex flex-wrap gap-2">
           {filters.map((f) => (
-            <Button key={f.value || 'all'} size="sm" variant={filter === f.value ? 'default' : 'outline'} onClick={() => setFilter(f.value)}>
+            <Button key={f.value || 'all'} size="sm" variant={filter === f.value ? 'default' : 'outline'} onClick={() => { setFilter(f.value); setCursor(undefined); }}>
               {f.label}
             </Button>
           ))}
+        </div>
+        <div className="grid gap-2 md:grid-cols-2">
+          <Input placeholder="Buscar por remetente" value={from} onChange={(e) => { setFrom(e.target.value); setCursor(undefined); }} />
+          <Input placeholder="Buscar por assunto" value={subject} onChange={(e) => { setSubject(e.target.value); setCursor(undefined); }} />
         </div>
       </Card>
 
@@ -118,34 +127,41 @@ export default function InboxEmailPage() {
         {isError && <ErrorState message="Erro ao carregar inbox" />}
         {!isLoading && !isError && items.length === 0 && <div className="p-4"><EmptyState title="Nenhum item encontrado para o filtro" /></div>}
         {!isLoading && !isError && items.length > 0 && (
-          <table className="w-full text-sm">
-            <thead className="bg-slate-50 text-left">
-              <tr>
-                <th className="p-2" />
-                <th className="p-2">Destino</th>
-                <th className="p-2">Mensagem</th>
-                <th className="p-2">Status</th>
-                <th className="p-2">Tags</th>
-              </tr>
-            </thead>
-            <tbody>
-              {items.map((item) => (
-                <tr key={item.id} className="border-t">
-                  <td className="p-2">
-                    <input
-                      type="checkbox"
-                      checked={selectedSet.has(item.id)}
-                      onChange={(e) => setSelectedIds((prev) => e.target.checked ? [...prev, item.id] : prev.filter((id) => id !== item.id))}
-                    />
-                  </td>
-                  <td className="p-2">{item.to || '—'}</td>
-                  <td className="p-2 max-w-md truncate">{item.message}</td>
-                  <td className="p-2">{item.status || '—'}</td>
-                  <td className="p-2">{item.tags?.join(', ') || '—'}</td>
+          <>
+            <table className="w-full text-sm">
+              <thead className="bg-slate-50 text-left">
+                <tr>
+                  <th className="p-2" />
+                  <th className="p-2">Remetente</th>
+                  <th className="p-2">Assunto</th>
+                  <th className="p-2">Prévia</th>
+                  <th className="p-2">Data</th>
                 </tr>
-              ))}
-            </tbody>
-          </table>
+              </thead>
+              <tbody>
+                {items.map((item) => (
+                  <tr key={item.id} className="border-t">
+                    <td className="p-2">
+                      <input
+                        type="checkbox"
+                        checked={selectedSet.has(item.id)}
+                        onChange={(e) => setSelectedIds((prev) => e.target.checked ? [...prev, item.id] : prev.filter((id) => id !== item.id))}
+                      />
+                    </td>
+                    <td className="p-2">{item.from || '—'}</td>
+                    <td className="p-2">{item.subject || '—'}</td>
+                    <td className="p-2 max-w-md truncate">{item.snippet || '—'}</td>
+                    <td className="p-2">{item.date ? new Date(item.date).toLocaleString('pt-BR') : '—'}</td>
+                  </tr>
+                ))}
+              </tbody>
+            </table>
+            <div className="flex justify-end p-3">
+              <Button size="sm" variant="outline" disabled={!data?.nextCursor} onClick={() => setCursor(data?.nextCursor ?? undefined)}>
+                Próxima página
+              </Button>
+            </div>
+          </>
         )}
       </Card>
     </div>
