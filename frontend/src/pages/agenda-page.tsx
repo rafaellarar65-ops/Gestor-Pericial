@@ -2,11 +2,14 @@ import { useMemo, useState } from 'react';
 import { CalendarDays, ChevronLeft, ChevronRight } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { Card } from '@/components/ui/card';
+import { Dialog } from '@/components/ui/dialog';
 import { Input } from '@/components/ui/input';
 import { EmptyState, ErrorState, LoadingState } from '@/components/ui/state';
 import { useDomainData } from '@/hooks/use-domain-data';
+import { agendaService } from '@/services/agenda-service';
 
 type AgendaStatus = 'todos' | 'agendado' | 'realizado' | 'cancelado';
+type PdfMode = 'compacto' | 'detalhado';
 
 type AgendaRow = {
   id: string;
@@ -51,24 +54,58 @@ const mapAgendaRow = (item: Record<string, string | number | undefined>, index: 
   status: inferStatus(item),
 });
 
+const usageTone = (value: number) => (value > 95 ? 'bg-red-500' : value > 85 ? 'bg-amber-500' : 'bg-emerald-500');
+
 const Page = () => {
+  const queryClient = useQueryClient();
   const { data = [], isLoading, isError } = useDomainData('agenda', '/agenda/events');
   const [busca, setBusca] = useState('');
   const [periodo, setPeriodo] = useState('');
   const [status, setStatus] = useState<AgendaStatus>('todos');
+  const [pdfMode, setPdfMode] = useState<PdfMode>('compacto');
+  const [aiOpen, setAiOpen] = useState(false);
+  const [aiForm, setAiForm] = useState({ avg: '90', backlog: '6', windows: '09:00,14:00', buffer: '45' });
+
+  const { data: workload } = useQuery({
+    queryKey: ['agenda', 'weekly-workload', periodo],
+    queryFn: () => agendaService.weeklyWorkload(periodo || undefined),
+  });
+
+  const exportMutation = useMutation({
+    mutationFn: () => agendaService.exportWeeklyPdf(pdfMode, periodo || undefined),
+    onSuccess: (file) => {
+      const blob = new Blob([Uint8Array.from(atob(file.contentBase64), (c) => c.charCodeAt(0))], { type: file.mimeType });
+      const url = URL.createObjectURL(blob);
+      const a = document.createElement('a');
+      a.href = url;
+      a.download = file.fileName;
+      a.click();
+      URL.revokeObjectURL(url);
+      toast.success('PDF semanal exportado.');
+    },
+    onError: () => toast.error('Não foi possível exportar PDF.'),
+  });
+
+  const suggestMutation = useMutation({ mutationFn: agendaService.suggestLaudoBlocks });
+
+  const applyMutation = useMutation({
+    mutationFn: agendaService.applyLaudoBlocks,
+    onSuccess: (result) => {
+      toast.success(`${result.created} blocos de laudo criados.`);
+      queryClient.invalidateQueries({ queryKey: ['agenda'] });
+      queryClient.invalidateQueries({ queryKey: ['agenda', 'weekly-workload'] });
+      setAiOpen(false);
+    },
+    onError: () => toast.error('Falha ao aplicar blocos sugeridos.'),
+  });
 
   const rows = useMemo(() => data.map(mapAgendaRow), [data]);
-
   const filteredRows = useMemo(
     () =>
       rows.filter((row) => {
-        const matchesBusca =
-          !busca ||
-          [row.titulo, row.tipo, row.local].some((value) => value.toLowerCase().includes(busca.toLowerCase()));
-
+        const matchesBusca = !busca || [row.titulo, row.tipo, row.local].some((value) => value.toLowerCase().includes(busca.toLowerCase()));
         const matchesStatus = status === 'todos' || row.status === status;
         const matchesPeriodo = !periodo || row.inicio.startsWith(periodo);
-
         return matchesBusca && matchesStatus && matchesPeriodo;
       }),
     [rows, busca, status, periodo],
@@ -104,11 +141,7 @@ const Page = () => {
         <div className="grid gap-3 md:grid-cols-3">
           <Input onChange={(event) => setBusca(event.target.value)} placeholder="Buscar por título, tipo ou local" value={busca} />
           <Input onChange={(event) => setPeriodo(event.target.value)} type="date" value={periodo} />
-          <select
-            className="h-10 rounded-md border border-input bg-background px-3 text-sm"
-            onChange={(event) => setStatus(event.target.value as AgendaStatus)}
-            value={status}
-          >
+          <select className="h-10 rounded-md border border-input bg-background px-3 text-sm" onChange={(event) => setStatus(event.target.value as AgendaStatus)} value={status}>
             <option value="todos">Todos os status</option>
             <option value="agendado">Agendado</option>
             <option value="realizado">Realizado</option>
@@ -155,6 +188,42 @@ const Page = () => {
           </div>
         </Card>
       )}
+
+      <Dialog open={aiOpen} onClose={() => setAiOpen(false)} title="IA: Sugerir blocos de laudo">
+        <div className="space-y-3">
+          <Input value={aiForm.avg} onChange={(e) => setAiForm((p) => ({ ...p, avg: e.target.value }))} placeholder="Média min/laudo" />
+          <Input value={aiForm.backlog} onChange={(e) => setAiForm((p) => ({ ...p, backlog: e.target.value }))} placeholder="Backlog" />
+          <Input value={aiForm.windows} onChange={(e) => setAiForm((p) => ({ ...p, windows: e.target.value }))} placeholder="Janelas preferidas (09:00,14:00)" />
+          <Input value={aiForm.buffer} onChange={(e) => setAiForm((p) => ({ ...p, buffer: e.target.value }))} placeholder="Buffer mínimo (min)" />
+          <Button
+            variant="outline"
+            onClick={() =>
+              suggestMutation.mutate({
+                startDate: periodo || undefined,
+                avg_minutes_per_laudo: Number(aiForm.avg),
+                backlog: Number(aiForm.backlog),
+                preferred_windows: aiForm.windows.split(',').map((s) => s.trim()).filter(Boolean),
+                min_buffer_minutes: Number(aiForm.buffer),
+              })
+            }
+          >
+            <WandSparkles className="mr-1 h-4 w-4" /> Gerar preview
+          </Button>
+          {suggestMutation.data?.suggestions?.length ? (
+            <div className="space-y-2">
+              {suggestMutation.data.suggestions.map((s, idx) => (
+                <div className="rounded border p-2 text-sm" key={`${s.startAt}-${idx}`}>
+                  <p className="font-medium">{s.title} {s.conflict && <span className="text-red-600">(conflito)</span>}</p>
+                  <p>{toDateTime(s.startAt)} → {toDateTime(s.endAt)}</p>
+                </div>
+              ))}
+              <Button onClick={() => applyMutation.mutate(suggestMutation.data!.suggestions.map((s) => ({ title: s.title, startAt: s.startAt, endAt: s.endAt })))}>
+                Aplicar sugestões
+              </Button>
+            </div>
+          ) : null}
+        </div>
+      </Dialog>
     </div>
   );
 };
