@@ -341,6 +341,7 @@ export class IntegrationsService {
     const direction = directionInput === 'push' ? CalendarSyncDirection.PUSH : CalendarSyncDirection.PULL;
     let conflicts = 0;
     let synced = 0;
+    let hasErrors = false;
 
     for (const event of events) {
       const status = this.reconcileSyncStatus({
@@ -413,7 +414,9 @@ export class IntegrationsService {
       else synced += 1;
     }
 
-    await this.prisma.calendarIntegration.update({ where: { id: integration.id }, data: { lastSyncAt: new Date() } });
+    if (!hasErrors) {
+      await this.prisma.calendarIntegration.update({ where: { id: integration.id }, data: { lastSyncAt: new Date() } });
+    }
 
     return { synced, conflicts, direction: directionInput };
   }
@@ -626,6 +629,328 @@ export class IntegrationsService {
         message: input.message,
         syncedAt: input.status === CalendarSyncStatus.ERROR ? null : new Date(),
         payload: input.payload,
+      },
+    });
+  }
+
+  private getGoogleCalendarClient(integration: CalendarIntegration) {
+    const auth = new google.auth.OAuth2(
+      process.env.GOOGLE_CLIENT_ID,
+      process.env.GOOGLE_CLIENT_SECRET,
+      process.env.GOOGLE_REDIRECT_URI,
+    );
+    auth.setCredentials({
+      access_token: integration.accessToken ?? undefined,
+      refresh_token: integration.refreshToken ?? undefined,
+      expiry_date: integration.tokenExpiresAt?.getTime(),
+    });
+    return google.calendar({ version: 'v3', auth });
+  }
+
+  private async pullGoogleEvents(
+    calendar: calendar_v3.Calendar,
+    integration: CalendarIntegration,
+    tenantId: string,
+    direction: CalendarSyncDirection,
+  ) {
+    const calendarId = integration.selectedCalendarId ?? 'primary';
+    const timeMin = new Date();
+    const timeMax = new Date();
+    timeMax.setDate(timeMax.getDate() + 30);
+    const response = await calendar.events.list({
+      calendarId,
+      singleEvents: true,
+      orderBy: 'updated',
+      timeMin: timeMin.toISOString(),
+      timeMax: timeMax.toISOString(),
+      maxResults: 250,
+    });
+
+    let synced = 0;
+    let conflicts = 0;
+    let errors = 0;
+
+    for (const remoteEvent of response.data.items ?? []) {
+      if (!remoteEvent.id || !remoteEvent.start?.dateTime) continue;
+
+      const externalLastModifiedAt = remoteEvent.updated ? new Date(remoteEvent.updated) : null;
+      const local = await this.prisma.agendaEvent.findFirst({
+        where: {
+          tenantId,
+          OR: [{ externalEventId: remoteEvent.id }, { externalId: remoteEvent.id }],
+        },
+      });
+
+      if (!local) {
+        const created = await this.prisma.agendaEvent.create({
+          data: {
+            tenantId,
+            title: remoteEvent.summary ?? 'Evento Google Calendar',
+            description: remoteEvent.description ?? undefined,
+            type: AgendaEventType.OUTRO,
+            status: AgendaEventStatus.AGENDADA,
+            source: AgendaEventSource.GOOGLE_CALENDAR,
+            syncStatus: 'SYNCED',
+            externalProvider: 'GOOGLE',
+            externalId: remoteEvent.id,
+            externalEventId: remoteEvent.id,
+            externalEtag: remoteEvent.etag ?? undefined,
+            externalLastModifiedAt: externalLastModifiedAt ?? undefined,
+            externalCalendarId: calendarId,
+            startAt: new Date(remoteEvent.start.dateTime),
+            endAt: remoteEvent.end?.dateTime ? new Date(remoteEvent.end.dateTime) : null,
+            allDay: false,
+            location: remoteEvent.location ?? undefined,
+            lastSyncAt: new Date(),
+          },
+        });
+        await this.createSyncAuditLog({
+          tenantId,
+          integration,
+          direction,
+          eventId: created.id,
+          externalId: remoteEvent.id,
+          status: CalendarSyncStatus.SYNCED,
+          message: 'Evento externo criado localmente.',
+          operation: 'create',
+          localUpdatedAt: created.updatedAt,
+          externalUpdatedAt: externalLastModifiedAt,
+        });
+        synced += 1;
+        continue;
+      }
+
+      const externalIsNewer = this.isExternalEventNewer(local, externalLastModifiedAt, remoteEvent.etag ?? null);
+      if (!externalIsNewer) {
+        await this.createSyncAuditLog({
+          tenantId,
+          integration,
+          direction,
+          eventId: local.id,
+          externalId: remoteEvent.id,
+          status: CalendarSyncStatus.WARNING,
+          message: 'Evento externo ignorado: sem alterações mais recentes.',
+          operation: 'skip',
+          localUpdatedAt: local.updatedAt,
+          externalUpdatedAt: externalLastModifiedAt,
+        });
+        continue;
+      }
+
+      const localChangedAfterSync = Boolean(local.lastSyncAt && local.updatedAt > local.lastSyncAt);
+      if (integration.mode === CalendarSyncMode.TWO_WAY && localChangedAfterSync) {
+        conflicts += 1;
+        await this.createSyncAuditLog({
+          tenantId,
+          integration,
+          direction,
+          eventId: local.id,
+          externalId: remoteEvent.id,
+          status: CalendarSyncStatus.CONFLICT,
+          message: 'Conflito em modo TWO_WAY: alterações locais pendentes.',
+          operation: 'skip',
+          localUpdatedAt: local.updatedAt,
+          externalUpdatedAt: externalLastModifiedAt,
+        });
+        continue;
+      }
+
+      try {
+        const updated = await this.prisma.agendaEvent.update({
+          where: { id: local.id },
+          data: {
+            title: remoteEvent.summary ?? local.title,
+            description: remoteEvent.description ?? local.description,
+            startAt: new Date(remoteEvent.start.dateTime),
+            endAt: remoteEvent.end?.dateTime ? new Date(remoteEvent.end.dateTime) : local.endAt,
+            location: remoteEvent.location ?? local.location,
+            source: AgendaEventSource.GOOGLE_CALENDAR,
+            syncStatus: 'SYNCED',
+            externalProvider: 'GOOGLE',
+            externalId: remoteEvent.id,
+            externalEventId: remoteEvent.id,
+            externalEtag: remoteEvent.etag ?? local.externalEtag,
+            externalLastModifiedAt: externalLastModifiedAt ?? local.externalLastModifiedAt,
+            externalCalendarId: calendarId,
+            lastSyncAt: new Date(),
+          },
+        });
+        await this.createSyncAuditLog({
+          tenantId,
+          integration,
+          direction,
+          eventId: updated.id,
+          externalId: remoteEvent.id,
+          status: CalendarSyncStatus.SYNCED,
+          message: 'Evento externo atualizado localmente.',
+          operation: 'update',
+          localUpdatedAt: updated.updatedAt,
+          externalUpdatedAt: externalLastModifiedAt,
+        });
+        synced += 1;
+      } catch (error) {
+        errors += 1;
+        await this.createSyncAuditLog({
+          tenantId,
+          integration,
+          direction,
+          eventId: local.id,
+          externalId: remoteEvent.id,
+          status: CalendarSyncStatus.ERROR,
+          message: `Erro ao atualizar evento local: ${(error as Error).message}`,
+          operation: 'error',
+          localUpdatedAt: local.updatedAt,
+          externalUpdatedAt: externalLastModifiedAt,
+        });
+      }
+    }
+
+    return { synced, conflicts, errors };
+  }
+
+  private async pushGoogleEvents(
+    calendar: calendar_v3.Calendar,
+    integration: CalendarIntegration,
+    tenantId: string,
+    direction: CalendarSyncDirection,
+  ) {
+    const calendarId = integration.selectedCalendarId ?? 'primary';
+    const since = integration.lastSyncAt ?? new Date(0);
+    const events = await this.prisma.agendaEvent.findMany({
+      where: {
+        tenantId,
+        updatedAt: { gt: since },
+      },
+      orderBy: { updatedAt: 'asc' },
+      take: 200,
+    });
+
+    let synced = 0;
+    let conflicts = 0;
+    let errors = 0;
+
+    for (const event of events) {
+      const payload: calendar_v3.Schema$Event = {
+        summary: event.title,
+        description: event.description ?? undefined,
+        location: event.location ?? undefined,
+        start: { dateTime: event.startAt.toISOString() },
+        end: { dateTime: (event.endAt ?? new Date(event.startAt.getTime() + 60 * 60 * 1000)).toISOString() },
+      };
+
+      try {
+        const result = event.externalEventId
+          ? await calendar.events.patch({
+              calendarId,
+              eventId: event.externalEventId,
+              requestBody: payload,
+            })
+          : await calendar.events.insert({
+              calendarId,
+              requestBody: payload,
+            });
+
+        const syncedEvent = result.data;
+        const externalUpdatedAt = syncedEvent.updated ? new Date(syncedEvent.updated) : event.externalLastModifiedAt;
+        await this.prisma.agendaEvent.update({
+          where: { id: event.id },
+          data: {
+            source: AgendaEventSource.GOOGLE_CALENDAR,
+            syncStatus: 'SYNCED',
+            syncErrorMessage: null,
+            externalProvider: 'GOOGLE',
+            externalId: syncedEvent.id ?? event.externalId,
+            externalEventId: syncedEvent.id ?? event.externalEventId,
+            externalEtag: syncedEvent.etag ?? event.externalEtag,
+            externalLastModifiedAt: externalUpdatedAt ?? undefined,
+            externalCalendarId: calendarId,
+            lastSyncAt: new Date(),
+          },
+        });
+
+        await this.createSyncAuditLog({
+          tenantId,
+          integration,
+          direction,
+          eventId: event.id,
+          externalId: syncedEvent.id ?? event.externalId,
+          status: CalendarSyncStatus.SYNCED,
+          message: event.externalEventId ? 'Evento atualizado no Google Calendar.' : 'Evento criado no Google Calendar.',
+          operation: event.externalEventId ? 'update' : 'create',
+          localUpdatedAt: event.updatedAt,
+          externalUpdatedAt: externalUpdatedAt ?? null,
+        });
+        synced += 1;
+      } catch (error) {
+        errors += 1;
+        await this.prisma.agendaEvent.update({
+          where: { id: event.id },
+          data: {
+            syncStatus: 'ERROR',
+            syncErrorMessage: (error as Error).message,
+          },
+        });
+        await this.createSyncAuditLog({
+          tenantId,
+          integration,
+          direction,
+          eventId: event.id,
+          externalId: event.externalId,
+          status: CalendarSyncStatus.ERROR,
+          message: `Erro no push do evento: ${(error as Error).message}`,
+          operation: 'error',
+          localUpdatedAt: event.updatedAt,
+          externalUpdatedAt: event.externalLastModifiedAt,
+        });
+      }
+    }
+
+    return { synced, conflicts, errors };
+  }
+
+  private isExternalEventNewer(
+    localEvent: { updatedAt: Date; externalLastModifiedAt: Date | null; externalEtag: string | null },
+    externalUpdatedAt: Date | null,
+    externalEtag: string | null,
+  ) {
+    if (externalUpdatedAt && (!localEvent.externalLastModifiedAt || externalUpdatedAt > localEvent.externalLastModifiedAt)) {
+      return true;
+    }
+    if (externalEtag && externalEtag !== localEvent.externalEtag) {
+      return !externalUpdatedAt || externalUpdatedAt >= localEvent.updatedAt;
+    }
+    return false;
+  }
+
+  private createSyncAuditLog(params: {
+    tenantId: string;
+    integration: CalendarIntegration;
+    direction: CalendarSyncDirection;
+    eventId: string;
+    externalId?: string | null;
+    status: CalendarSyncStatus;
+    message: string;
+    operation: 'create' | 'update' | 'skip' | 'error';
+    localUpdatedAt: Date | null;
+    externalUpdatedAt: Date | null;
+  }) {
+    return this.prisma.syncAuditLog.create({
+      data: {
+        tenantId: params.tenantId,
+        integrationId: params.integration.id,
+        syncType: CalendarSyncType.EVENT,
+        direction: params.direction,
+        localEntity: 'AgendaEvent',
+        localEntityId: params.eventId,
+        externalId: params.externalId ?? undefined,
+        status: params.status,
+        message: params.message,
+        localUpdatedAt: params.localUpdatedAt,
+        externalUpdatedAt: params.externalUpdatedAt,
+        syncedAt: params.status === CalendarSyncStatus.ERROR || params.status === CalendarSyncStatus.CONFLICT ? null : new Date(),
+        payload: {
+          operation: params.operation,
+        },
       },
     });
   }
