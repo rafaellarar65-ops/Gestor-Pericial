@@ -57,11 +57,59 @@ export class FinancialService {
     });
   }
 
-  listRecebimentos(periciaId?: string) {
+  listRecebimentos(periciaId?: string, search?: string) {
+    const tenantId = this.context.get('tenantId') ?? '';
+    const trimmedSearch = search?.trim();
+
     return this.prisma.recebimento.findMany({
-      where: periciaId ? { periciaId } : undefined,
+      where: {
+        tenantId,
+        ...(periciaId ? { periciaId } : {}),
+        ...(trimmedSearch
+          ? {
+              OR: [
+                { descricao: { contains: trimmedSearch, mode: 'insensitive' } },
+                { pericia: { autorNome: { contains: trimmedSearch, mode: 'insensitive' } } },
+                {
+                  pericia: {
+                    OR: [
+                      { processoCNJ: { contains: trimmedSearch } },
+                      { processoCNJDigits: { contains: trimmedSearch.replace(/\D/g, '') } },
+                    ],
+                  },
+                },
+              ],
+            }
+          : {}),
+      },
+      include: {
+        pericia: {
+          select: {
+            processoCNJ: true,
+            autorNome: true,
+          },
+        },
+      },
       orderBy: { dataRecebimento: 'desc' },
     });
+  }
+
+  async updateRecebimento(id: string, dto: UpdateRecebimentoDto) {
+    return this.prisma.recebimento.update({
+      where: { id },
+      data: {
+        ...(dto.origem ? { fontePagamento: dto.origem } : {}),
+        ...(dto.dataRecebimento ? { dataRecebimento: new Date(dto.dataRecebimento) } : {}),
+        ...(dto.valorLiquido !== undefined ? { valorLiquido: new Prisma.Decimal(dto.valorLiquido) } : {}),
+        ...(dto.descricao !== undefined ? { descricao: dto.descricao } : {}),
+      },
+    });
+  }
+
+  async bulkDeleteRecebimentos(dto: BulkDeleteRecebimentosDto) {
+    const tenantId = this.context.get('tenantId') ?? '';
+    const result = await this.prisma.recebimento.deleteMany({ where: { tenantId, id: { in: dto.ids } } });
+    return { deleted: result.count };
   }
 
   createDespesa(dto: CreateDespesaDto) {

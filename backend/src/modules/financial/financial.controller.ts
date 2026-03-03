@@ -25,8 +25,18 @@ export class FinancialController {
   }
 
   @Get('recebimentos')
-  listRecebimentos(@Query('periciaId') periciaId?: string) {
-    return this.service.listRecebimentos(periciaId);
+  listRecebimentos(@Query('periciaId') periciaId?: string, @Query('search') search?: string) {
+    return this.service.listRecebimentos(periciaId, search);
+  }
+
+  @Patch('recebimentos/:id')
+  updateRecebimento(@Param('id') id: string, @Body() dto: UpdateRecebimentoDto) {
+    return this.service.updateRecebimento(id, dto);
+  }
+
+  @Post('recebimentos/bulk-delete')
+  bulkDeleteRecebimentos(@Body() dto: BulkDeleteRecebimentosDto) {
+    return this.service.bulkDeleteRecebimentos(dto);
   }
 
   @Post('despesas')
