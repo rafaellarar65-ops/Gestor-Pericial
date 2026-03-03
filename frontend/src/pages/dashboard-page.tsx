@@ -277,7 +277,7 @@ const DashboardPage = () => {
           <p className="text-xs font-bold uppercase text-slate-400">Processos Ativos</p>
           <p className="text-2xl font-bold text-slate-800">{totalAtivosLabel}</p>
         </div>
-      </div>
+      </Card>
 
       <Card className="space-y-4 rounded-xl bg-slate-900 p-5 text-white">
         <div className="flex items-center gap-2">

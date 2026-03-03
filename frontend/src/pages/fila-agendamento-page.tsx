@@ -148,7 +148,7 @@ const FilaAgendamentoPage = () => {
             <p className="text-sm text-slate-500">Etapa {currentStep} de 4: seleção, parâmetros, revisão e confirmação.</p>
           </div>
         </div>
-      </header>
+      </Card>
 
       {currentStep === 1 && (
         <StepSelect

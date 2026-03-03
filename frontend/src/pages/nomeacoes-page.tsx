@@ -94,9 +94,7 @@ function getGroupIcon(icon: StatusGroup['icon']) {
 function getStatusCode(item: PericiaItem): string {
   const rawStatus = item.status;
 
-  if (typeof rawStatus === 'string' || typeof rawStatus === 'number') {
-    return String(rawStatus).toUpperCase();
-  }
+  if (typeof rawStatus === 'string' || typeof rawStatus === 'number') return String(rawStatus).toUpperCase();
 
   if (rawStatus && typeof rawStatus === 'object') {
     const statusObject = rawStatus as Record<string, unknown>;
@@ -115,10 +113,7 @@ function getStatusCode(item: PericiaItem): string {
   return '';
 }
 
-function matchGroup(item: PericiaItem, group: StatusGroup): boolean {
-  const status = getStatusCode(item);
-  return group.statuses.some((s) => status.includes(s));
-}
+const matchGroup = (item: PericiaItem, group: StatusGroup) => group.statuses.some((status) => getStatusCode(item).includes(status));
 
 const NomeacoesPage = () => {
   const [openGroups, setOpenGroups] = useState<Set<string>>(new Set(['A AVALIAR (NOVAS)']));
@@ -243,6 +238,11 @@ const NomeacoesPage = () => {
 
   const loadedCount = allItems.length;
 
+  const groupedData = useMemo(
+    () => STATUS_GROUPS.map((group) => ({ ...group, items: data.filter((item) => matchGroup(item, group)) })),
+    [data],
+  );
+
   const toggle = (label: string) => {
     setOpenGroups((prev) => {
       const next = new Set(prev);
@@ -274,7 +274,11 @@ const NomeacoesPage = () => {
             </p>
           </div>
         </div>
-      </div>
+        <div>
+          <h1 className="text-2xl font-semibold">Central de Nomeações</h1>
+          <p className="text-sm text-primary-foreground/85">Triagem inicial, aceites, majorações e pendências com observações.</p>
+        </div>
+      </Card>
 
       <div className="space-y-3">
         {groups.map((group) => {
@@ -347,7 +351,7 @@ const NomeacoesPage = () => {
                   )}
                 </div>
               )}
-            </div>
+            </Card>
           );
         })}
       </div>
