@@ -1,0 +1,12 @@
+{
+  "name": "gestor-pericial-e2e",
+  "private": true,
+  "type": "module",
+  "scripts": {
+    "test:e2e": "cd .. && tests/node_modules/.bin/playwright test -c tests/playwright.config.ts tests/e2e",
+    "test:e2e:headed": "cd .. && tests/node_modules/.bin/playwright test --headed -c tests/playwright.config.ts tests/e2e"
+  },
+  "devDependencies": {
+    "@playwright/test": "^1.56.1"
+  }
+}

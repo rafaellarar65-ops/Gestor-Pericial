@@ -68,6 +68,16 @@ Garantir qualidade funcional, segurança (LGPD/RBAC), confiabilidade e conformid
 | CC-003 | Cross-cutting | Notificações | Evento de sistema | Disparar evento | Notificação correta sem duplicidade | Medium | S |
 | CC-004 | Cross-cutting | Responsividade | Viewports mobile/desktop | Abrir páginas principais | Layout usável sem quebra crítica | High | S |
 
+## Estrutura oficial da automação
+- A suíte E2E oficial do projeto está em `tests/` (raiz).
+- Configuração Playwright: `tests/playwright.config.ts`.
+- Specs E2E: `tests/e2e/*.spec.ts`.
+- Fixtures compartilhadas: `tests/fixtures/`.
+- Comandos oficiais:
+  - `npm --prefix tests install`
+  - `npm --prefix tests run test:e2e`
+  - `npm --prefix tests run test:e2e:headed`
+
 ## Critérios de saída
 - 100% dos testes BLOCKER aprovados.
 - 0 falhas críticas abertas.

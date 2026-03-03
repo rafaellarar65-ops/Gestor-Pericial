@@ -79,3 +79,15 @@ Ordem recomendada no pipeline de deploy/release:
 ## 10) Pipeline de deploy/release (referência)
 - Consulte também: `docs/deploy-pipeline.md`.
 - Sequência mandatória: migration/release -> deploy web -> validação.
+
+
+
+## 11) Execução da suíte E2E
+- Local oficial da suíte: `tests/` (raiz do repositório).
+- Instalação de dependências da suíte:
+  - `npm --prefix tests install`
+- Execução da suíte Playwright (headless):
+  - `npm --prefix tests run test:e2e`
+- Execução com navegador visível:
+  - `npm --prefix tests run test:e2e:headed`
+- Observação: os testes usam `tests/playwright.config.ts` e fixtures em `tests/fixtures/`.
