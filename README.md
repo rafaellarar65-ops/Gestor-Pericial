@@ -12,3 +12,12 @@ Blueprint UX/UI e especificações funcionais do **Perícias Manager Pro**.
 - `spec-detalhe-pericia.md` — Entrega 7 (spec detalhada)
 - `arquitetura_dados.md` — arquitetura de dados
 - `avaliacao-bugs.md` — revisão de qualidade e riscos
+
+
+## Suíte E2E (oficial)
+- A suíte E2E permanece em `tests/` na raiz do repositório.
+- Os cenários Playwright ficam em `tests/e2e/` e reutilizam fixtures em `tests/fixtures/`.
+- Para executar:
+  - `npm --prefix tests install`
+  - `npm --prefix tests run test:e2e`
+  - `npm --prefix tests run test:e2e:headed`
