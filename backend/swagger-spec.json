@@ -1,0 +1,473 @@
+{
+  "openapi": "3.0.3",
+  "info": {
+    "title": "Perícias Manager Pro API",
+    "version": "1.0.0",
+    "description": "Especificação inicial dos endpoints NestJS"
+  },
+  "servers": [
+    {
+      "url": "http://localhost:3000"
+    }
+  ],
+  "components": {
+    "securitySchemes": {
+      "bearer": {
+        "type": "http",
+        "scheme": "bearer",
+        "bearerFormat": "JWT"
+      }
+    },
+    "schemas": {
+      "ErrorResponse": {
+        "type": "object",
+        "properties": {
+          "statusCode": {
+            "type": "number"
+          },
+          "path": {
+            "type": "string"
+          },
+          "method": {
+            "type": "string"
+          },
+          "timestamp": {
+            "type": "string"
+          },
+          "error": {
+            "oneOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "object"
+              }
+            ]
+          }
+        }
+      }
+    }
+  },
+  "paths": {
+    "/documents": {
+      "get": {
+        "summary": "List documents",
+        "responses": {
+          "200": {
+            "description": "OK"
+          }
+        },
+        "security": [
+          {
+            "bearer": []
+          }
+        ]
+      },
+      "post": {
+        "summary": "Create documents",
+        "responses": {
+          "201": {
+            "description": "Created"
+          }
+        },
+        "security": [
+          {
+            "bearer": []
+          }
+        ]
+      }
+    },
+    "/laudo": {
+      "get": {
+        "summary": "List laudo",
+        "responses": {
+          "200": {
+            "description": "OK"
+          }
+        },
+        "security": [
+          {
+            "bearer": []
+          }
+        ]
+      },
+      "post": {
+        "summary": "Create laudo",
+        "responses": {
+          "201": {
+            "description": "Created"
+          }
+        },
+        "security": [
+          {
+            "bearer": []
+          }
+        ]
+      }
+    },
+    "/integrations": {
+      "get": {
+        "summary": "List integrations",
+        "responses": {
+          "200": {
+            "description": "OK"
+          }
+        },
+        "security": [
+          {
+            "bearer": []
+          }
+        ]
+      },
+      "post": {
+        "summary": "Create integrations",
+        "responses": {
+          "201": {
+            "description": "Created"
+          }
+        },
+        "security": [
+          {
+            "bearer": []
+          }
+        ]
+      }
+    },
+    "/knowledge": {
+      "get": {
+        "summary": "List knowledge",
+        "responses": {
+          "200": {
+            "description": "OK"
+          }
+        },
+        "security": [
+          {
+            "bearer": []
+          }
+        ]
+      },
+      "post": {
+        "summary": "Create knowledge",
+        "responses": {
+          "201": {
+            "description": "Created"
+          }
+        },
+        "security": [
+          {
+            "bearer": []
+          }
+        ]
+      }
+    },
+    "/telepericia": {
+      "get": {
+        "summary": "List telepericia",
+        "responses": {
+          "200": {
+            "description": "OK"
+          }
+        },
+        "security": [
+          {
+            "bearer": []
+          }
+        ]
+      },
+      "post": {
+        "summary": "Create telepericia",
+        "responses": {
+          "201": {
+            "description": "Created"
+          }
+        },
+        "security": [
+          {
+            "bearer": []
+          }
+        ]
+      }
+    },
+    "/maneuvers": {
+      "get": {
+        "summary": "List maneuvers",
+        "responses": {
+          "200": {
+            "description": "OK"
+          }
+        },
+        "security": [
+          {
+            "bearer": []
+          }
+        ]
+      },
+      "post": {
+        "summary": "Create maneuvers",
+        "responses": {
+          "201": {
+            "description": "Created"
+          }
+        },
+        "security": [
+          {
+            "bearer": []
+          }
+        ]
+      }
+    },
+    "/pericias": {
+      "get": {
+        "summary": "List pericias",
+        "responses": {
+          "200": {
+            "description": "OK"
+          }
+        },
+        "security": [
+          {
+            "bearer": []
+          }
+        ]
+      },
+      "post": {
+        "summary": "Create pericias",
+        "responses": {
+          "201": {
+            "description": "Created"
+          }
+        },
+        "security": [
+          {
+            "bearer": []
+          }
+        ]
+      }
+    },
+    "/notifications": {
+      "get": {
+        "summary": "List notifications",
+        "responses": {
+          "200": {
+            "description": "OK"
+          }
+        },
+        "security": [
+          {
+            "bearer": []
+          }
+        ]
+      },
+      "post": {
+        "summary": "Create notifications",
+        "responses": {
+          "201": {
+            "description": "Created"
+          }
+        },
+        "security": [
+          {
+            "bearer": []
+          }
+        ]
+      }
+    },
+    "/financial": {
+      "get": {
+        "summary": "List financial",
+        "responses": {
+          "200": {
+            "description": "OK"
+          }
+        },
+        "security": [
+          {
+            "bearer": []
+          }
+        ]
+      },
+      "post": {
+        "summary": "Create financial",
+        "responses": {
+          "201": {
+            "description": "Created"
+          }
+        },
+        "security": [
+          {
+            "bearer": []
+          }
+        ]
+      }
+    },
+    "/config": {
+      "get": {
+        "summary": "List config",
+        "responses": {
+          "200": {
+            "description": "OK"
+          }
+        },
+        "security": [
+          {
+            "bearer": []
+          }
+        ]
+      },
+      "post": {
+        "summary": "Create config",
+        "responses": {
+          "201": {
+            "description": "Created"
+          }
+        },
+        "security": [
+          {
+            "bearer": []
+          }
+        ]
+      }
+    },
+    "/agenda": {
+      "get": {
+        "summary": "List agenda",
+        "responses": {
+          "200": {
+            "description": "OK"
+          }
+        },
+        "security": [
+          {
+            "bearer": []
+          }
+        ]
+      },
+      "post": {
+        "summary": "Create agenda",
+        "responses": {
+          "201": {
+            "description": "Created"
+          }
+        },
+        "security": [
+          {
+            "bearer": []
+          }
+        ]
+      }
+    },
+    "/ai": {
+      "get": {
+        "summary": "List ai",
+        "responses": {
+          "200": {
+            "description": "OK"
+          }
+        },
+        "security": [
+          {
+            "bearer": []
+          }
+        ]
+      },
+      "post": {
+        "summary": "Create ai",
+        "responses": {
+          "201": {
+            "description": "Created"
+          }
+        },
+        "security": [
+          {
+            "bearer": []
+          }
+        ]
+      }
+    },
+    "/auth": {
+      "get": {
+        "summary": "List auth",
+        "responses": {
+          "200": {
+            "description": "OK"
+          }
+        },
+        "security": [
+          {
+            "bearer": []
+          }
+        ]
+      },
+      "post": {
+        "summary": "Create auth",
+        "responses": {
+          "201": {
+            "description": "Created"
+          }
+        },
+        "security": [
+          {
+            "bearer": []
+          }
+        ]
+      }
+    },
+    "/users": {
+      "get": {
+        "summary": "List users",
+        "responses": {
+          "200": {
+            "description": "OK"
+          }
+        },
+        "security": [
+          {
+            "bearer": []
+          }
+        ]
+      },
+      "post": {
+        "summary": "Create users",
+        "responses": {
+          "201": {
+            "description": "Created"
+          }
+        },
+        "security": [
+          {
+            "bearer": []
+          }
+        ]
+      }
+    },
+    "/communications": {
+      "get": {
+        "summary": "List communications",
+        "responses": {
+          "200": {
+            "description": "OK"
+          }
+        },
+        "security": [
+          {
+            "bearer": []
+          }
+        ]
+      },
+      "post": {
+        "summary": "Create communications",
+        "responses": {
+          "201": {
+            "description": "Created"
+          }
+        },
+        "security": [
+          {
+            "bearer": []
+          }
+        ]
+      }
+    }
+  }
+}
