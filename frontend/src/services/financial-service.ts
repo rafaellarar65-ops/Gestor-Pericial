@@ -1,6 +1,7 @@
 import { apiClient } from '@/lib/api-client';
 import type {
   ApiListResponse,
+  ConciliationStats,
   Despesa,
   FinancialAnalytics,
   FinancialItem,
@@ -103,6 +104,12 @@ export const financialService = {
 
   discardUnmatchedPayment: async (id: string, note?: string): Promise<UnmatchedPayment> => {
     const { data } = await apiClient.post<UnmatchedPayment>(`/financial/unmatched/${id}/discard`, { note });
+    return data;
+  },
+
+
+  conciliationStats: async (): Promise<ConciliationStats> => {
+    const { data } = await apiClient.get<ConciliationStats>('/financial/conciliation/stats');
     return data;
   },
 

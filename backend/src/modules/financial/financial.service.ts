@@ -218,6 +218,83 @@ export class FinancialService {
     return { reconciled: result.count };
   }
 
+
+  async conciliationStats() {
+    const rows = await this.prisma.unmatchedPayment.findMany({
+      select: { amount: true, matchStatus: true, notes: true, rawData: true },
+    });
+
+    const parseOrigin = (rawData: unknown) => {
+      const raw = (rawData ?? {}) as RawUnmatchedData;
+      const origin = typeof raw.origin === 'string' ? raw.origin : 'INDIVIDUAL';
+      if (origin === 'MANUAL_CSV') return 'CSV';
+      if (origin === 'AI_PRINT') return 'OFX';
+      return 'INDIVIDUAL';
+    };
+
+    const isIgnored = (row: { matchStatus: PaymentMatchStatus; notes: string | null }) =>
+      row.matchStatus === PaymentMatchStatus.PARTIAL && (row.notes ?? '').includes('[DISCARDED]');
+
+    const total = rows.length;
+    const ignored = rows.filter((row) => isIgnored(row as { matchStatus: PaymentMatchStatus; notes: string | null })).length;
+    const matched = rows.filter((row) => row.matchStatus === PaymentMatchStatus.MATCHED).length;
+    const pending = total - matched - ignored;
+
+    const autoMatched = rows.filter((row) => {
+      if (row.matchStatus !== PaymentMatchStatus.MATCHED) return false;
+      const note = (row.notes ?? '').toLowerCase();
+      return note.includes('auto') || note.includes('lote por cnj');
+    }).length;
+
+    const autoMatchRate = matched > 0 ? Number(((autoMatched / matched) * 100).toFixed(2)) : 0;
+
+    const byOrigin = rows.reduce(
+      (acc, row) => {
+        const key = parseOrigin(row.rawData);
+        acc[key] += 1;
+        return acc;
+      },
+      { CSV: 0, OFX: 0, INDIVIDUAL: 0 },
+    );
+
+    const matchedVolume = rows.reduce((sum, row) => {
+      if (row.matchStatus !== PaymentMatchStatus.MATCHED) return sum;
+      return sum + Number(row.amount ?? 0);
+    }, 0);
+
+    const pendingVolume = rows.reduce((sum, row) => {
+      if (row.matchStatus === PaymentMatchStatus.MATCHED || isIgnored(row as { matchStatus: PaymentMatchStatus; notes: string | null })) {
+        return sum;
+      }
+      return sum + Number(row.amount ?? 0);
+    }, 0);
+
+    const ignoredVolume = rows.reduce((sum, row) => {
+      if (!isIgnored(row as { matchStatus: PaymentMatchStatus; notes: string | null })) return sum;
+      return sum + Number(row.amount ?? 0);
+    }, 0);
+
+    return {
+      totals: {
+        reconciled: matched,
+        unreconciled: pending,
+        ignored,
+        total,
+      },
+      autoMatching: {
+        automaticMatches: autoMatched,
+        totalReconciliable: matched,
+        rate: autoMatchRate,
+      },
+      originDistribution: byOrigin,
+      financialVolume: {
+        reconciled: Number(matchedVolume.toFixed(2)),
+        pending: Number(pendingVolume.toFixed(2)),
+        ignored: Number(ignoredVolume.toFixed(2)),
+      },
+    };
+  }
+
   async analytics() {
     const [totalRecebidoAgg, totalDespesaAgg, atrasados] = await this.prisma.$transaction([
       this.prisma.recebimento.aggregate({ _sum: { valorLiquido: true, valorBruto: true } }),

@@ -59,4 +59,21 @@ describe('FinancialService', () => {
     const result = await service.analytics();
     expect(result.financialScore).toBe(0);
   });
+
+  it('returns conciliation stats with ignored separated from matched', async () => {
+    prisma.unmatchedPayment.findMany.mockResolvedValue([
+      { amount: 100, matchStatus: 'MATCHED', notes: 'Conciliação em lote por CNJ', rawData: { origin: 'MANUAL_CSV' } },
+      { amount: 80, matchStatus: 'MATCHED', notes: 'Vinculado manualmente', rawData: { origin: 'INDIVIDUAL' } },
+      { amount: 45, matchStatus: 'UNMATCHED', notes: null, rawData: { origin: 'AI_PRINT' } },
+      { amount: 20, matchStatus: 'PARTIAL', notes: '[DISCARDED] Ignorado', rawData: { origin: 'MANUAL_CSV' } },
+    ]);
+
+    const result = await service.conciliationStats();
+
+    expect(result.totals).toEqual({ reconciled: 2, unreconciled: 1, ignored: 1, total: 4 });
+    expect(result.autoMatching.rate).toBe(50);
+    expect(result.originDistribution).toEqual({ CSV: 2, OFX: 1, INDIVIDUAL: 1 });
+    expect(result.financialVolume).toEqual({ reconciled: 180, pending: 45, ignored: 20 });
+  });
+
 });

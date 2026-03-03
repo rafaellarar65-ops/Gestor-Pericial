@@ -65,6 +65,11 @@ const ConciliacaoPage = () => {
     queryFn: () => financialService.listUnmatchedPayments(),
   });
 
+  const statsQuery = useQuery({
+    queryKey: ['financial-conciliation-stats'],
+    queryFn: () => financialService.conciliationStats(),
+  });
+
   const selectedItem = useMemo(
     () => unmatchedQuery.data?.find((item) => item.id === selectedId) ?? unmatchedQuery.data?.[0],
     [unmatchedQuery.data, selectedId],
@@ -81,7 +86,10 @@ const ConciliacaoPage = () => {
   });
 
   const refreshUnmatched = async () => {
-    await queryClient.invalidateQueries({ queryKey: ['financial-unmatched-payments'] });
+    await Promise.all([
+      queryClient.invalidateQueries({ queryKey: ['financial-unmatched-payments'] }),
+      queryClient.invalidateQueries({ queryKey: ['financial-conciliation-stats'] }),
+    ]);
   };
 
   const linkMutation = useMutation({
@@ -176,6 +184,35 @@ const ConciliacaoPage = () => {
         <p className="text-sm text-muted-foreground">Concilie pagamentos não vinculados de forma individual ou em lote.</p>
       </div>
 
+
+      <div className="grid gap-3 sm:grid-cols-2 xl:grid-cols-4">
+        <Card className="space-y-1 p-4">
+          <p className="text-xs text-muted-foreground">Conciliado vs não conciliado</p>
+          <p className="text-lg font-semibold">{statsQuery.data?.totals.reconciled ?? 0} / {statsQuery.data?.totals.unreconciled ?? 0}</p>
+          <p className="text-xs text-muted-foreground">Ignorados: {statsQuery.data?.totals.ignored ?? 0}</p>
+        </Card>
+
+        <Card className="space-y-1 p-4">
+          <p className="text-xs text-muted-foreground">Matching automático</p>
+          <p className="text-lg font-semibold">{(statsQuery.data?.autoMatching.rate ?? 0).toFixed(2)}%</p>
+          <p className="text-xs text-muted-foreground">{statsQuery.data?.autoMatching.automaticMatches ?? 0} automáticos</p>
+        </Card>
+
+        <Card className="space-y-1 p-4">
+          <p className="text-xs text-muted-foreground">Distribuição por origem</p>
+          <p className="text-sm">CSV: {statsQuery.data?.originDistribution.CSV ?? 0}</p>
+          <p className="text-sm">OFX: {statsQuery.data?.originDistribution.OFX ?? 0}</p>
+          <p className="text-sm">Individual: {statsQuery.data?.originDistribution.INDIVIDUAL ?? 0}</p>
+        </Card>
+
+        <Card className="space-y-1 p-4">
+          <p className="text-xs text-muted-foreground">Volume financeiro</p>
+          <p className="text-sm">Conciliado: {formatCurrency(statsQuery.data?.financialVolume.reconciled ?? 0)}</p>
+          <p className="text-sm">Pendente: {formatCurrency(statsQuery.data?.financialVolume.pending ?? 0)}</p>
+          <p className="text-xs text-muted-foreground">Ignorado: {formatCurrency(statsQuery.data?.financialVolume.ignored ?? 0)}</p>
+        </Card>
+      </div>
+
       <Card className="space-y-3 p-4">
         <h2 className="text-base font-medium">Importar extrato CSV</h2>
         <input type="file" accept=".csv" onChange={(e) => setCsvFile(e.target.files?.[0] ?? null)} />
@@ -214,6 +251,7 @@ const ConciliacaoPage = () => {
               ))}
             </div>
           </Card>
+
 
           <Card className="space-y-3 p-4">
             <h3 className="text-sm font-medium">Sugestões de match</h3>
