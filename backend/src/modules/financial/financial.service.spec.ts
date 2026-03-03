@@ -13,6 +13,9 @@ describe('FinancialService', () => {
       findMany: jest.fn(),
       aggregate: jest.fn(),
     },
+    bankTransaction: {
+      create: jest.fn(),
+    },
     importBatch: {
       create: jest.fn(),
       update: jest.fn(),

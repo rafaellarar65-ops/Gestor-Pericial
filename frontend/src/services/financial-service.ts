@@ -12,6 +12,8 @@ import type {
   Recebimento,
   UnmatchedPayment,
   UnmatchedPaymentOrigin,
+  UnmatchedPaymentSplitPayload,
+  UnmatchedPaymentSplitResult,
 } from '@/types/api';
 
 

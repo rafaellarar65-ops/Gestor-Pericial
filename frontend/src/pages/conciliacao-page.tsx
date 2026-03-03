@@ -1,4 +1,4 @@
-import { useMemo, useState } from 'react';
+import { useEffect, useMemo, useState } from 'react';
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 import { toast } from 'sonner';
 import { Button } from '@/components/ui/button';
@@ -41,6 +41,21 @@ const parseCsv = async (file: File): Promise<Array<Record<string, string>>> => {
   });
 };
 
+
+const DECIMAL_TOLERANCE = 0.01;
+
+type SplitInstallmentDraft = {
+  periciaId: string;
+  amount: string;
+  note: string;
+};
+
+const emptyInstallment = (): SplitInstallmentDraft => ({
+  periciaId: '',
+  amount: '',
+  note: '',
+});
+
 const mapCsvItems = (rows: Array<Record<string, string>>) =>
   rows.map((row) => ({
     amount: Number((row.valor ?? row.amount ?? row.vlr ?? '0').replace('.', '').replace(',', '.')),
@@ -59,6 +74,7 @@ const ConciliacaoPage = () => {
   const [selectedId, setSelectedId] = useState<string | null>(null);
   const [selectedBatchIds, setSelectedBatchIds] = useState<string[]>([]);
   const [csvFile, setCsvFile] = useState<File | null>(null);
+  const [splitInstallments, setSplitInstallments] = useState<SplitInstallmentDraft[]>([emptyInstallment(), emptyInstallment()]);
 
   const unmatchedQuery = useQuery({
     queryKey: ['financial-unmatched-payments'],
@@ -74,6 +90,10 @@ const ConciliacaoPage = () => {
     () => unmatchedQuery.data?.find((item) => item.id === selectedId) ?? unmatchedQuery.data?.[0],
     [unmatchedQuery.data, selectedId],
   );
+
+  useEffect(() => {
+    setSplitInstallments([emptyInstallment(), emptyInstallment()]);
+  }, [selectedItem?.id]);
 
   const suggestionsQuery = useQuery({
     queryKey: ['conciliacao-suggestions', selectedItem?.id, selectedItem?.cnj],
@@ -121,6 +141,43 @@ const ConciliacaoPage = () => {
       await refreshUnmatched();
     },
     onError: () => toast.error('Falha ao ignorar item.'),
+  });
+
+
+  const splitMutation = useMutation({
+    mutationFn: async () => {
+      if (!selectedItem?.id) throw new Error('Selecione um item para dividir.');
+      const originalAmount = Number(selectedItem.amount ?? 0);
+      if (originalAmount <= 0) throw new Error('O item selecionado precisa ter valor maior que zero.');
+
+      const normalized = splitInstallments.map((item) => ({
+        periciaId: item.periciaId.trim(),
+        amount: Number(item.amount),
+        note: item.note.trim() || undefined,
+      }));
+
+      if (normalized.some((item) => !item.periciaId || Number.isNaN(item.amount) || item.amount <= 0)) {
+        throw new Error('Preencha perícia e valor válido para todas as parcelas.');
+      }
+
+      const total = normalized.reduce((sum, item) => sum + item.amount, 0);
+      if (Math.abs(total - originalAmount) > DECIMAL_TOLERANCE) {
+        throw new Error('A soma das parcelas deve ser igual ao valor original.');
+      }
+
+      return financialService.splitUnmatchedPayment(selectedItem.id, {
+        installments: normalized,
+      });
+    },
+    onSuccess: async () => {
+      toast.success('Split realizado com sucesso.');
+      setSplitInstallments([emptyInstallment(), emptyInstallment()]);
+      await refreshUnmatched();
+    },
+    onError: (error) => {
+      const message = error instanceof Error ? error.message : 'Falha ao realizar split.';
+      toast.error(message);
+    },
   });
 
   const uploadMutation = useMutation({
@@ -176,6 +233,16 @@ const ConciliacaoPage = () => {
     setSelectedBatchIds([]);
     await refreshUnmatched();
   };
+
+
+  const splitOriginalAmount = Number(selectedItem?.amount ?? 0);
+  const splitTotalAmount = splitInstallments.reduce((sum, item) => sum + (Number(item.amount) || 0), 0);
+  const splitDifference = Number((splitOriginalAmount - splitTotalAmount).toFixed(2));
+  const splitCanConfirm =
+    Boolean(selectedItem?.id) &&
+    splitInstallments.length >= 2 &&
+    splitInstallments.every((item) => item.periciaId.trim() && Number(item.amount) > 0) &&
+    Math.abs(splitDifference) <= DECIMAL_TOLERANCE;
 
   return (
     <div className="space-y-6">
@@ -255,6 +322,77 @@ const ConciliacaoPage = () => {
 
           <Card className="space-y-3 p-4">
             <h3 className="text-sm font-medium">Sugestões de match</h3>
+
+            {selectedItem ? (
+              <div className="space-y-2 rounded border border-dashed p-3">
+                <h4 className="text-xs font-semibold uppercase text-muted-foreground">Split do pagamento</h4>
+                <p className="text-xs text-muted-foreground">Valor original: {formatCurrency(splitOriginalAmount)}</p>
+                <div className="space-y-2">
+                  {splitInstallments.map((installment, index) => (
+                    <div key={`split-${index}`} className="grid gap-2 rounded border p-2 md:grid-cols-3">
+                      <input
+                        className="rounded border px-2 py-1 text-xs"
+                        placeholder="Perícia ID"
+                        value={installment.periciaId}
+                        onChange={(e) =>
+                          setSplitInstallments((prev) =>
+                            prev.map((item, itemIndex) =>
+                              itemIndex === index ? { ...item, periciaId: e.target.value } : item,
+                            ),
+                          )
+                        }
+                      />
+                      <input
+                        className="rounded border px-2 py-1 text-xs"
+                        type="number"
+                        step="0.01"
+                        min="0"
+                        placeholder="Valor"
+                        value={installment.amount}
+                        onChange={(e) =>
+                          setSplitInstallments((prev) =>
+                            prev.map((item, itemIndex) =>
+                              itemIndex === index ? { ...item, amount: e.target.value } : item,
+                            ),
+                          )
+                        }
+                      />
+                      <input
+                        className="rounded border px-2 py-1 text-xs"
+                        placeholder="Nota (opcional)"
+                        value={installment.note}
+                        onChange={(e) =>
+                          setSplitInstallments((prev) =>
+                            prev.map((item, itemIndex) =>
+                              itemIndex === index ? { ...item, note: e.target.value } : item,
+                            ),
+                          )
+                        }
+                      />
+                    </div>
+                  ))}
+                </div>
+                <div className="flex flex-wrap gap-2">
+                  <Button size="sm" variant="outline" onClick={() => setSplitInstallments((prev) => [...prev, emptyInstallment()])}>
+                    Adicionar parcela
+                  </Button>
+                  <Button
+                    size="sm"
+                    variant="outline"
+                    disabled={splitInstallments.length <= 2}
+                    onClick={() => setSplitInstallments((prev) => (prev.length > 2 ? prev.slice(0, -1) : prev))}
+                  >
+                    Remover última
+                  </Button>
+                </div>
+                <p className={`text-xs ${Math.abs(splitDifference) <= DECIMAL_TOLERANCE ? 'text-emerald-600' : 'text-amber-600'}`}>
+                  Total parcelas: {formatCurrency(splitTotalAmount)} · Diferença: {formatCurrency(splitDifference)}
+                </p>
+                <Button size="sm" disabled={!splitCanConfirm || splitMutation.isPending} onClick={() => splitMutation.mutate()}>
+                  {splitMutation.isPending ? 'Confirmando split...' : 'Confirmar split'}
+                </Button>
+              </div>
+            ) : null}
             {!selectedItem ? <EmptyState title="Selecione um item para ver sugestões." /> : null}
             {suggestionsQuery.isLoading ? <LoadingState /> : null}
             {suggestionsQuery.isError ? <ErrorState message="Falha ao carregar sugestões." /> : null}
