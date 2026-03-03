@@ -22,24 +22,14 @@ type AgendaRow = {
   syncStatus: 'PENDING' | 'SYNCED' | 'WARNING' | 'CONFLICT' | 'ERROR';
 };
 
-const getValue = (item: Record<string, string | number | undefined>, keys: string[]): string => {
-  for (const key of keys) {
-    const value = item[key];
-    if (value !== undefined && value !== null && String(value).trim()) {
-      return String(value);
-    }
-  }
-  return '';
+const addDays = (date: Date, days: number) => {
+  const next = new Date(date);
+  next.setDate(next.getDate() + days);
+  return next;
 };
 
-const toDateTime = (value: string) => {
-  if (!value) return '—';
-  const date = new Date(value);
-  return Number.isNaN(date.getTime()) ? value : date.toLocaleString('pt-BR');
-};
-
-const inferStatus = (item: Record<string, string | number | undefined>): AgendaRow['status'] => {
-  const raw = getValue(item, ['status', 'state']).toLowerCase();
+const inferStatus = (item: AgendaEvent): AgendaStatusFilter => {
+  const raw = String((item as AgendaEvent & { status?: string }).status ?? '').toLowerCase();
   if (raw.includes('realiz')) return 'realizado';
   if (raw.includes('cancel')) return 'cancelado';
   return 'agendado';
@@ -118,8 +108,42 @@ const Page = () => {
         const matchesPeriodo = !periodo || row.inicio.startsWith(periodo);
         return matchesBusca && matchesStatus && matchesPeriodo;
       }),
-    [rows, busca, status, periodo],
+    [rows, search, status, dateFilter, locationFilter],
   );
+
+  const overlappingIds = useMemo(() => {
+    const ids = new Set<string>();
+    filteredRows.forEach((row) => {
+      if (isOverlapping(row, filteredRows)) ids.add(row.id);
+    });
+    return ids;
+  }, [filteredRows]);
+
+  const selectedEvent = useMemo(
+    () => (selectedEventId ? filteredRows.find((item) => item.id === selectedEventId) ?? null : null),
+    [selectedEventId, filteredRows],
+  );
+
+  const currentDateLabel = useMemo(() => {
+    if (view === 'day') return currentDate.toLocaleDateString('pt-BR', { weekday: 'long', day: '2-digit', month: 'long' });
+    const end = addDays(currentDate, 6);
+    return `${currentDate.toLocaleDateString('pt-BR')} - ${end.toLocaleDateString('pt-BR')}`;
+  }, [currentDate, view]);
+
+  const savePatch = (id: string, payload: Partial<AgendaSheetEvent>) => updateEventMutation.mutate({ id, payload });
+
+  const handleCalendarEventChange = (id: string, startAt: string, endAt: string) => {
+    const current = filteredRows.find((item) => item.id === id);
+    if (!current) return;
+    const candidate = { ...current, startAt, endAt };
+
+    if (isOverlapping(candidate, filteredRows)) {
+      setPendingUpdate({ id, startAt, endAt });
+      return;
+    }
+
+    savePatch(id, { startAt, endAt });
+  };
 
   if (isLoading) return <LoadingState />;
   if (isError) return <ErrorState message="Erro ao carregar agenda." />;
@@ -197,6 +221,15 @@ const Page = () => {
             </table>
           </div>
         </Card>
+      ) : (
+        <TimeGridCalendar
+          currentDate={currentDate}
+          events={filteredRows}
+          onEventChange={handleCalendarEventChange}
+          onSelectEvent={setSelectedEventId}
+          overlappingIds={overlappingIds}
+          view={view}
+        />
       )}
 
       <Dialog open={aiOpen} onClose={() => setAiOpen(false)} title="IA: Sugerir blocos de laudo">
