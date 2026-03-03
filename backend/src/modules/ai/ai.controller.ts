@@ -4,12 +4,14 @@ import { Throttle } from '@nestjs/throttler';
 import { AiService } from './ai.service';
 import {
   AnalyzeDocumentDto,
+  AnalyzePdfDto,
   BatchActionDto,
   CoherenceCheckDto,
   ExecuteAiTaskDto,
   LaudoAssistDto,
   ProcessAiOutputDto,
   SpecificAnalysisDto,
+  TranscribeAudioDto,
 } from './dto/ai.dto';
 
 @ApiTags('ai')
@@ -19,6 +21,18 @@ import {
 export class AiController {
   constructor(private readonly service: AiService) {}
 
+
+  @Post('transcribe-audio')
+  @ApiOperation({ summary: 'Transcreve áudio via proxy backend para Gemini' })
+  transcribeAudio(@Body() dto: TranscribeAudioDto) {
+    return this.service.transcribeAudio(dto);
+  }
+
+  @Post('analyze-pdf')
+  @ApiOperation({ summary: 'Analisa PDF de documento do processo usando Gemini e retorna JSON estruturado' })
+  analyzePdf(@Body() dto: AnalyzePdfDto) {
+    return this.service.analyzePdf(dto);
+  }
   @Post('analyze-document')
   @ApiOperation({ summary: 'Monta prompt mestre para análise inicial de PDF processual' })
   analyzeDocument(@Body() dto: AnalyzeDocumentDto) {

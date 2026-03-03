@@ -1,14 +1,20 @@
-import { Injectable } from '@nestjs/common';
+import { BadRequestException, GatewayTimeoutException, Injectable, InternalServerErrorException, Logger, NotFoundException } from '@nestjs/common';
+import { GoogleGenerativeAI } from '@google/generative-ai';
+import { PDFParse } from 'pdf-parse';
+import { setTimeout as delay } from 'node:timers/promises';
 import { RequestContextService } from '../../common/request-context.service';
 import { PrismaService } from '../../prisma/prisma.service';
 import {
   AnalyzeDocumentDto,
+  AnalyzePdfDto,
   BatchActionDto,
   CoherenceCheckDto,
   ExecuteAiTaskDto,
   LaudoAssistDto,
   ProcessAiOutputDto,
   SpecificAnalysisDto,
+  TranscribeAudioDto,
+  analyzePdfPromptType,
 } from './dto/ai.dto';
 import { guardrailsConfig } from './guardrails-config';
 import { buildBatchActionPrompt } from './prompts/batch-action';
@@ -21,11 +27,189 @@ import { JsonSchemaHint, PromptBuildResult } from './prompts/types';
 @Injectable()
 export class AiService {
   private readonly cache = new Map<string, Record<string, unknown>>();
+  private readonly logger = new Logger(AiService.name);
+  private readonly genAI: GoogleGenerativeAI | null;
+  private readonly geminiModel: string;
 
   constructor(
     private readonly prisma: PrismaService,
     private readonly context: RequestContextService,
-  ) {}
+  ) {
+    const apiKey = process.env.GEMINI_API_KEY;
+    this.genAI = apiKey ? new GoogleGenerativeAI(apiKey) : null;
+    this.geminiModel = process.env.GEMINI_MODEL ?? 'gemini-1.5-flash';
+  }
+
+
+  async transcribeAudio(dto: TranscribeAudioDto) {
+    const startedAt = Date.now();
+    const transcription = await this.withTimeout(this.transcribe(dto.audio), 60_000, 'Tempo limite excedido para transcrição de áudio.');
+
+    await this.logTokenUsage('ai.transcribe-audio', Math.ceil(dto.audio.length / 4));
+    this.logger.log(JSON.stringify({ event: 'ai.transcribe-audio.success', latencyMs: Date.now() - startedAt }));
+
+    return { text: transcription };
+  }
+
+  async analyzePdf(dto: AnalyzePdfDto) {
+    const startedAt = Date.now();
+    const tenantId = this.context.get('tenantId') ?? '';
+
+    const document = await this.prisma.caseDocument.findFirst({
+      where: { id: dto.documentId, tenantId },
+    });
+
+    if (!document) {
+      throw new NotFoundException('Documento não encontrado para este tenant.');
+    }
+
+    if (!document.storagePath) {
+      throw new BadRequestException('Documento sem storagePath para processamento.');
+    }
+
+    const pdfBuffer = await this.withTimeout(this.fetchPdfBuffer(document.storagePath), 60_000, 'Tempo limite excedido ao baixar PDF.');
+
+    const parser = new PDFParse({ data: pdfBuffer });
+    const parsed = await this.withTimeout(parser.getText(), 60_000, 'Tempo limite excedido ao extrair texto do PDF.');
+    await parser.destroy();
+    const extractedText = parsed.text?.trim();
+
+    if (!extractedText) {
+      throw new BadRequestException('Não foi possível extrair texto do PDF informado.');
+    }
+
+    const analysis = await this.withTimeout(this.analyzePdfText(extractedText, dto.promptType), 60_000, 'Tempo limite excedido na análise de IA do PDF.');
+
+    await this.logTokenUsage('ai.analyze-pdf', Math.ceil(extractedText.length / 4));
+
+    this.logger.log(
+      JSON.stringify({
+        event: 'ai.analyze-pdf.success',
+        promptType: dto.promptType,
+        documentId: dto.documentId,
+        latencyMs: Date.now() - startedAt,
+      }),
+    );
+
+    return analysis;
+  }
+
+
+  private requireGenAI(): GoogleGenerativeAI {
+    if (!this.genAI) {
+      throw new InternalServerErrorException('GEMINI_API_KEY não configurada no backend.');
+    }
+
+    return this.genAI;
+  }
+
+  private async transcribe(audioInput: string): Promise<string> {
+    const normalized = this.normalizeAudioInput(audioInput);
+    const model = this.requireGenAI().getGenerativeModel({ model: this.geminiModel });
+
+    const prompt =
+      'Transcreva este áudio de consulta médica. Organize em seções: Identificação, História Médica, Exame Físico, etc. Formato: texto estruturado por seções.';
+
+    const response = await model.generateContent([
+      { inlineData: { data: normalized.base64, mimeType: normalized.mimeType } },
+      { text: prompt },
+    ]);
+
+    const text = response.response.text();
+    if (!text?.trim()) {
+      throw new InternalServerErrorException('Gemini não retornou conteúdo de transcrição.');
+    }
+
+    return text.trim();
+  }
+
+  private async analyzePdfText(text: string, promptType: AnalyzePdfDto['promptType']): Promise<Record<string, unknown>> {
+    const model = this.requireGenAI().getGenerativeModel({ model: this.geminiModel });
+    const prompt = this.getAnalyzePdfPrompt(promptType, text);
+
+    const response = await model.generateContent(prompt);
+    const raw = response.response.text();
+
+    if (!raw?.trim()) {
+      throw new InternalServerErrorException('Gemini não retornou conteúdo para análise de PDF.');
+    }
+
+    return this.parseModelJsonResponse(raw);
+  }
+
+  private getAnalyzePdfPrompt(promptType: AnalyzePdfDto['promptType'], text: string): string {
+    const preLaudoPrompt = `Analise este processo judicial de perícia médica.\n\nExtraia:\n1. Dados do processo (CNJ, vara, comarca, partes)\n2. Condições médicas alegadas (nome, CID, lateralidade)\n3. Linha do tempo de eventos\n4. Questões particulares a investigar\n5. Checklist documental\n\nFormato de resposta: JSON conforme interface AiMasterAnalysis em types.ts`;
+
+    const summaryPrompt =
+      'Resuma o processo pericial com foco em fatos clínicos e processuais, retornando JSON com resumoExecutivo, riscos e próximos passos.';
+
+    const lawyersPrompt =
+      'Extraia informações úteis para advogados (partes, pedidos, provas, inconsistências) e retorne JSON estruturado com campos claros.';
+
+    const selectedPrompt =
+      promptType === analyzePdfPromptType.PRE_LAUDO
+        ? preLaudoPrompt
+        : promptType === analyzePdfPromptType.SUMMARY
+          ? summaryPrompt
+          : lawyersPrompt;
+
+    return `${selectedPrompt}\n\nTexto do documento:\n${text}`;
+  }
+
+  private parseModelJsonResponse(rawResponse: string): Record<string, unknown> {
+    const normalized = rawResponse
+      .replace(/^```json\s*/i, '')
+      .replace(/^```\s*/i, '')
+      .replace(/```$/i, '')
+      .trim();
+
+    try {
+      const parsed = JSON.parse(normalized) as unknown;
+      return this.normalizeParsedObject(parsed);
+    } catch {
+      throw new InternalServerErrorException('Resposta da IA não está em JSON válido.');
+    }
+  }
+
+  private normalizeAudioInput(audioInput: string): { base64: string; mimeType: string } {
+    if (audioInput.startsWith('http://') || audioInput.startsWith('https://')) {
+      throw new BadRequestException('URL de áudio não suportada nesta versão. Envie base64 ou data URL.');
+    }
+
+    if (audioInput.startsWith('data:')) {
+      const [meta, base64] = audioInput.split(',', 2);
+      if (!base64) {
+        throw new BadRequestException('Audio data URL inválida.');
+      }
+
+      const mimeType = meta.split(';')[0].replace('data:', '') || 'audio/webm';
+      return { base64, mimeType };
+    }
+
+    return { base64: audioInput, mimeType: 'audio/webm' };
+  }
+
+  private async fetchPdfBuffer(storagePath: string): Promise<Buffer> {
+    if (storagePath.startsWith('http://') || storagePath.startsWith('https://')) {
+      const response = await fetch(storagePath);
+      if (!response.ok) {
+        throw new InternalServerErrorException(`Falha ao baixar PDF: ${response.statusText}`);
+      }
+
+      const data = await response.arrayBuffer();
+      return Buffer.from(data);
+    }
+
+    throw new BadRequestException('Apenas storagePath em URL pública é suportado para análise de PDF.');
+  }
+
+  private async withTimeout<T>(promise: Promise<T>, timeoutMs: number, timeoutMessage: string): Promise<T> {
+    const timeoutPromise = delay(timeoutMs).then(() => {
+      throw new GatewayTimeoutException(timeoutMessage);
+    });
+
+    return Promise.race([promise, timeoutPromise]) as Promise<T>;
+  }
 
   async analyzeDocument(dto: AnalyzeDocumentDto) {
     const key = `analyze:${dto.fileName}:${dto.fileBase64.length}:${dto.tipoAcaoEstimado ?? 'nao_informado'}`;
