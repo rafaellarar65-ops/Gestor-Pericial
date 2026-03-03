@@ -80,6 +80,43 @@ describe('AgendaService', () => {
     prisma.agendaEvent.findFirst.mockResolvedValue(null);
 
     await expect(service.updateEvent('404', { title: 'x' })).rejects.toThrow(NotFoundException);
+    expect(prisma.agendaEvent.findFirst).toHaveBeenCalledWith({
+      where: { id: '404', tenantId: 't-1' },
+    });
+  });
+
+  it('batch scheduling keeps tenantId in all transactional event creations', async () => {
+    prisma.agendaEvent.create.mockImplementation(({ data }: { data: { title: string } }) => Promise.resolve({ id: data.title }));
+
+    const result = await service.batchScheduling({
+      items: [
+        {
+          title: 'Evento A',
+          type: AgendaEventType.OUTRO,
+          startAt: new Date().toISOString(),
+        },
+        {
+          title: 'Evento B',
+          type: AgendaEventType.OUTRO,
+          startAt: new Date().toISOString(),
+        },
+      ],
+    });
+
+    expect(prisma.$transaction).toHaveBeenCalledTimes(1);
+    expect(prisma.agendaEvent.create).toHaveBeenNthCalledWith(
+      1,
+      expect.objectContaining({
+        data: expect.objectContaining({ tenantId: 't-1', title: 'Evento A' }),
+      }),
+    );
+    expect(prisma.agendaEvent.create).toHaveBeenNthCalledWith(
+      2,
+      expect.objectContaining({
+        data: expect.objectContaining({ tenantId: 't-1', title: 'Evento B' }),
+      }),
+    );
+    expect(result).toEqual({ created: 2 });
   });
 
   it('batch scheduling keeps tenantId in all transactional event creations', async () => {
