@@ -1,5 +1,5 @@
 import { Injectable, NotFoundException } from '@nestjs/common';
-import { PaymentMatchStatus, Prisma } from '@prisma/client';
+import { FontePagamento, PaymentMatchStatus, Prisma } from '@prisma/client';
 import { RequestContextService } from '../../common/request-context.service';
 import { PrismaService } from '../../prisma/prisma.service';
 import {
@@ -9,6 +9,20 @@ import {
   ReconcileDto,
   UpdateUnmatchedPaymentDto,
 } from './dto/financial.dto';
+import { ImportCsvDto, type ImportSourceType, LinkUnmatchedPaymentDto } from './dto/import.dto';
+
+type ParsedCsvPayment = {
+  cnj: string;
+  dataRecebimento: Date;
+  valorBruto: number;
+  valorLiquido: number;
+  desconto: number;
+  inss: number;
+  irpf: number;
+  sourceType: ImportSourceType;
+  sourceLabel?: string;
+  rawLine: Record<string, string>;
+};
 
 type RawUnmatchedData = {
   cnj?: string;
@@ -100,6 +114,222 @@ export class FinancialService {
     });
 
     return { batchId: batch.id, imported: dto.rows.length };
+  }
+
+  parseCsv(content: string, sourceType: ImportSourceType, sourceLabel?: string): ParsedCsvPayment[] {
+    const lines = content
+      .split(/\r?\n/)
+      .map((line) => line.trim())
+      .filter((line) => line.length > 0);
+
+    if (lines.length < 2) return [];
+
+    const separator = sourceType === 'AJG' ? ';' : ',';
+    const headers = lines[0].split(separator).map((header) => header.trim().toLowerCase());
+
+    return lines.slice(1).map((line) => {
+      const values = line.split(separator).map((value) => value.trim());
+      const row = headers.reduce<Record<string, string>>((acc, header, index) => {
+        acc[header] = values[index] ?? '';
+        return acc;
+      }, {});
+
+      const cnj = row['processo'] || row['cnj'] || row['processo cnj'] || '';
+      const dataRaw = row['data pagamento'] || row['data'] || '';
+      const brutoRaw = row['valor bruto'] || row['bruto'] || '';
+      const liquidoRaw = row['valor líquido'] || row['líquido'] || row['liquido'] || '';
+      const descontoRaw = row['desconto'] || '0';
+      const inssRaw = row['inss'] || '0';
+      const irpfRaw = row['irpf'] || '0';
+
+      const dataRecebimento = this.parseDateBySource(dataRaw, sourceType);
+      return {
+        cnj,
+        dataRecebimento,
+        valorBruto: this.parseCurrency(brutoRaw),
+        valorLiquido: this.parseCurrency(liquidoRaw),
+        desconto: this.parseCurrency(descontoRaw),
+        inss: this.parseCurrency(inssRaw),
+        irpf: this.parseCurrency(irpfRaw),
+        sourceType,
+        ...(sourceLabel ? { sourceLabel } : {}),
+        rawLine: row,
+      };
+    });
+  }
+
+  async matchPayments(payments: ParsedCsvPayment[]) {
+    const tenantId = this.context.get('tenantId') ?? '';
+    const pericias = await this.prisma.pericia.findMany({
+      where: { tenantId },
+      select: { id: true, processoCNJ: true },
+    });
+
+    const periciaByCnj = new Map<string, { id: string; processoCNJ: string }>();
+    for (const pericia of pericias) {
+      periciaByCnj.set(this.normalizeCnj(pericia.processoCNJ), pericia);
+    }
+
+    const matched: Array<{ payment: ParsedCsvPayment; periciaId: string }> = [];
+    const unmatched: ParsedCsvPayment[] = [];
+
+    for (const payment of payments) {
+      const key = this.normalizeCnj(payment.cnj);
+      const pericia = periciaByCnj.get(key);
+      if (pericia) {
+        matched.push({ payment, periciaId: pericia.id });
+      } else {
+        unmatched.push(payment);
+      }
+    }
+
+    return { matched, unmatched };
+  }
+
+  calculateBatchTotals(recebimentos: Array<Pick<ParsedCsvPayment, 'valorBruto' | 'valorLiquido' | 'inss' | 'irpf' | 'desconto'>>) {
+    return recebimentos.reduce(
+      (acc, item) => {
+        acc.valorBruto += item.valorBruto;
+        acc.valorLiquido += item.valorLiquido;
+        acc.inss += item.inss;
+        acc.irpf += item.irpf;
+        acc.desconto += item.desconto;
+        return acc;
+      },
+      { valorBruto: 0, valorLiquido: 0, inss: 0, irpf: 0, desconto: 0 },
+    );
+  }
+
+  async importCsv(dto: ImportCsvDto) {
+    const tenantId = this.context.get('tenantId') ?? '';
+    const parsedPayments = this.parseCsv(dto.csvContent, dto.sourceType, dto.sourceLabel);
+
+    const batch = await this.prisma.importBatch.create({
+      data: {
+        tenantId,
+        totalRecords: parsedPayments.length,
+        status: 'PROCESSING',
+        metadata: {
+          sourceType: dto.sourceType,
+          ...(dto.sourceLabel ? { sourceLabel: dto.sourceLabel } : {}),
+        },
+      },
+    });
+
+    const { matched, unmatched } = await this.matchPayments(parsedPayments);
+    const fontePagamento = this.mapSourceToFonte(dto.sourceType);
+
+    await this.prisma.$transaction([
+      ...matched.map(({ payment, periciaId }) =>
+        this.prisma.recebimento.create({
+          data: {
+            tenantId,
+            importBatchId: batch.id,
+            periciaId,
+            fontePagamento,
+            dataRecebimento: payment.dataRecebimento,
+            valorBruto: new Prisma.Decimal(payment.valorBruto),
+            valorLiquido: new Prisma.Decimal(payment.valorLiquido),
+            desconto: new Prisma.Decimal(payment.desconto),
+            tarifa: new Prisma.Decimal(payment.inss + payment.irpf),
+            descricao: `Importação ${dto.sourceType}${dto.sourceLabel ? ` - ${dto.sourceLabel}` : ''}`,
+            metadata: {
+              cnj: payment.cnj,
+              inss: payment.inss,
+              irpf: payment.irpf,
+              sourceType: payment.sourceType,
+            },
+          },
+        }),
+      ),
+      ...unmatched.map((payment) =>
+        this.prisma.unmatchedPayment.create({
+          data: {
+            tenantId,
+            importBatchId: batch.id,
+            amount: new Prisma.Decimal(payment.valorLiquido || payment.valorBruto),
+            transactionDate: payment.dataRecebimento,
+            payerName: dto.sourceLabel ?? dto.sourceType,
+            rawData: {
+              cnj: payment.cnj,
+              source: dto.sourceType,
+              description: `Não localizado por CNJ na importação ${dto.sourceType}`,
+              origin: 'MANUAL_CSV',
+              valorBruto: payment.valorBruto,
+              valorLiquido: payment.valorLiquido,
+              inss: payment.inss,
+              irpf: payment.irpf,
+              rawLine: payment.rawLine,
+            },
+            notes: 'Aguardando vínculo manual por CNJ',
+          },
+        }),
+      ),
+    ]);
+
+    const totals = this.calculateBatchTotals(parsedPayments);
+
+    await this.prisma.importBatch.update({
+      where: { id: batch.id },
+      data: {
+        matchedRecords: matched.length,
+        unmatchedRecords: unmatched.length,
+        status: 'DONE',
+        metadata: {
+          sourceType: dto.sourceType,
+          ...(dto.sourceLabel ? { sourceLabel: dto.sourceLabel } : {}),
+          totals,
+        },
+      },
+    });
+
+    return {
+      batchId: batch.id,
+      summary: {
+        total: parsedPayments.length,
+        matched: matched.length,
+        unmatched: unmatched.length,
+        totals,
+      },
+    };
+  }
+
+  async listImportBatches() {
+    const tenantId = this.context.get('tenantId') ?? '';
+    return this.prisma.importBatch.findMany({
+      where: { tenantId },
+      orderBy: { importedAt: 'desc' },
+      take: 100,
+    });
+  }
+
+  async linkPaymentToPericia(paymentId: string, dto: LinkUnmatchedPaymentDto) {
+    const unmatched = await this.prisma.unmatchedPayment.findUnique({ where: { id: paymentId } });
+    if (!unmatched) throw new NotFoundException('Pagamento não vinculado não encontrado.');
+
+    const amount = Number(unmatched.amount ?? 0);
+    const transactionDate = unmatched.transactionDate ?? new Date();
+
+    const recebimento = await this.prisma.recebimento.create({
+      data: {
+        tenantId: unmatched.tenantId,
+        importBatchId: unmatched.importBatchId ?? undefined,
+        periciaId: dto.periciaId,
+        fontePagamento: FontePagamento.OUTRO,
+        dataRecebimento: transactionDate,
+        valorBruto: new Prisma.Decimal(amount),
+        valorLiquido: new Prisma.Decimal(amount),
+        descricao: 'Recebimento vinculado manualmente a partir de pagamento não vinculado',
+        metadata: {
+          unmatchedPaymentId: unmatched.id,
+          rawData: unmatched.rawData,
+        },
+      },
+    });
+
+    await this.prisma.unmatchedPayment.delete({ where: { id: paymentId } });
+
+    return { linked: true, recebimentoId: recebimento.id };
   }
 
   async unmatched() {
@@ -288,6 +518,45 @@ export class FinancialService {
 
   chargeAutomation() {
     return { enqueued: true, queue: 'charge-dispatch', message: 'Cobranças automáticas enfileiradas.' };
+  }
+
+  private parseCurrency(raw: string): number {
+    const value = raw.trim();
+    if (!value) return 0;
+
+    const hasComma = value.includes(',');
+    const hasDot = value.includes('.');
+
+    let normalized = value;
+    if (hasComma && hasDot) {
+      normalized = value.replace(/\./g, '').replace(',', '.');
+    } else if (hasComma) {
+      normalized = value.replace(',', '.');
+    }
+
+    const parsed = Number(normalized.replace(/[^\d.-]/g, ''));
+    return Number.isFinite(parsed) ? parsed : 0;
+  }
+
+  private parseDateBySource(raw: string, sourceType: ImportSourceType): Date {
+    if (sourceType === 'TJ') {
+      const [day, month, year] = raw.split('/').map((piece) => Number(piece));
+      const date = new Date(Date.UTC(year, (month || 1) - 1, day || 1));
+      return Number.isNaN(date.getTime()) ? new Date() : date;
+    }
+
+    const date = new Date(raw);
+    return Number.isNaN(date.getTime()) ? new Date() : date;
+  }
+
+  private normalizeCnj(cnj: string): string {
+    return cnj.replace(/\D/g, '');
+  }
+
+  private mapSourceToFonte(sourceType: ImportSourceType): FontePagamento {
+    if (sourceType === 'TJ') return FontePagamento.TJ;
+    if (sourceType === 'PARTES') return FontePagamento.PARTE_AUTORA;
+    return FontePagamento.OUTRO;
   }
 
   private parseDate(value?: string): Date | null {

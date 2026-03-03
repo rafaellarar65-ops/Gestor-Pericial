@@ -8,6 +8,7 @@ import {
   ReconcileDto,
   UpdateUnmatchedPaymentDto,
 } from './dto/financial.dto';
+import { ImportCsvDto, LinkUnmatchedPaymentDto } from './dto/import.dto';
 
 @ApiTags('financial')
 @ApiBearerAuth()
@@ -40,6 +41,30 @@ export class FinancialController {
   @Post('import-batch')
   importBatch(@Body() dto: ImportRecebimentosDto) {
     return this.service.importBatch(dto);
+  }
+
+  @Post('import-csv')
+  @ApiOperation({ summary: 'Importa CSV financeiro com matching automático por CNJ' })
+  importCsv(@Body() dto: ImportCsvDto) {
+    return this.service.importCsv(dto);
+  }
+
+  @Get('unmatched-payments')
+  @ApiOperation({ summary: 'Lista pagamentos financeiros não vinculados' })
+  getUnmatchedPayments() {
+    return this.service.unmatched();
+  }
+
+  @Post('unmatched-payments/:id/link')
+  @ApiOperation({ summary: 'Vincula manualmente pagamento não vinculado a uma perícia' })
+  linkPayment(@Param('id') paymentId: string, @Body() dto: LinkUnmatchedPaymentDto) {
+    return this.service.linkPaymentToPericia(paymentId, dto);
+  }
+
+  @Get('import-batches')
+  @ApiOperation({ summary: 'Histórico de lotes importados' })
+  listImportBatches() {
+    return this.service.listImportBatches();
   }
 
   @Get('unmatched')
