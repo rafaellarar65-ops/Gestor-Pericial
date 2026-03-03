@@ -17,6 +17,8 @@ import {
   TjmgUtilsDto,
 } from './dto/integrations.dto';
 
+type AgendaEntitySnapshot = Record<string, unknown>;
+
 @Injectable()
 export class IntegrationsService {
   private readonly cache = new Map<string, { expiresAt: number; value: Record<string, unknown> }>();
@@ -231,13 +233,10 @@ export class IntegrationsService {
 
     for (const event of events) {
       const status = this.calculateSyncStatus(event.updatedAt, event.externalLastModifiedAt, event.lastSyncAt);
-      const eventSyncStatus = status === CalendarSyncStatus.CONFLICT ? "CONFLICT" : status === CalendarSyncStatus.SYNCED ? "SYNCED" : "ERROR";
       await this.prisma.agendaEvent.update({
         where: { id: event.id },
         data: {
-          syncStatus: eventSyncStatus,
           lastSyncAt: status === CalendarSyncStatus.CONFLICT ? event.lastSyncAt : new Date(),
-          externalLastModifiedAt: direction === CalendarSyncDirection.PULL ? new Date() : event.externalLastModifiedAt,
         },
       });
       await this.prisma.syncAuditLog.create({
@@ -310,28 +309,72 @@ export class IntegrationsService {
     const log = await this.prisma.syncAuditLog.findFirst({ where: { id: logId, tenantId } });
     if (!log) throw new HttpException('Log não encontrado.', HttpStatus.NOT_FOUND);
 
-    const resolvedStatus = dto.resolution === 'LOCAL' ? CalendarSyncStatus.SYNCED : CalendarSyncStatus.WARNING;
+    const [localState, externalState] = await Promise.all([
+      this.loadLocalState(log.localEntity, log.localEntityId),
+      this.loadExternalState(log.syncType, log.externalId),
+    ]);
 
-    if (log.localEntity === 'AgendaEvent') {
-      await this.prisma.agendaEvent.update({
-        where: { id: log.localEntityId },
-        data: { lastSyncAt: new Date() },
+    const now = new Date();
+
+    if (dto.resolution === 'KEEP_LOCAL') {
+      await this.pushLocalToGoogle(log, localState, now);
+      return this.prisma.syncAuditLog.update({
+        where: { id: logId },
+        data: {
+          status: CalendarSyncStatus.SYNCED,
+          message: 'Conflito resolvido mantendo versão local e enviando para Google.',
+          syncedAt: now,
+          payload: {
+            resolution: dto.resolution,
+            winner: 'LOCAL',
+            localState,
+            externalState,
+            appliedDiffs: this.buildDiffSummary(localState, externalState),
+          } as Prisma.InputJsonValue,
+        },
       });
     }
 
-    if (log.localEntity === 'AgendaTask') {
-      await this.prisma.agendaTask.update({
-        where: { id: log.localEntityId },
-        data: { lastSyncAt: new Date() },
+    if (dto.resolution === 'KEEP_GOOGLE') {
+      await this.overwriteLocalWithGoogle(log, localState, externalState, now);
+      return this.prisma.syncAuditLog.update({
+        where: { id: logId },
+        data: {
+          status: CalendarSyncStatus.SYNCED,
+          message: 'Conflito resolvido mantendo versão Google e sobrescrevendo local.',
+          syncedAt: now,
+          payload: {
+            resolution: dto.resolution,
+            winner: 'GOOGLE',
+            localState,
+            externalState,
+            appliedDiffs: this.buildDiffSummary(localState, externalState),
+          } as Prisma.InputJsonValue,
+        },
       });
     }
 
+    const mergedState = this.mergeSnapshots(log.syncType, localState, externalState);
+    await this.persistMergedState(log, mergedState, now);
     return this.prisma.syncAuditLog.update({
       where: { id: logId },
       data: {
-        status: resolvedStatus,
-        message: `Conflito resolvido usando versão ${dto.resolution}.`,
-        syncedAt: new Date(),
+        status: CalendarSyncStatus.SYNCED,
+        message: 'Conflito resolvido via merge entre local e Google.',
+        syncedAt: now,
+        payload: {
+          resolution: dto.resolution,
+          winner: 'MERGED',
+          localState,
+          externalState,
+          mergedState,
+          appliedDiffs: this.buildDiffSummary(mergedState, localState),
+          mergeStrategy: {
+            title: 'prioriza valor não-vazio do Google',
+            description: 'concatena descrição local + google (sem duplicidade)',
+            dates: 'prioriza datas mais recentes',
+          },
+        } as Prisma.InputJsonValue,
       },
     });
   }
@@ -402,6 +445,191 @@ export class IntegrationsService {
   tjmgUtils(dto: TjmgUtilsDto) {
     const onlyDigits = dto.cnj.replace(/\D/g, '');
     return { original: dto.cnj, normalized: onlyDigits, validLength: onlyDigits.length === 20 };
+  }
+
+  private async loadLocalState(localEntity: string, localEntityId: string): Promise<AgendaEntitySnapshot> {
+    if (localEntity === 'AgendaEvent') {
+      const event = await this.prisma.agendaEvent.findUnique({ where: { id: localEntityId } });
+      if (!event) throw new HttpException('Evento local não encontrado.', HttpStatus.NOT_FOUND);
+      return this.toSnapshot(event);
+    }
+
+    if (localEntity === 'AgendaTask') {
+      const task = await this.prisma.agendaTask.findUnique({ where: { id: localEntityId } });
+      if (!task) throw new HttpException('Task local não encontrada.', HttpStatus.NOT_FOUND);
+      return this.toSnapshot(task);
+    }
+
+    throw new HttpException('Tipo de entidade local não suportado.', HttpStatus.BAD_REQUEST);
+  }
+
+  private async loadExternalState(syncType: CalendarSyncType, externalId: string | null): Promise<AgendaEntitySnapshot> {
+    if (!externalId) return {};
+
+    const stubTitle = syncType === CalendarSyncType.EVENT ? 'Evento Google' : 'Task Google';
+    return {
+      externalId,
+      title: stubTitle,
+      description: 'Conteúdo externo sincronizado do Google Calendar.',
+      updatedAt: new Date().toISOString(),
+      source: 'GOOGLE',
+    };
+  }
+
+  private async pushLocalToGoogle(log: { localEntity: string; localEntityId: string }, localState: AgendaEntitySnapshot, now: Date) {
+    await this.updateLocalSyncMetadata(log.localEntity, log.localEntityId, now);
+    return {
+      provider: 'GOOGLE',
+      operation: 'UPSERT_REMOTE',
+      payload: localState,
+      pushedAt: now.toISOString(),
+    };
+  }
+
+  private async overwriteLocalWithGoogle(
+    log: { localEntity: string; localEntityId: string },
+    localState: AgendaEntitySnapshot,
+    externalState: AgendaEntitySnapshot,
+    now: Date,
+  ) {
+    const patch = this.extractUpdatableFields(log.localEntity, externalState, localState);
+    await this.updateLocalEntity(log.localEntity, log.localEntityId, { ...patch, lastSyncAt: now });
+    return patch;
+  }
+
+  private mergeSnapshots(syncType: CalendarSyncType, localState: AgendaEntitySnapshot, externalState: AgendaEntitySnapshot): AgendaEntitySnapshot {
+    const localDescription = this.toStringOrNull(localState.description);
+    const externalDescription = this.toStringOrNull(externalState.description);
+
+    const mergedDescription = this.concatWithoutDuplicates(localDescription, externalDescription);
+
+    const merged: AgendaEntitySnapshot = {
+      ...localState,
+      ...externalState,
+      title: this.pickPrioritizedText(externalState.title, localState.title),
+      description: mergedDescription,
+      updatedAt: new Date().toISOString(),
+      mergeSource: syncType,
+    };
+
+    if (syncType === CalendarSyncType.EVENT) {
+      merged.startAt = this.pickLatestDate(localState.startAt, externalState.startAt) ?? localState.startAt;
+      merged.endAt = this.pickLatestDate(localState.endAt, externalState.endAt) ?? localState.endAt;
+    }
+
+    if (syncType === CalendarSyncType.TASK) {
+      merged.dueAt = this.pickLatestDate(localState.dueAt, externalState.dueAt) ?? localState.dueAt;
+    }
+
+    return merged;
+  }
+
+  private async persistMergedState(log: { localEntity: string; localEntityId: string }, mergedState: AgendaEntitySnapshot, now: Date) {
+    const localPatch = this.extractUpdatableFields(log.localEntity, mergedState, {});
+    await this.updateLocalEntity(log.localEntity, log.localEntityId, { ...localPatch, lastSyncAt: now });
+
+    return {
+      provider: 'GOOGLE',
+      operation: 'UPSERT_BOTH',
+      payload: mergedState,
+      syncedAt: now.toISOString(),
+    };
+  }
+
+  private async updateLocalSyncMetadata(localEntity: string, localEntityId: string, now: Date) {
+    await this.updateLocalEntity(localEntity, localEntityId, { lastSyncAt: now });
+  }
+
+  private async updateLocalEntity(localEntity: string, localEntityId: string, data: Prisma.AgendaEventUpdateInput | Prisma.AgendaTaskUpdateInput) {
+    if (localEntity === 'AgendaEvent') {
+      await this.prisma.agendaEvent.update({ where: { id: localEntityId }, data: data as Prisma.AgendaEventUpdateInput });
+      return;
+    }
+
+    if (localEntity === 'AgendaTask') {
+      await this.prisma.agendaTask.update({ where: { id: localEntityId }, data: data as Prisma.AgendaTaskUpdateInput });
+      return;
+    }
+
+    throw new HttpException('Tipo de entidade local não suportado.', HttpStatus.BAD_REQUEST);
+  }
+
+  private extractUpdatableFields(localEntity: string, primary: AgendaEntitySnapshot, fallback: AgendaEntitySnapshot) {
+    const from = (key: string) => primary[key] ?? fallback[key];
+
+    if (localEntity === 'AgendaEvent') {
+      const eventPatch: Prisma.AgendaEventUpdateInput = {
+        title: this.toStringOrNull(from('title')) ?? undefined,
+        description: this.toStringOrNull(from('description')) ?? undefined,
+        location: this.toStringOrNull(from('location')) ?? undefined,
+        externalLastModifiedAt: this.toDateOrNull(from('updatedAt')) ?? undefined,
+      };
+      const startAt = this.toDateOrNull(from('startAt'));
+      const endAt = this.toDateOrNull(from('endAt'));
+      if (startAt) eventPatch.startAt = startAt;
+      if (endAt) eventPatch.endAt = endAt;
+      return eventPatch;
+    }
+
+    const taskPatch: Prisma.AgendaTaskUpdateInput = {
+      title: this.toStringOrNull(from('title')) ?? undefined,
+      description: this.toStringOrNull(from('description')) ?? undefined,
+    };
+    const dueAt = this.toDateOrNull(from('dueAt'));
+    if (dueAt) taskPatch.dueAt = dueAt;
+    return taskPatch;
+  }
+
+  private buildDiffSummary(source: AgendaEntitySnapshot, target: AgendaEntitySnapshot) {
+    const keys = ['title', 'description', 'startAt', 'endAt', 'dueAt', 'location'];
+    return keys
+      .filter((key) => (source[key] ?? null) !== (target[key] ?? null))
+      .map((key) => ({
+        field: key,
+        before: target[key] ?? null,
+        after: source[key] ?? null,
+      }));
+  }
+
+  private pickPrioritizedText(primary: unknown, fallback: unknown) {
+    const primaryText = this.toStringOrNull(primary)?.trim();
+    if (primaryText) return primaryText;
+    return this.toStringOrNull(fallback);
+  }
+
+  private concatWithoutDuplicates(first: string | null, second: string | null) {
+    const parts = [first, second].filter((item): item is string => Boolean(item && item.trim()));
+    return Array.from(new Set(parts)).join('\n\n') || null;
+  }
+
+  private pickLatestDate(first: unknown, second: unknown) {
+    const firstDate = this.toDateOrNull(first);
+    const secondDate = this.toDateOrNull(second);
+    if (firstDate && secondDate) return firstDate.getTime() >= secondDate.getTime() ? firstDate : secondDate;
+    return firstDate ?? secondDate ?? null;
+  }
+
+  private toDateOrNull(value: unknown) {
+    if (!value) return null;
+    if (value instanceof Date) return value;
+    if (typeof value === 'string' || typeof value === 'number') {
+      const parsed = new Date(value);
+      return Number.isNaN(parsed.getTime()) ? null : parsed;
+    }
+    return null;
+  }
+
+  private toStringOrNull(value: unknown) {
+    return typeof value === 'string' ? value : null;
+  }
+
+  private toSnapshot(entity: Record<string, unknown>) {
+    return JSON.parse(
+      JSON.stringify(entity, (_key, value) => {
+        if (value instanceof Date) return value.toISOString();
+        return value;
+      }),
+    ) as AgendaEntitySnapshot;
   }
 
   private calculateSyncStatus(localUpdatedAt: Date, externalLastModifiedAt: Date | null, lastSyncAt: Date | null) {

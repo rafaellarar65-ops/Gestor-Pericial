@@ -110,9 +110,9 @@ export class GoogleSyncRunDto {
 }
 
 export class ResolveSyncConflictDto {
-  @ApiProperty({ enum: ['LOCAL', 'EXTERNAL'] })
-  @IsIn(['LOCAL', 'EXTERNAL'])
-  resolution!: 'LOCAL' | 'EXTERNAL';
+  @ApiProperty({ enum: ['KEEP_LOCAL', 'KEEP_GOOGLE', 'MERGE'] })
+  @IsIn(['KEEP_LOCAL', 'KEEP_GOOGLE', 'MERGE'])
+  resolution!: 'KEEP_LOCAL' | 'KEEP_GOOGLE' | 'MERGE';
 }
 
 export class ListSyncAuditDto {
