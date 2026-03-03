@@ -1,4 +1,4 @@
-import { Injectable, NotFoundException } from '@nestjs/common';
+import { BadRequestException, Injectable, NotFoundException } from '@nestjs/common';
 import { AgendaEventStatus, AgendaEventType, AgendaTaskStatus, Prisma } from '@prisma/client';
 import { RequestContextService } from '../../common/request-context.service';
 import { PrismaService } from '../../prisma/prisma.service';
@@ -27,6 +27,17 @@ type StatusHistoryEntry = {
   changedAt: string;
   changedBy?: string;
   reason?: string;
+};
+
+type BatchValidationReason = 'PAST_DATE' | 'INVALID_DATETIME' | 'EXISTING_OVERLAP' | 'INTRA_BATCH_COLLISION';
+
+type BatchInvalidItem = {
+  index: number;
+  periciaId?: string;
+  startAt: string;
+  city?: string;
+  reason: BatchValidationReason;
+  detail: string;
 };
 
 
@@ -112,6 +123,14 @@ export class AgendaService {
 
   async batchScheduling(dto: BatchScheduleDto) {
     const tenantId = this.context.get('tenantId') as string;
+    const invalidItems = await this.validateBatchScheduling(dto, tenantId);
+    if (invalidItems.length > 0) {
+      throw new BadRequestException({
+        code: 'BATCH_SCHEDULE_VALIDATION_ERROR',
+        message: 'Falha de validação no agendamento em lote.',
+        invalidItems,
+      });
+    }
 
     const summary = await this.prisma.$transaction(async (tx) => {
       const createdEvents: Array<{ id: string; periciaId: string | null }> = [];
@@ -328,6 +347,107 @@ export class AgendaService {
       contentBase64: pdfBuffer.toString('base64'),
       mimeType: 'application/pdf',
     };
+  }
+
+  private async validateBatchScheduling(dto: BatchScheduleDto, tenantId: string): Promise<BatchInvalidItem[]> {
+    const nowMs = Date.now();
+    const invalidItems: BatchInvalidItem[] = [];
+
+    const periciaIds = Array.from(new Set(dto.items.map((item) => item.periciaId).filter((id): id is string => Boolean(id))));
+    const pericias = periciaIds.length
+      ? await this.prisma.pericia.findMany({
+          where: { tenantId, id: { in: periciaIds } },
+          select: { id: true, cidade: { select: { nome: true } } },
+        })
+      : [];
+    const cityByPericia = new Map(pericias.map((pericia) => [pericia.id, pericia.cidade?.nome ?? undefined]));
+
+    const slotMap = new Map<string, number[]>();
+
+    dto.items.forEach((item, index) => {
+      const startAtDate = new Date(item.startAt);
+      const startAtMs = startAtDate.getTime();
+      const city = item.city || (item.periciaId ? cityByPericia.get(item.periciaId) : undefined);
+
+      if (!Number.isFinite(startAtMs)) {
+        invalidItems.push({
+          index,
+          periciaId: item.periciaId,
+          startAt: item.startAt,
+          city,
+          reason: 'INVALID_DATETIME',
+          detail: 'Data/hora inválida para o item. Revise o horário informado.',
+        });
+        return;
+      }
+
+      if (startAtMs <= nowMs) {
+        invalidItems.push({
+          index,
+          periciaId: item.periciaId,
+          startAt: item.startAt,
+          city,
+          reason: 'PAST_DATE',
+          detail: 'Data/hora no passado. Informe um horário futuro.',
+        });
+      }
+
+      const slotKey = `${city ?? '__SEM_CIDADE__'}|${startAtDate.toISOString()}`;
+      const currentSlot = slotMap.get(slotKey) ?? [];
+      currentSlot.push(index);
+      slotMap.set(slotKey, currentSlot);
+    });
+
+    slotMap.forEach((indexes) => {
+      if (indexes.length < 2) return;
+      indexes.forEach((index) => {
+        const item = dto.items[index];
+        invalidItems.push({
+          index,
+          periciaId: item.periciaId,
+          startAt: item.startAt,
+          city: item.city || (item.periciaId ? cityByPericia.get(item.periciaId) : undefined),
+          reason: 'INTRA_BATCH_COLLISION',
+          detail: 'Conflito intra-lote: existe mais de um item com mesma cidade e mesmo horário.',
+        });
+      });
+    });
+
+    const overlapChecks = await Promise.all(
+      dto.items.map(async (item, index) => {
+        const startAtDate = new Date(item.startAt);
+        const startAtMs = startAtDate.getTime();
+        if (!Number.isFinite(startAtMs)) return null;
+
+        const endAtDate = item.endAt ? new Date(item.endAt) : new Date(startAtMs + 60 * 60 * 1000);
+
+        const existingEvent = await this.prisma.agendaEvent.findFirst({
+          where: {
+            tenantId,
+            startAt: { lt: endAtDate },
+            OR: [{ endAt: { gt: startAtDate } }, { endAt: null, startAt: { gt: new Date(startAtMs - 60 * 60 * 1000) } }],
+          },
+          select: { id: true, startAt: true, endAt: true },
+        });
+
+        if (!existingEvent) return null;
+
+        return {
+          index,
+          periciaId: item.periciaId,
+          startAt: item.startAt,
+          city: item.city || (item.periciaId ? cityByPericia.get(item.periciaId) : undefined),
+          reason: 'EXISTING_OVERLAP' as const,
+          detail: `Conflito com evento existente (${existingEvent.id}) entre ${existingEvent.startAt.toISOString()} e ${(existingEvent.endAt ?? new Date(existingEvent.startAt.getTime() + 60 * 60 * 1000)).toISOString()}.`,
+        };
+      }),
+    );
+
+    overlapChecks.forEach((entry) => {
+      if (entry) invalidItems.push(entry);
+    });
+
+    return invalidItems;
   }
 
   async weeklyWorkload(startDate?: string) {

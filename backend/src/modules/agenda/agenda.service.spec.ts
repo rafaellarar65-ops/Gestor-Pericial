@@ -1,5 +1,5 @@
-import { NotFoundException } from '@nestjs/common';
-import { AgendaEventStatus, AgendaEventType, AgendaTaskStatus } from '@prisma/client';
+import { BadRequestException, NotFoundException } from '@nestjs/common';
+import { AgendaEventStatus, AgendaEventType } from '@prisma/client';
 import { AgendaService } from './agenda.service';
 
 describe('AgendaService', () => {
@@ -12,7 +12,14 @@ describe('AgendaService', () => {
       create: jest.fn(),
       findMany: jest.fn(),
       findFirst: jest.fn(),
+      updateMany: jest.fn(),
       update: jest.fn(),
+    },
+    pericia: {
+      findMany: jest.fn(),
+    },
+    schedulingBatch: {
+      create: jest.fn(),
     },
     agendaTask: {
       create: jest.fn(),
@@ -31,8 +38,9 @@ describe('AgendaService', () => {
   let service: AgendaService;
 
   beforeEach(() => {
-    jest.clearAllMocks();
-    prisma.$transaction.mockImplementation(async (cb: (tx: typeof prisma) => unknown) => cb(prisma));
+    jest.resetAllMocks();
+    context.get.mockImplementation((key: string) => (key === 'tenantId' ? 't-1' : 'u-1'));
+    prisma.$transaction.mockImplementation(async (ops: Array<Promise<unknown>>) => Promise.all(ops));
     service = new AgendaService(prisma, context as any);
   });
 
@@ -53,7 +61,7 @@ describe('AgendaService', () => {
   });
 
   it('updates event by id + tenantId and returns updated entity', async () => {
-    prisma.agendaEvent.findFirst.mockResolvedValue({ id: 'ev-1', tenantId: 't-1', status: AgendaEventStatus.AGENDADA });
+    prisma.agendaEvent.findFirst.mockResolvedValue({ id: 'ev-1', tenantId: 't-1' });
     prisma.agendaEvent.update.mockResolvedValue({ id: 'ev-1', tenantId: 't-1', title: 'Atualizado' });
 
     const result = await service.updateEvent('ev-1', { title: 'Atualizado' });
@@ -74,36 +82,76 @@ describe('AgendaService', () => {
     await expect(service.updateEvent('404', { title: 'x' })).rejects.toThrow(NotFoundException);
   });
 
-  it('batch scheduling runs in one transaction and returns summary after commit', async () => {
-    prisma.agendaEvent.create
-      .mockResolvedValueOnce({ id: 'event-1', periciaId: 'pericia-1' })
-      .mockResolvedValueOnce({ id: 'event-2', periciaId: null });
-    prisma.pericia.update.mockResolvedValue({ id: 'pericia-1' });
-    prisma.agendaTask.create.mockResolvedValue({ id: 'task-1' });
-    prisma.schedulingBatch.create.mockResolvedValue({ id: 'batch-1' });
+  it('batch scheduling keeps tenantId in all transactional event creations', async () => {
+    prisma.agendaEvent.create.mockImplementation(({ data }: { data: { title: string } }) => Promise.resolve({ id: data.title }));
+    prisma.pericia.findMany.mockResolvedValue([]);
+    prisma.agendaEvent.findFirst.mockResolvedValue(null);
+    prisma.schedulingBatch.create.mockResolvedValue({ id: 'b-1' });
 
     const result = await service.batchScheduling({
       items: [
         {
-          title: 'Evento A',
-          type: AgendaEventType.OUTRO,
-          periciaId: 'pericia-1',
-          startAt: '2026-01-02T09:00:00.000Z',
-        },
-        {
-          title: 'Evento B',
-          type: AgendaEventType.OUTRO,
-          startAt: '2026-01-02T10:00:00.000Z',
-        },
-      ],
-      metadata: { date: '2026-01-01', cityNames: ['A'] },
-    });
+            title: 'Evento A',
+            type: AgendaEventType.OUTRO,
+            startAt: '2030-01-10T10:00:00.000Z',
+          },
+          {
+            title: 'Evento B',
+            type: AgendaEventType.OUTRO,
+            startAt: '2030-01-10T11:00:00.000Z',
+          },
+        ],
+      });
 
     expect(prisma.$transaction).toHaveBeenCalledTimes(1);
-    expect(prisma.agendaEvent.create).toHaveBeenCalledTimes(2);
-    expect(prisma.pericia.update).toHaveBeenCalledWith({
-      where: { id: 'pericia-1' },
-      data: expect.objectContaining({ agendada: true }),
+    expect(prisma.agendaEvent.create).toHaveBeenNthCalledWith(
+      1,
+      expect.objectContaining({
+        data: expect.objectContaining({ tenantId: 't-1', title: 'Evento A' }),
+      }),
+    );
+    expect(prisma.agendaEvent.create).toHaveBeenNthCalledWith(
+      2,
+      expect.objectContaining({
+        data: expect.objectContaining({ tenantId: 't-1', title: 'Evento B' }),
+      }),
+    );
+    expect(result).toEqual({ created: 2 });
+  });
+
+  it('rejects batch scheduling with detailed invalid items', async () => {
+    prisma.pericia.findMany.mockResolvedValue([]);
+    prisma.agendaEvent.findFirst.mockResolvedValue({
+      id: 'ev-conflict',
+      startAt: new Date('2027-01-10T10:00:00.000Z'),
+      endAt: new Date('2027-01-10T11:00:00.000Z'),
+    });
+
+    await expect(
+      service.batchScheduling({
+        items: [
+          {
+            title: 'Evento A',
+            type: AgendaEventType.OUTRO,
+            startAt: '2027-01-10T10:00:00.000Z',
+            city: 'Belo Horizonte',
+          },
+          {
+            title: 'Evento B',
+            type: AgendaEventType.OUTRO,
+            startAt: '2027-01-10T10:00:00.000Z',
+            city: 'Belo Horizonte',
+          },
+        ],
+      }),
+    ).rejects.toThrow(BadRequestException);
+  });
+
+  it('appends status history when status changes', async () => {
+    prisma.agendaEvent.findFirst.mockResolvedValue({
+      id: 'ev-1',
+      status: AgendaEventStatus.AGENDADA,
+      statusHistory: [],
     });
     expect(prisma.agendaTask.create).toHaveBeenCalledWith(
       expect.objectContaining({
