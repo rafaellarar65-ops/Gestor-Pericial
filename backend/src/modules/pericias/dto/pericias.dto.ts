@@ -247,6 +247,115 @@ export class BatchUpdatePericiasDto {
   data!: UpdatePericiasDto;
 }
 
+export class BatchSchedulePericiaItemDto {
+  @ApiProperty()
+  @IsUUID()
+  periciaId!: string;
+
+  @ApiPropertyOptional({ description: 'Data do agendamento (YYYY-MM-DD)' })
+  @IsOptional()
+  @IsDateString()
+  dataAgendamento?: string;
+
+  @ApiPropertyOptional({ description: 'Hora do agendamento (HH:mm)' })
+  @IsOptional()
+  @IsString()
+  horaAgendamento?: string;
+
+  @ApiPropertyOptional()
+  @IsOptional()
+  @IsString()
+  title?: string;
+}
+
+export class BatchSchedulePericiasParamsDto {
+  @ApiPropertyOptional({ description: 'Data padrão do lote (YYYY-MM-DD)' })
+  @IsOptional()
+  @IsDateString()
+  data?: string;
+
+  @ApiPropertyOptional({ description: 'Hora padrão do lote (HH:mm)' })
+  @IsOptional()
+  @IsString()
+  hora?: string;
+
+  @ApiPropertyOptional()
+  @IsOptional()
+  @IsUUID()
+  statusId?: string;
+
+  @ApiPropertyOptional()
+  @IsOptional()
+  @IsString()
+  location?: string;
+
+  @ApiPropertyOptional()
+  @IsOptional()
+  @IsString()
+  modalidade?: string;
+
+  @ApiPropertyOptional()
+  @IsOptional()
+  @IsArray()
+  cityNames?: string[];
+
+  @ApiPropertyOptional()
+  @IsOptional()
+  @Type(() => Number)
+  @IsInt()
+  @Min(1)
+  durationMinutes?: number;
+
+  @ApiPropertyOptional()
+  @IsOptional()
+  @Type(() => Number)
+  @IsInt()
+  @Min(0)
+  intervalMinutes?: number;
+
+  @ApiPropertyOptional()
+  @IsOptional()
+  @IsString()
+  source?: string;
+}
+
+export class BatchSchedulePericiasFlagsDto {
+  @ApiPropertyOptional({ default: true })
+  @IsOptional()
+  @IsBoolean()
+  atualizarStatus?: boolean;
+
+  @ApiPropertyOptional({ default: true })
+  @IsOptional()
+  @IsBoolean()
+  criarEventos?: boolean;
+
+  @ApiPropertyOptional({ default: true })
+  @IsOptional()
+  @IsBoolean()
+  criarTarefas48h?: boolean;
+}
+
+export class BatchSchedulePericiasDto {
+  @ApiProperty({ type: [BatchSchedulePericiaItemDto] })
+  @IsArray()
+  @ValidateNested({ each: true })
+  @Type(() => BatchSchedulePericiaItemDto)
+  items!: BatchSchedulePericiaItemDto[];
+
+  @ApiPropertyOptional({ type: BatchSchedulePericiasParamsDto })
+  @IsOptional()
+  @ValidateNested()
+  @Type(() => BatchSchedulePericiasParamsDto)
+  parametros?: BatchSchedulePericiasParamsDto;
+
+  @ApiPropertyOptional({ type: BatchSchedulePericiasFlagsDto })
+  @IsOptional()
+  @ValidateNested()
+  @Type(() => BatchSchedulePericiasFlagsDto)
+  flags?: BatchSchedulePericiasFlagsDto;
+}
+
 export class ChangeStatusPericiaDto {
   @ApiProperty()
   @IsUUID()
