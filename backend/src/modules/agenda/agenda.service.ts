@@ -49,14 +49,6 @@ type StatusHistoryEntry = {
   reason?: string;
 };
 
-type StatusHistoryEntry = {
-  from: AgendaEventStatus;
-  to: AgendaEventStatus;
-  changedAt: string;
-  changedBy?: string;
-  reason?: string;
-};
-
 @Injectable()
 export class AgendaService {
   constructor(
@@ -838,12 +830,12 @@ export class AgendaService {
     await this.prisma.schedulingBatch.create({
       data: {
         tenantId,
-        dateRef: new Date(dto.metadata?.date ?? dto.items[0]?.startAt ?? new Date().toISOString()),
-        criteriaJson: (dto.metadata ?? {}) as Prisma.InputJsonValue,
+        dateRef: new Date(items[0]?.startAt ?? new Date().toISOString()),
+        criteriaJson: ({ source: 'laudo_blocks' }) as Prisma.InputJsonValue,
         resultJson: ({
           status: 'CONFIRMADO',
           created: created.length,
-          items: dto.items.map((item) => ({
+          items: items.map((item) => ({
             periciaId: item.periciaId,
             scheduledAt: item.startAt,
           })),
@@ -854,7 +846,7 @@ export class AgendaService {
     return { created: created.length };
   }
 
-  async listBatchScheduling() {
+  async listBatchSchedulingHistory() {
     const rows = await this.prisma.schedulingBatch.findMany({ orderBy: { createdAt: 'desc' }, take: 100 });
     return rows.map((row) => {
       const criteria = (row.criteriaJson ?? {}) as Record<string, unknown>;
