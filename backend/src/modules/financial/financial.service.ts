@@ -6,6 +6,7 @@ import {
   CreateDespesaDto,
   CreateRecebimentoDto,
   ImportRecebimentosDto,
+  ImportUnmatchedTransactionsDto,
   ReconcileDto,
   UpdateUnmatchedPaymentDto,
 } from './dto/financial.dto';
@@ -330,7 +331,52 @@ export class FinancialService {
     await this.prisma.unmatchedPayment.delete({ where: { id: paymentId } });
 
     return { linked: true, recebimentoId: recebimento.id };
-  }
+
+  async importUnmatched(dto: ImportUnmatchedTransactionsDto) {
+    const tenantId = this.context.get('tenantId') ?? '';
+    const rejected: Array<{ index: number; reason: string; row: unknown }> = [];
+
+    const rowsToCreate: Prisma.UnmatchedPaymentCreateManyInput[] = [];
+
+    dto.rows.forEach((row, index) => {
+      const parsedAmount = this.parseMoney(row.amount);
+      if (parsedAmount === null) {
+        rejected.push({ index, reason: 'Valor monetário inválido.', row });
+        return;
+      }
+
+      const parsedDate = this.parseDate(row.transactionDate) ?? this.parseDate(row.receivedAt);
+      if (!parsedDate) {
+        rejected.push({ index, reason: 'Data inválida (transactionDate/receivedAt).', row });
+        return;
+      }
+
+      const rawData: RawUnmatchedData = {
+        amount: row.amount,
+        transactionDate: row.transactionDate,
+        receivedAt: row.receivedAt,
+        payerName: row.payerName,
+        cnj: row.cnj,
+        description: row.description,
+        source: row.source,
+        origin: row.origin ?? 'INDIVIDUAL',
+      };
+
+      rowsToCreate.push({
+        tenantId,
+        amount: parsedAmount,
+        transactionDate: parsedDate,
+        payerName: row.payerName?.trim() || null,
+        matchStatus: PaymentMatchStatus.UNMATCHED,
+        rawData: rawData as Prisma.InputJsonValue,
+      });
+    });
+
+    if (rowsToCreate.length > 0) {
+      await this.prisma.unmatchedPayment.createMany({ data: rowsToCreate });
+    }
+
+    return { imported: rowsToCreate.length, rejected };
 
   async unmatched() {
     const rows = await this.prisma.unmatchedPayment.findMany({
@@ -634,11 +680,43 @@ export class FinancialService {
     if (sourceType === 'TJ') return FontePagamento.TJ;
     if (sourceType === 'PARTES') return FontePagamento.PARTE_AUTORA;
     return FontePagamento.OUTRO;
-  }
+  private parseMoney(value: number | string | null | undefined): Prisma.Decimal | null {
+    if (value === null || value === undefined) return null;
+    if (typeof value === 'number') {
+      if (!Number.isFinite(value)) return null;
+      return new Prisma.Decimal(value);
+    }
+
+    const normalized = value
+      .toString()
+      .trim()
+      .replace(/\s/g, '')
+      .replace(/R\$/gi, '')
+      .replace(/\.(?=\d{3}(\D|$))/g, '')
+      .replace(',', '.');
+
+    if (!normalized || !/^-?\d+(\.\d+)?$/.test(normalized)) return null;
+
+    try {
+      return new Prisma.Decimal(normalized);
+    } catch {
+      return null;
+    }
 
   private parseDate(value?: string): Date | null {
     if (!value) return null;
-    const date = new Date(value);
-    return Number.isNaN(date.getTime()) ? null : date;
+
+    const normalized = value.trim();
+    const directDate = new Date(normalized);
+    if (!Number.isNaN(directDate.getTime())) return directDate;
+
+    const brFormat = normalized.match(/^(\d{2})\/(\d{2})\/(\d{4})(?:\s+(\d{2}):(\d{2})(?::(\d{2}))?)?$/);
+    if (brFormat) {
+      const [, dd, mm, yyyy, hh = '00', min = '00', sec = '00'] = brFormat;
+      const date = new Date(Number(yyyy), Number(mm) - 1, Number(dd), Number(hh), Number(min), Number(sec));
+      return Number.isNaN(date.getTime()) ? null : date;
+    }
+
+    return null;
   }
 }

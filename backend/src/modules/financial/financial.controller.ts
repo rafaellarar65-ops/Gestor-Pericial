@@ -5,6 +5,7 @@ import {
   CreateDespesaDto,
   CreateRecebimentoDto,
   ImportRecebimentosDto,
+  ImportUnmatchedTransactionsDto,
   ReconcileDto,
   UpdateUnmatchedPaymentDto,
 } from './dto/financial.dto';
@@ -65,6 +66,11 @@ export class FinancialController {
   @ApiOperation({ summary: 'Histórico de lotes importados' })
   listImportBatches() {
     return this.service.listImportBatches();
+  }
+
+  @Post('unmatched')
+  importUnmatched(@Body() dto: ImportUnmatchedTransactionsDto) {
+    return this.service.importUnmatched(dto);
   }
 
   @Get('unmatched')

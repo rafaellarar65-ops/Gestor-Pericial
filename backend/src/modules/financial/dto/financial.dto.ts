@@ -3,8 +3,10 @@ import { FontePagamento } from '@prisma/client';
 import { Type } from 'class-transformer';
 import {
   IsArray,
+  IsDefined,
   IsDateString,
   IsEnum,
+  IsIn,
   IsNumber,
   IsOptional,
   IsString,
@@ -131,4 +133,53 @@ export class UpdateUnmatchedPaymentDto {
   @IsOptional()
   @IsString()
   notes?: string;
+}
+
+export class ImportUnmatchedTransactionDto {
+  @ApiProperty({ description: 'Valor monetário bruto da transação', oneOf: [{ type: 'number' }, { type: 'string' }] })
+  @IsDefined()
+  amount!: number | string;
+
+  @ApiPropertyOptional({ description: 'Data da transação no banco' })
+  @IsOptional()
+  @IsString()
+  transactionDate?: string;
+
+  @ApiPropertyOptional({ description: 'Data de recebimento quando não houver transactionDate' })
+  @IsOptional()
+  @IsString()
+  receivedAt?: string;
+
+  @ApiPropertyOptional()
+  @IsOptional()
+  @IsString()
+  payerName?: string;
+
+  @ApiPropertyOptional()
+  @IsOptional()
+  @IsString()
+  cnj?: string;
+
+  @ApiPropertyOptional()
+  @IsOptional()
+  @IsString()
+  description?: string;
+
+  @ApiPropertyOptional()
+  @IsOptional()
+  @IsString()
+  source?: string;
+
+  @ApiPropertyOptional({ enum: ['AI_PRINT', 'MANUAL_CSV', 'INDIVIDUAL'] })
+  @IsOptional()
+  @IsIn(['AI_PRINT', 'MANUAL_CSV', 'INDIVIDUAL'])
+  origin?: 'AI_PRINT' | 'MANUAL_CSV' | 'INDIVIDUAL';
+}
+
+export class ImportUnmatchedTransactionsDto {
+  @ApiProperty({ type: [ImportUnmatchedTransactionDto] })
+  @IsArray()
+  @ValidateNested({ each: true })
+  @Type(() => ImportUnmatchedTransactionDto)
+  rows!: ImportUnmatchedTransactionDto[];
 }
