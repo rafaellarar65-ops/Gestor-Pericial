@@ -8,6 +8,8 @@ import type {
   Recebimento,
   UnmatchedPayment,
   UnmatchedPaymentOrigin,
+  UnmatchedPaymentSplitPayload,
+  UnmatchedPaymentSplitResult,
 } from '@/types/api';
 
 type RecebimentoRaw = {
@@ -103,6 +105,12 @@ export const financialService = {
 
   discardUnmatchedPayment: async (id: string, note?: string): Promise<UnmatchedPayment> => {
     const { data } = await apiClient.post<UnmatchedPayment>(`/financial/unmatched/${id}/discard`, { note });
+    return data;
+  },
+
+
+  splitUnmatchedPayment: async (id: string, payload: UnmatchedPaymentSplitPayload): Promise<UnmatchedPaymentSplitResult> => {
+    const { data } = await apiClient.post<UnmatchedPaymentSplitResult>(`/financial/conciliation/${id}/split`, payload);
     return data;
   },
 

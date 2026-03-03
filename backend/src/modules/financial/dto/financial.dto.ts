@@ -2,6 +2,7 @@ import { ApiProperty, ApiPropertyOptional } from '@nestjs/swagger';
 import { FontePagamento } from '@prisma/client';
 import { Type } from 'class-transformer';
 import {
+  ArrayMinSize,
   IsArray,
   IsDateString,
   IsEnum,
@@ -9,6 +10,7 @@ import {
   IsOptional,
   IsString,
   IsUUID,
+  Min,
   ValidateNested,
 } from 'class-validator';
 
@@ -131,4 +133,30 @@ export class UpdateUnmatchedPaymentDto {
   @IsOptional()
   @IsString()
   notes?: string;
+}
+
+export class SplitInstallmentDto {
+  @ApiProperty()
+  @IsUUID()
+  periciaId!: string;
+
+  @ApiProperty()
+  @Type(() => Number)
+  @IsNumber({ maxDecimalPlaces: 2 })
+  @Min(0.01)
+  amount!: number;
+
+  @ApiPropertyOptional()
+  @IsOptional()
+  @IsString()
+  note?: string;
+}
+
+export class SplitUnmatchedPaymentDto {
+  @ApiProperty({ type: [SplitInstallmentDto] })
+  @IsArray()
+  @ArrayMinSize(2)
+  @ValidateNested({ each: true })
+  @Type(() => SplitInstallmentDto)
+  installments!: SplitInstallmentDto[];
 }

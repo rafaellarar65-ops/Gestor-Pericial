@@ -105,6 +105,26 @@ export type UnmatchedPayment = {
   createdAt?: string;
 };
 
+
+export type UnmatchedPaymentSplitInstallmentPayload = {
+  periciaId: string;
+  amount: number;
+  note?: string;
+};
+
+export type UnmatchedPaymentSplitPayload = {
+  installments: UnmatchedPaymentSplitInstallmentPayload[];
+};
+
+export type UnmatchedPaymentSplitResult = {
+  unmatchedId: string;
+  status: string;
+  installments: number;
+  totalAmount: number;
+  recebimentos: Array<{ id: string; periciaId: string; amount: number }>;
+  bankTransactions: Array<{ id: string; periciaId: string; amount: number }>;
+};
+
 export type Despesa = {
   id: string;
   categoria: string;

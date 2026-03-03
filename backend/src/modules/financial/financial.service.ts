@@ -1,5 +1,5 @@
-import { Injectable, NotFoundException } from '@nestjs/common';
-import { PaymentMatchStatus, Prisma } from '@prisma/client';
+import { BadRequestException, Injectable, NotFoundException } from '@nestjs/common';
+import { FinancialDirection, FontePagamento, PaymentMatchStatus, Prisma } from '@prisma/client';
 import { RequestContextService } from '../../common/request-context.service';
 import { PrismaService } from '../../prisma/prisma.service';
 import {
@@ -7,6 +7,7 @@ import {
   CreateRecebimentoDto,
   ImportRecebimentosDto,
   ReconcileDto,
+  SplitUnmatchedPaymentDto,
   UpdateUnmatchedPaymentDto,
 } from './dto/financial.dto';
 
@@ -186,6 +187,104 @@ export class FinancialService {
     });
 
     return { ...updated, amount: updated.amount ? Number(updated.amount) : null, status: 'DISCARDED' as const };
+  }
+
+
+  async splitUnmatched(unmatchedId: string, dto: SplitUnmatchedPaymentDto) {
+    const tenantId = this.context.get('tenantId') ?? '';
+
+    const unmatched = await this.prisma.unmatchedPayment.findFirst({
+      where: { id: unmatchedId, tenantId },
+    });
+
+    if (!unmatched) {
+      throw new NotFoundException('Pagamento não vinculado não encontrado.');
+    }
+
+    const originalAmount = Number(unmatched.amount ?? 0);
+    if (originalAmount <= 0) {
+      throw new BadRequestException('Pagamento original sem valor válido para split.');
+    }
+
+    const installmentTotal = dto.installments.reduce((sum, item) => sum + Number(item.amount), 0);
+    const decimalTolerance = 0.01;
+    if (Math.abs(originalAmount - installmentTotal) > decimalTolerance) {
+      throw new BadRequestException('Soma das parcelas deve ser igual ao valor original.');
+    }
+
+    const uniquePericiaIds = [...new Set(dto.installments.map((item) => item.periciaId))];
+    const validPericias = await this.prisma.pericia.findMany({
+      where: {
+        id: { in: uniquePericiaIds },
+        tenantId,
+        deletedAt: null,
+      },
+      select: { id: true },
+    });
+
+    if (validPericias.length !== uniquePericiaIds.length) {
+      throw new BadRequestException('Uma ou mais perícias são inválidas para o tenant atual.');
+    }
+
+    const result = await this.prisma.$transaction(async (tx) => {
+      const createdRecebimentos = await Promise.all(
+        dto.installments.map((installment) =>
+          tx.recebimento.create({
+            data: {
+              tenantId,
+              periciaId: installment.periciaId,
+              fontePagamento: FontePagamento.OUTRO,
+              dataRecebimento: unmatched.transactionDate ?? unmatched.createdAt,
+              valorBruto: new Prisma.Decimal(installment.amount),
+              valorLiquido: new Prisma.Decimal(installment.amount),
+              descricao: `Split de conciliação #${unmatched.id}`,
+              metadata: {
+                splitFromUnmatchedId: unmatched.id,
+                splitNote: installment.note ?? null,
+              },
+            },
+          }),
+        ),
+      );
+
+      const createdTransactions = await Promise.all(
+        dto.installments.map((installment) =>
+          tx.bankTransaction.create({
+            data: {
+              tenantId,
+              periciaId: installment.periciaId,
+              direction: FinancialDirection.IN,
+              transactionDate: unmatched.transactionDate ?? unmatched.createdAt,
+              amount: new Prisma.Decimal(installment.amount),
+              description: installment.note?.trim() || `Split de conciliação #${unmatched.id}`,
+              rawPayload: {
+                splitFromUnmatchedId: unmatched.id,
+                splitNote: installment.note ?? null,
+              },
+            },
+          }),
+        ),
+      );
+
+      const updatedUnmatched = await tx.unmatchedPayment.update({
+        where: { id: unmatched.id },
+        data: {
+          matchStatus: PaymentMatchStatus.MATCHED,
+          notes: `[SPLIT] Conciliado em ${dto.installments.length} parcela(s).`,
+        },
+      });
+
+      return {
+        unmatchedId: updatedUnmatched.id,
+        status: updatedUnmatched.matchStatus,
+        installments: dto.installments.length,
+        totalAmount: originalAmount,
+        recebimentos: createdRecebimentos.map((item) => ({ id: item.id, periciaId: item.periciaId, amount: Number(item.valorBruto) })),
+        bankTransactions: createdTransactions.map((item) => ({ id: item.id, periciaId: item.periciaId, amount: Number(item.amount) })),
+      };
+    });
+
+    return result;
   }
 
   async deleteUnmatched(id: string, reason?: string) {

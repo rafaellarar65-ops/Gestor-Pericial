@@ -7,6 +7,7 @@ import {
   ImportRecebimentosDto,
   ReconcileDto,
   UpdateUnmatchedPaymentDto,
+  SplitUnmatchedPaymentDto,
 } from './dto/financial.dto';
 
 @ApiTags('financial')
@@ -66,6 +67,14 @@ export class FinancialController {
   @Post('unmatched/:id/discard')
   discardUnmatched(@Param('id') id: string, @Body() body: { note?: string }) {
     return this.service.discardUnmatched(id, body.note);
+  }
+
+  @Post('conciliation/:unmatchedId/split')
+  splitUnmatched(
+    @Param('unmatchedId') unmatchedId: string,
+    @Body() dto: SplitUnmatchedPaymentDto,
+  ) {
+    return this.service.splitUnmatched(unmatchedId, dto);
   }
 
   @Delete('unmatched/:id')
