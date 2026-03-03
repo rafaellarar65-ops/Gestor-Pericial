@@ -115,6 +115,31 @@ export type Despesa = {
   createdAt?: string;
 };
 
+
+export type ConciliationStats = {
+  totals: {
+    reconciled: number;
+    unreconciled: number;
+    ignored: number;
+    total: number;
+  };
+  autoMatching: {
+    automaticMatches: number;
+    totalReconciliable: number;
+    rate: number;
+  };
+  originDistribution: {
+    CSV: number;
+    OFX: number;
+    INDIVIDUAL: number;
+  };
+  financialVolume: {
+    reconciled: number;
+    pending: number;
+    ignored: number;
+  };
+};
+
 export type FinancialAnalytics = {
   totals: {
     recebido: number;

@@ -72,6 +72,11 @@ export class FinancialController {
     return this.service.unmatched();
   }
 
+  @Get('conciliation/stats')
+  conciliationStats() {
+    return this.service.conciliationStats();
+  }
+
   @Post('reconcile')
   reconcile(@Body() dto: ReconcileDto) {
     return this.service.reconcile(dto);
