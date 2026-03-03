@@ -122,7 +122,7 @@ export class PericiasService {
   async update(id: string, dto: UpdatePericiasDto) {
     await this.findOne(id);
 
-    return this.prisma.pericia.update({
+    const updated = await this.prisma.pericia.update({
       where: { id },
       data: {
         ...(dto.juizNome !== undefined ? { juizNome: dto.juizNome } : {}),
@@ -139,7 +139,11 @@ export class PericiasService {
         ...(dto.dataRealizacao !== undefined ? { dataRealizacao: new Date(dto.dataRealizacao) } : {}),
         ...(dto.dataEnvioLaudo !== undefined ? { dataEnvioLaudo: new Date(dto.dataEnvioLaudo) } : {}),
       },
+      include: { modalidade: true },
     });
+
+    await this.scheduleWhatsappJobs(updated.id, updated.tenantId, updated.dataAgendamento, updated.modalidade?.codigo, updated.metadata);
+    return updated;
   }
 
   async delete(id: string) {
@@ -948,6 +952,33 @@ export class PericiasService {
         finalizada: { total: grouped.finalizada.length },
       },
     };
+  }
+
+
+  private async scheduleWhatsappJobs(
+    periciaId: string,
+    tenantId: string,
+    dataAgendamento: Date | null,
+    modalidadeCodigo?: string | null,
+    metadata?: Prisma.JsonValue,
+  ) {
+    const isTelepericia = (modalidadeCodigo ?? '').toLowerCase() === 'telepericia';
+    const phone = this.extractPhone(metadata);
+
+    await this.whatsappScheduler.syncPericiaJobs({
+      tenantId,
+      periciaId,
+      scheduledAt: dataAgendamento,
+      phone,
+      shouldSchedule: isTelepericia,
+    });
+  }
+
+  private extractPhone(metadata?: Prisma.JsonValue) {
+    if (!metadata || typeof metadata !== 'object' || Array.isArray(metadata)) return null;
+
+    const value = (metadata as Record<string, unknown>).whatsappPhone ?? (metadata as Record<string, unknown>).phone;
+    return typeof value === 'string' ? value : null;
   }
 
 }
