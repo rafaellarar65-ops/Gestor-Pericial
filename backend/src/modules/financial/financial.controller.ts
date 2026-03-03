@@ -4,16 +4,20 @@ import { FileInterceptor } from '@nestjs/platform-express';
 import { memoryStorage } from 'multer';
 import { FinancialService } from './financial.service';
 import {
+  BulkDeleteRecebimentosDto,
   CreateDespesaDto,
   CreateRecebimentoDto,
+  FinancialImportAiPrintResponseDto,
+  ImportAiPrintDto,
   ImportRecebimentosDto,
   ImportUnmatchedTransactionsDto,
-  ReconcileDto,
   LinkUnmatchedPaymentDto,
-  UpdateUnmatchedPaymentDto,
+  ReconcileDto,
   SplitUnmatchedPaymentDto,
+  UpdateRecebimentoDto,
+  UpdateUnmatchedPaymentDto,
 } from './dto/financial.dto';
-import { ImportCsvDto, LinkUnmatchedPaymentDto } from './dto/import.dto';
+import { ImportCsvDto, LinkUnmatchedPaymentDto as ImportLinkUnmatchedPaymentDto } from './dto/import.dto';
 
 @ApiTags('financial')
 @ApiBearerAuth()
@@ -79,7 +83,7 @@ export class FinancialController {
 
   @Post('unmatched-payments/:id/link')
   @ApiOperation({ summary: 'Vincula manualmente pagamento não vinculado a uma perícia' })
-  linkPayment(@Param('id') paymentId: string, @Body() dto: LinkUnmatchedPaymentDto) {
+  linkPayment(@Param('id') paymentId: string, @Body() dto: ImportLinkUnmatchedPaymentDto) {
     return this.service.linkPaymentToPericia(paymentId, dto);
   }
 

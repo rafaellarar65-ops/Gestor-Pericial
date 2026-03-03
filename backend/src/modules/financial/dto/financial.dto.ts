@@ -4,14 +4,14 @@ import { Type } from 'class-transformer';
 import {
   ArrayMinSize,
   IsArray,
-  IsDefined,
+  IsBoolean,
   IsDateString,
+  IsDefined,
   IsEnum,
   IsIn,
   IsNumber,
   IsOptional,
   IsString,
-  IsIn,
   IsUUID,
   Min,
   ValidateNested,
@@ -53,6 +53,37 @@ export class CreateRecebimentoDto {
   descricao?: string;
 }
 
+export class UpdateRecebimentoDto {
+  @ApiPropertyOptional({ enum: FontePagamento })
+  @IsOptional()
+  @IsEnum(FontePagamento)
+  origem?: FontePagamento;
+
+  @ApiPropertyOptional()
+  @IsOptional()
+  @IsDateString()
+  dataRecebimento?: string;
+
+  @ApiPropertyOptional()
+  @IsOptional()
+  @Type(() => Number)
+  @IsNumber({ maxDecimalPlaces: 2 })
+  valorLiquido?: number;
+
+  @ApiPropertyOptional()
+  @IsOptional()
+  @IsString()
+  descricao?: string;
+}
+
+export class BulkDeleteRecebimentosDto {
+  @ApiProperty({ type: [String] })
+  @IsArray()
+  @ArrayMinSize(1)
+  @IsUUID('4', { each: true })
+  ids!: string[];
+}
+
 export class CreateDespesaDto {
   @ApiProperty()
   @IsString()
@@ -75,6 +106,25 @@ export class CreateDespesaDto {
   @IsOptional()
   @IsUUID()
   periciaId?: string;
+}
+
+export class ImportAiPrintDto {
+  @ApiProperty({ description: 'Texto bruto extraído por OCR/IA.' })
+  @IsString()
+  content!: string;
+}
+
+export class FinancialImportAiPrintResponseDto {
+  @ApiProperty()
+  global!: {
+    totalBruto: number;
+    totalLiquido: number;
+    totalImpostos: number;
+    dataPagamento: string;
+  };
+
+  @ApiProperty({ type: [Object] })
+  items!: Array<Record<string, unknown>>;
 }
 
 export class ImportRecebimentoItemDto {
@@ -126,13 +176,6 @@ export class ImportRecebimentosDto {
   sourceFileName?: string;
 }
 
-
-export class LinkUnmatchedPaymentDto {
-  @ApiProperty()
-  @IsUUID()
-  periciaId!: string;
-}
-
 export class ReconcileDto {
   @ApiProperty({ type: [String] })
   @IsArray()
@@ -144,9 +187,9 @@ export class ReconcileDto {
   @IsString()
   note?: string;
 
-  @ApiPropertyOptional({ enum: [PaymentMatchStatus.LINKED, PaymentMatchStatus.DISCARDED] })
+  @ApiPropertyOptional({ enum: [PaymentMatchStatus.LINKED, PaymentMatchStatus.PARTIAL] })
   @IsOptional()
-  @IsIn([PaymentMatchStatus.LINKED, PaymentMatchStatus.DISCARDED])
+  @IsIn([PaymentMatchStatus.LINKED, PaymentMatchStatus.PARTIAL])
   status?: PaymentMatchStatus;
 
   @ApiPropertyOptional()
@@ -209,7 +252,7 @@ export class UpdateUnmatchedPaymentDto {
 
   @ApiPropertyOptional({ enum: ['AI_PRINT', 'MANUAL_CSV', 'OFX_IMPORT', 'INDIVIDUAL'] })
   @IsOptional()
-  @IsEnum(['AI_PRINT', 'MANUAL_CSV', 'OFX_IMPORT', 'INDIVIDUAL'])
+  @IsIn(['AI_PRINT', 'MANUAL_CSV', 'OFX_IMPORT', 'INDIVIDUAL'])
   origin?: 'AI_PRINT' | 'MANUAL_CSV' | 'OFX_IMPORT' | 'INDIVIDUAL';
 
   @ApiPropertyOptional()
@@ -265,4 +308,30 @@ export class ImportUnmatchedTransactionsDto {
   @ValidateNested({ each: true })
   @Type(() => ImportUnmatchedTransactionDto)
   rows!: ImportUnmatchedTransactionDto[];
+}
+
+export class SplitInstallmentDto {
+  @ApiProperty()
+  @IsUUID()
+  periciaId!: string;
+
+  @ApiProperty()
+  @Type(() => Number)
+  @IsNumber({ maxDecimalPlaces: 2 })
+  @Min(0.01)
+  amount!: number;
+
+  @ApiPropertyOptional()
+  @IsOptional()
+  @IsString()
+  note?: string;
+}
+
+export class SplitUnmatchedPaymentDto {
+  @ApiProperty({ type: [SplitInstallmentDto] })
+  @IsArray()
+  @ArrayMinSize(2)
+  @ValidateNested({ each: true })
+  @Type(() => SplitInstallmentDto)
+  installments!: SplitInstallmentDto[];
 }

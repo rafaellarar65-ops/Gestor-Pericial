@@ -3,15 +3,22 @@ import { FinancialDirection, FontePagamento, PaymentMatchStatus, Prisma } from '
 import { RequestContextService } from '../../common/request-context.service';
 import { PrismaService } from '../../prisma/prisma.service';
 import {
+  BulkDeleteRecebimentosDto,
   CreateDespesaDto,
   CreateRecebimentoDto,
+  FinancialImportAiPrintResponseDto,
+  FinancialImportSource,
+  ImportAiPrintDto,
+  ImportRecebimentoItemDto,
   ImportRecebimentosDto,
   ImportUnmatchedTransactionsDto,
+  LinkUnmatchedPaymentDto,
   ReconcileDto,
   SplitUnmatchedPaymentDto,
+  UpdateRecebimentoDto,
   UpdateUnmatchedPaymentDto,
 } from './dto/financial.dto';
-import { ImportCsvDto, type ImportSourceType, LinkUnmatchedPaymentDto } from './dto/import.dto';
+import { ImportCsvDto, type ImportSourceType, LinkUnmatchedPaymentDto as ImportLinkUnmatchedPaymentDto } from './dto/import.dto';
 
 type ParsedCsvPayment = {
   cnj: string;
@@ -66,6 +73,34 @@ export class FinancialService {
     private readonly context: RequestContextService,
   ) {}
 
+
+
+  private normalizeCnj(cnj: string): string {
+    return cnj.replace(/\D/g, '');
+  }
+
+  private extractReconciliationReference(rawData: Prisma.JsonValue | null): ReconciliationReference | null {
+    if (!rawData || typeof rawData !== 'object' || Array.isArray(rawData)) return null;
+    const value = (rawData as Record<string, unknown>).reconciliation;
+    if (!value || typeof value !== 'object' || Array.isArray(value)) return null;
+
+    const ref = value as Record<string, unknown>;
+    if ((ref.type !== 'BANK_TRANSACTION' && ref.type !== 'RECEBIMENTO') || typeof ref.id !== 'string' || typeof ref.periciaId !== 'string') {
+      return null;
+    }
+
+    return { type: ref.type, id: ref.id, periciaId: ref.periciaId };
+  }
+
+  private withReconciliationReference(rawData: RawUnmatchedData, reconciliation: ReconciliationReference | null): RawUnmatchedData {
+    const next = { ...rawData };
+    if (!reconciliation) {
+      delete next.reconciliation;
+      return next;
+    }
+
+    return { ...next, reconciliation };
+  }
   private serializeUnmatchedPayment(payment: {
     id: string;
     cnjRaw: string | null;
@@ -217,10 +252,6 @@ export class FinancialService {
 
   importBatchIndividual(dto: ImportRecebimentosDto) {
     return this.importBatchBySource(FinancialImportSource.INDIVIDUAL, dto);
-  }
-
-  private normalizeCnj(cnj: string): string {
-    return cnj.replace(/\D/g, '');
   }
 
   private formatCnj(digits: string): string {
@@ -512,7 +543,7 @@ export class FinancialService {
     });
   }
 
-  async linkPaymentToPericia(paymentId: string, dto: LinkUnmatchedPaymentDto) {
+  async linkPaymentToPericia(paymentId: string, dto: ImportLinkUnmatchedPaymentDto) {
     const unmatched = await this.prisma.unmatchedPayment.findUnique({ where: { id: paymentId } });
     if (!unmatched) throw new NotFoundException('Pagamento não vinculado não encontrado.');
 
@@ -539,6 +570,7 @@ export class FinancialService {
     await this.prisma.unmatchedPayment.delete({ where: { id: paymentId } });
 
     return { linked: true, recebimentoId: recebimento.id };
+  }
 
   async importUnmatched(dto: ImportUnmatchedTransactionsDto) {
     const tenantId = this.context.get('tenantId') ?? '';
@@ -1153,14 +1185,12 @@ export class FinancialService {
     return Number.isNaN(date.getTime()) ? new Date() : date;
   }
 
-  private normalizeCnj(cnj: string): string {
-    return cnj.replace(/\D/g, '');
-  }
-
   private mapSourceToFonte(sourceType: ImportSourceType): FontePagamento {
     if (sourceType === 'TJ') return FontePagamento.TJ;
     if (sourceType === 'PARTES') return FontePagamento.PARTE_AUTORA;
     return FontePagamento.OUTRO;
+  }
+
   private parseMoney(value: number | string | null | undefined): Prisma.Decimal | null {
     if (value === null || value === undefined) return null;
     if (typeof value === 'number') {
@@ -1183,6 +1213,7 @@ export class FinancialService {
     } catch {
       return null;
     }
+  }
 
   private parseDate(value?: string): Date | null {
     if (!value) return null;
@@ -1201,7 +1232,7 @@ export class FinancialService {
     return null;
   }
 
-  private parseCsv(content: string): ImportedBankRecord[] {
+  private parseBankCsv(content: string): ImportedBankRecord[] {
     const lines = content
       .split(/\r?\n/)
       .map((line) => line.trim())
