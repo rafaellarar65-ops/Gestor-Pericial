@@ -101,6 +101,9 @@ export class PericiasService {
       .map((pericia) => pericia.statusId)
       .filter((statusId): statusId is string => Boolean(statusId));
 
+    return { items, pagination: { page: query.page, limit: query.limit, total }, statusIds };
+  }
+
   async list(query: ListPericiasDto) {
     return this.findAll(query);
   }

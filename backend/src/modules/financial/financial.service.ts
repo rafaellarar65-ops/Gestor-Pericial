@@ -539,6 +539,7 @@ export class FinancialService {
     await this.prisma.unmatchedPayment.delete({ where: { id: paymentId } });
 
     return { linked: true, recebimentoId: recebimento.id };
+  }
 
   async importUnmatched(dto: ImportUnmatchedTransactionsDto) {
     const tenantId = this.context.get('tenantId') ?? '';
@@ -585,6 +586,7 @@ export class FinancialService {
     }
 
     return { imported: rowsToCreate.length, rejected };
+  }
 
   async unmatched() {
     const rows = await this.prisma.unmatchedPayment.findMany({
@@ -1211,6 +1213,8 @@ export class FinancialService {
     if (sourceType === 'TJ') return FontePagamento.TJ;
     if (sourceType === 'PARTES') return FontePagamento.PARTE_AUTORA;
     return FontePagamento.OUTRO;
+  }
+
   private parseMoney(value: number | string | null | undefined): Prisma.Decimal | null {
     if (value === null || value === undefined) return null;
     if (typeof value === 'number') {
@@ -1233,6 +1237,7 @@ export class FinancialService {
     } catch {
       return null;
     }
+  }
 
   private parseDate(value?: string): Date | null {
     if (!value) return null;
