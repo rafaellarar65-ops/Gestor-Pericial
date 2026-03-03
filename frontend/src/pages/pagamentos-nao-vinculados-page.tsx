@@ -1,5 +1,5 @@
 import { useMemo, useState } from 'react';
-import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
+import { useMutation, useQueries, useQuery, useQueryClient } from '@tanstack/react-query';
 import { toast } from 'sonner';
 import { Button } from '@/components/ui/button';
 import { Card } from '@/components/ui/card';
@@ -7,7 +7,6 @@ import { Dialog } from '@/components/ui/dialog';
 import { Input } from '@/components/ui/input';
 import { LoadingState } from '@/components/ui/state';
 import { financialService } from '@/services/financial-service';
-import { periciaService } from '@/services/pericia-service';
 import type { UnmatchedPayment, UnmatchedPaymentOrigin } from '@/types/api';
 import { formatCurrency } from '@/lib/formatters';
 
@@ -34,11 +33,6 @@ const PagamentosNaoVinculadosPage = () => {
     queryFn: () => financialService.listUnmatchedPayments(),
   });
 
-  const periciasQuery = useQuery({
-    queryKey: ['pericias-sugestoes-unmatched'],
-    queryFn: () => periciaService.list(1, { limit: 500 }),
-  });
-
   const [search, setSearch] = useState('');
   const [fromDate, setFromDate] = useState('');
   const [toDate, setToDate] = useState('');
@@ -61,6 +55,7 @@ const PagamentosNaoVinculadosPage = () => {
 
   const refresh = async () => {
     await queryClient.invalidateQueries({ queryKey: ['financial-unmatched-payments'] });
+    await queryClient.invalidateQueries({ queryKey: ['financial-conciliation-suggestions'] });
   };
 
   const linkMutation = useMutation({
@@ -71,6 +66,15 @@ const PagamentosNaoVinculadosPage = () => {
       await refresh();
     },
     onError: () => toast.error('Não foi possível vincular o pagamento.'),
+  });
+
+  const runBatchMutation = useMutation({
+    mutationFn: (transactionIds: string[]) => financialService.runConciliationBatch(transactionIds),
+    onSuccess: async () => {
+      toast.success('Matching automático executado para o lote filtrado.');
+      await queryClient.invalidateQueries({ queryKey: ['financial-conciliation-suggestions'] });
+    },
+    onError: () => toast.error('Não foi possível executar o matching automático em lote.'),
   });
 
   const discardMutation = useMutation({
@@ -135,6 +139,24 @@ const PagamentosNaoVinculadosPage = () => {
       .sort((a, b) => new Date(b.receivedAt ?? b.transactionDate ?? b.createdAt ?? 0).getTime() - new Date(a.receivedAt ?? a.transactionDate ?? a.createdAt ?? 0).getTime());
   }, [data, fromDate, onlyValidCnj, originFilter, search, sourceFilter, toDate, withoutCnj]);
 
+  const suggestionsQueries = useQueries({
+    queries: filtered.map((item) => ({
+      queryKey: ['financial-conciliation-suggestions', item.id],
+      queryFn: () => financialService.getConciliationSuggestions(item.id),
+      staleTime: 60_000,
+    })),
+  });
+
+  const suggestionsMap = useMemo(
+    () =>
+      filtered.reduce<Record<string, { periciaId: string; score: number } | null>>((acc, item, index) => {
+        const top = suggestionsQueries[index]?.data?.suggestions?.[0];
+        acc[item.id] = top ? { periciaId: top.periciaId, score: top.score } : null;
+        return acc;
+      }, {}),
+    [filtered, suggestionsQueries],
+  );
+
   const openEdit = (item: UnmatchedPayment) => {
     setEditing(item);
     setEditForm({
@@ -149,27 +171,22 @@ const PagamentosNaoVinculadosPage = () => {
     });
   };
 
-  const pericias = periciasQuery.data?.items ?? [];
-
-  const findSuggestedPericiaId = (cnj?: string | null) => {
-    const cleanCnj = (cnj ?? '').replace(/\D/g, '');
-    if (!cleanCnj) return null;
-
-    const similar = pericias.find((pericia) => {
-      const periciaCnj = String(pericia.processoCNJ ?? '').replace(/\D/g, '');
-      return periciaCnj && (periciaCnj.includes(cleanCnj) || cleanCnj.includes(periciaCnj));
-    });
-
-    return similar?.id ?? null;
-  };
-
   if (isLoading) return <LoadingState />;
 
   return (
     <div className="space-y-6">
-      <div>
-        <h1 className="text-2xl font-semibold">Pagamentos não vinculados</h1>
-        <p className="text-sm text-muted-foreground">Monitore e trate registros de UnmatchedPayment.</p>
+      <div className="flex flex-wrap items-end justify-between gap-2">
+        <div>
+          <h1 className="text-2xl font-semibold">Pagamentos não vinculados</h1>
+          <p className="text-sm text-muted-foreground">Monitore e trate registros de UnmatchedPayment.</p>
+        </div>
+        <Button
+          variant="outline"
+          onClick={() => runBatchMutation.mutate(filtered.map((item) => item.id))}
+          disabled={runBatchMutation.isPending || filtered.length === 0}
+        >
+          Rodar matching automático (lote filtrado)
+        </Button>
       </div>
 
       <Card className="space-y-4 p-4">
@@ -220,6 +237,7 @@ const PagamentosNaoVinculadosPage = () => {
             <tbody>
               {filtered.map((item) => {
                 const receivedDate = item.receivedAt ?? item.transactionDate ?? item.createdAt;
+                const suggestion = suggestionsMap[item.id];
                 return (
                 <tr key={item.id} className="border-b align-top">
                   <td className="px-2 py-2">{receivedDate ? new Date(receivedDate).toLocaleDateString('pt-BR') : '-'}</td>
@@ -230,22 +248,16 @@ const PagamentosNaoVinculadosPage = () => {
                   <td className="px-2 py-2">{item.origin ?? 'INDIVIDUAL'}</td>
                   <td className="px-2 py-2">{item.ignored ? 'DISCARDED' : item.matchStatus}</td>
                   <td className="px-2 py-2">
-                    {item.cnj ? (
-                      (() => {
-                        const suggestedPericiaId = findSuggestedPericiaId(item.cnj);
-                        if (!suggestedPericiaId) return <span className="text-xs text-muted-foreground">Sem sugestão</span>;
-                        return (
-                          <button
-                            className="text-xs font-medium text-blue-600 hover:underline"
-                            onClick={() => linkMutation.mutate({ id: item.id, periciaId: suggestedPericiaId })}
-                            type="button"
-                          >
-                            Vincular sugerido ({suggestedPericiaId.slice(0, 8)}…)
-                          </button>
-                        );
-                      })()
+                    {suggestion ? (
+                      <button
+                        className="text-xs font-medium text-blue-600 hover:underline"
+                        onClick={() => linkMutation.mutate({ id: item.id, periciaId: suggestion.periciaId })}
+                        type="button"
+                      >
+                        Vincular sugerido ({suggestion.periciaId.slice(0, 8)}… | {suggestion.score} pts)
+                      </button>
                     ) : (
-                      <span className="text-xs text-muted-foreground">Sem CNJ</span>
+                      <span className="text-xs text-muted-foreground">Sem sugestão</span>
                     )}
                   </td>
                   <td className="px-2 py-2">
