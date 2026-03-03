@@ -626,6 +626,22 @@ export class AgendaService {
       ),
     );
 
+    await this.prisma.schedulingBatch.create({
+      data: {
+        tenantId,
+        dateRef: new Date(dto.metadata?.date ?? dto.items[0]?.startAt ?? new Date().toISOString()),
+        criteriaJson: (dto.metadata ?? {}) as Prisma.InputJsonValue,
+        resultJson: ({
+          status: 'CONFIRMADO',
+          created: created.length,
+          items: dto.items.map((item) => ({
+            periciaId: item.periciaId,
+            scheduledAt: item.startAt,
+          })),
+        }) as Prisma.InputJsonValue,
+      },
+    });
+
     return { created: created.length };
   }
 
