@@ -66,6 +66,39 @@ export class FinancialService {
     private readonly context: RequestContextService,
   ) {}
 
+  private serializeUnmatchedPayment(payment: {
+    id: string;
+    cnjRaw: string | null;
+    cnjNormalized: string | null;
+    source: string | null;
+    originType: string;
+    grossValue: Prisma.Decimal | null;
+    discountValue: Prisma.Decimal | null;
+    netValue: Prisma.Decimal | null;
+    receivedAt: Date | null;
+    description: string | null;
+    status: PaymentMatchStatus;
+    linkedPericiaId: string | null;
+    linkedAt: Date | null;
+    linkedBy: string | null;
+    notes: string | null;
+    rawData: Prisma.JsonValue;
+    importBatchId: string | null;
+    createdAt: Date;
+    updatedAt: Date;
+  }) {
+    return {
+      ...payment,
+      grossValue: payment.grossValue ? Number(payment.grossValue) : null,
+      discountValue: payment.discountValue ? Number(payment.discountValue) : null,
+      netValue: payment.netValue ? Number(payment.netValue) : null,
+      receivedAt: payment.receivedAt?.toISOString() ?? null,
+      linkedAt: payment.linkedAt?.toISOString() ?? null,
+      createdAt: payment.createdAt.toISOString(),
+      updatedAt: payment.updatedAt.toISOString(),
+    };
+  }
+
   createRecebimento(dto: CreateRecebimentoDto) {
     const tenantId = this.context.get('tenantId') ?? '';
     return this.prisma.recebimento.create({

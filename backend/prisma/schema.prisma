@@ -479,6 +479,7 @@ model Pericia {
   agendaEvents     AgendaEvent[]
   agendaTasks      AgendaTask[]
   recebimentos     Recebimento[]
+  unmatchedPaymentsLinked UnmatchedPayment[]
   despesas         Despesa[]
   logStatuses      LogStatus[]
   bankTransactions BankTransaction[]
@@ -1020,7 +1021,8 @@ model UnmatchedPayment {
   tenant      Tenant       @relation(fields: [tenantId], references: [id], onDelete: Cascade)
   importBatch ImportBatch? @relation(fields: [importBatchId], references: [id], onDelete: SetNull)
 
-  @@index([tenantId, matchStatus, transactionDate])
+  @@index([tenantId, status, receivedAt])
+  @@index([tenantId, cnjNormalized])
 }
 
 model Despesa {

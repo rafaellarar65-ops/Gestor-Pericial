@@ -1,5 +1,5 @@
 import { ApiProperty, ApiPropertyOptional } from '@nestjs/swagger';
-import { FontePagamento } from '@prisma/client';
+import { FontePagamento, PaymentMatchStatus } from '@prisma/client';
 import { Type } from 'class-transformer';
 import {
   ArrayMinSize,
@@ -11,6 +11,7 @@ import {
   IsNumber,
   IsOptional,
   IsString,
+  IsIn,
   IsUUID,
   Min,
   ValidateNested,
@@ -138,9 +139,20 @@ export class ReconcileDto {
   @IsUUID('4', { each: true })
   unmatchedIds!: string[];
 
-  @ApiProperty()
+  @ApiPropertyOptional()
+  @IsOptional()
   @IsString()
-  note!: string;
+  note?: string;
+
+  @ApiPropertyOptional({ enum: [PaymentMatchStatus.LINKED, PaymentMatchStatus.DISCARDED] })
+  @IsOptional()
+  @IsIn([PaymentMatchStatus.LINKED, PaymentMatchStatus.DISCARDED])
+  status?: PaymentMatchStatus;
+
+  @ApiPropertyOptional()
+  @IsOptional()
+  @IsUUID()
+  linkedPericiaId?: string;
 }
 
 export class LinkUnmatchedPaymentDto {
