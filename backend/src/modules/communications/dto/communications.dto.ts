@@ -84,46 +84,6 @@ export class GenerateHubEmailDto {
   context?: Record<string, string>;
 }
 
-export class UpsertUolhostEmailConfigDto {
-  @ApiProperty()
-  @IsString()
-  fromEmail!: string;
-
-  @ApiPropertyOptional()
-  @IsOptional()
-  @IsString()
-  fromName?: string;
-
-  @ApiProperty()
-  @IsString()
-  smtpHost!: string;
-
-  @ApiProperty()
-  @IsString()
-  smtpPort!: string;
-
-  @ApiProperty()
-  @IsString()
-  imapHost!: string;
-
-  @ApiProperty()
-  @IsString()
-  imapPort!: string;
-
-  @ApiProperty()
-  @IsString()
-  login!: string;
-
-  @ApiProperty()
-  @IsString()
-  password!: string;
-
-  @ApiPropertyOptional()
-  @IsOptional()
-  @IsBoolean()
-  secure?: boolean;
-}
-
 export class SendWhatsappMessageDto {
   @ApiProperty()
   @IsString()

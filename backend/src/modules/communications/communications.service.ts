@@ -1,4 +1,4 @@
-import { Injectable, NotFoundException } from '@nestjs/common';
+import { BadGatewayException, BadRequestException, Injectable, InternalServerErrorException, NotFoundException } from '@nestjs/common';
 import { NotificationChannel, PericiaPaymentStatus, Prisma } from '@prisma/client';
 import { RequestContextService } from '../../common/request-context.service';
 import { PrismaService } from '../../prisma/prisma.service';
@@ -19,8 +19,9 @@ import {
   SendWhatsappMessageDto,
   UpdateMessageTemplateDto,
   UpdateWhatsappConsentDto,
-  UpsertUolhostEmailConfigDto,
 } from './dto/communications.dto';
+import { EmailConfigDto, UpsertUolhostEmailConfigDto } from './dto/email-config.dto';
+import { EmailImapService } from './email-imap.service';
 
 @Injectable()
 export class CommunicationsService {
@@ -28,10 +29,24 @@ export class CommunicationsService {
     private readonly prisma: PrismaService,
     private readonly context: RequestContextService,
     private readonly whatsappService: WhatsappService,
+    private readonly emailImapService: EmailImapService,
   ) {}
 
   sendEmail(dto: SendEmailDto) { return { queued: true, ...dto }; }
-  imapSync() { return { synced: true, fetched: 0 }; }
+
+  async imapSync() {
+    const config = await this.getTenantEmailConfig();
+
+    try {
+      await this.emailImapService.connect(config);
+      const headers = await this.emailImapService.fetchHeaders(20);
+      return { synced: true, fetched: headers.length, headers };
+    } catch (error) {
+      throw new BadGatewayException(`Falha ao sincronizar IMAP: ${this.getErrorMessage(error)}`);
+    } finally {
+      await this.emailImapService.disconnect();
+    }
+  }
 
   createTemplate(dto: CreateEmailTemplateDto) {
     const tenantId = this.context.get('tenantId') ?? '';
@@ -54,7 +69,7 @@ export class CommunicationsService {
   async upsertUolhostConfig(dto: UpsertUolhostEmailConfigDto) {
     const tenantId = this.context.get('tenantId') ?? '';
     const existing = await this.prisma.emailConfig.findFirst({ where: { tenantId, provider: 'UOLHOST' } });
-    const data = { tenantId, provider: 'UOLHOST', fromEmail: dto.fromEmail, fromName: dto.fromName, smtpHost: dto.smtpHost, smtpPort: Number(dto.smtpPort), secure: dto.secure ?? true, encryptedCreds: Buffer.from(JSON.stringify({ login: dto.login, password: dto.password, imapHost: dto.imapHost, imapPort: dto.imapPort })).toString('base64'), active: true };
+    const data = { tenantId, provider: 'UOLHOST', fromEmail: dto.fromEmail, fromName: dto.fromName, smtpHost: dto.smtpHost, smtpPort: dto.smtpPort, secure: dto.smtpSecure, encryptedCreds: Buffer.from(JSON.stringify({ login: dto.login, password: dto.password, imapHost: dto.imapHost, imapPort: dto.imapPort, imapSecure: dto.imapSecure })).toString('base64'), active: true };
     return existing ? this.prisma.emailConfig.update({ where: { id: existing.id }, data }) : this.prisma.emailConfig.create({ data });
   }
 
@@ -104,4 +119,60 @@ export class CommunicationsService {
     const charged = pericias.filter((p) => p.pagamentoStatus !== PericiaPaymentStatus.PAGO).length;
     return { varaId: dto.varaId, charged };
   }
+
+  private async getTenantEmailConfig(): Promise<EmailConfigDto> {
+    const tenantId = this.context.get('tenantId') ?? '';
+    const config = await this.prisma.emailConfig.findFirst({ where: { tenantId, provider: 'UOLHOST', active: true } });
+
+    if (!config) {
+      throw new NotFoundException('Configuração de e-mail não encontrada para o tenant.');
+    }
+
+    let credentials: Record<string, unknown>;
+    try {
+      if (!config.encryptedCreds) {
+        throw new BadRequestException('Credenciais IMAP não configuradas.');
+      }
+      credentials = JSON.parse(Buffer.from(config.encryptedCreds, 'base64').toString('utf8')) as Record<string, unknown>;
+    } catch (error) {
+      if (error instanceof BadRequestException) {
+        throw error;
+      }
+      throw new InternalServerErrorException('Credenciais de e-mail inválidas ou corrompidas.');
+    }
+
+    const login = credentials.login;
+    const password = credentials.password;
+    const imapHost = credentials.imapHost;
+    const imapPort = credentials.imapPort;
+    const imapSecure = credentials.imapSecure;
+
+    if (!login || !password || !imapHost || !imapPort) {
+      throw new BadRequestException('Configuração IMAP incompleta.');
+    }
+
+    if (!config.smtpHost || !config.smtpPort) {
+      throw new BadRequestException('Configuração SMTP incompleta.');
+    }
+
+    return {
+      smtpHost: config.smtpHost ?? "",
+      smtpPort: Number(config.smtpPort),
+      smtpSecure: Boolean(config.secure),
+      imapHost: String(imapHost),
+      imapPort: Number(imapPort),
+      imapSecure: typeof imapSecure === 'boolean' ? imapSecure : true,
+      login: String(login),
+      password: String(password),
+    };
+  }
+
+  private getErrorMessage(error: unknown): string {
+    if (error instanceof Error) {
+      return error.message;
+    }
+
+    return 'erro desconhecido';
+  }
+
 }
