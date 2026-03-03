@@ -1,9 +1,10 @@
+import { decryptPayload } from '../../common/crypto.util';
 import { CommunicationsService } from './communications.service';
-import { WhatsappRulesEngine } from './whatsapp.rules-engine';
 
 describe('CommunicationsService', () => {
   const prisma = {
     emailTemplate: { create: jest.fn(), findMany: jest.fn(), findFirst: jest.fn() },
+    emailConfig: { findFirst: jest.fn(), create: jest.fn(), update: jest.fn() },
     lawyer: { create: jest.fn(), findMany: jest.fn() },
     whatsappMessage: { findMany: jest.fn() },
   } as any;
@@ -15,7 +16,12 @@ describe('CommunicationsService', () => {
 
   beforeEach(() => {
     jest.clearAllMocks();
+    process.env.EMAIL_CONFIG_CRYPTO_KEY = '12345678901234567890123456789012';
     service = new CommunicationsService(prisma, context as any, whatsappService as any);
+  });
+
+  afterEach(() => {
+    delete process.env.EMAIL_CONFIG_CRYPTO_KEY;
   });
 
   it('creates template (happy path)', async () => {
@@ -35,5 +41,37 @@ describe('CommunicationsService', () => {
     const result = await service.sendWhatsappMessage({ to: '5511999999999', message: 'oi' });
     expect(whatsappService.sendTenantMessage).toHaveBeenCalled();
     expect(result.messageId).toBe('w-1');
+  });
+
+  it('persists encrypted credentials and does not return password in response', async () => {
+    prisma.emailConfig.findFirst.mockResolvedValue(null);
+    prisma.emailConfig.create.mockImplementation(async ({ data }: any) => ({
+      id: 'cfg-1',
+      ...data,
+      createdAt: new Date('2025-01-01T00:00:00.000Z'),
+      updatedAt: new Date('2025-01-01T00:00:00.000Z'),
+    }));
+
+    const result = await service.upsertUolhostConfig({
+      fromEmail: 'no-reply@example.com',
+      fromName: 'Perícias',
+      smtpHost: 'smtp.example.com',
+      smtpPort: '465',
+      imapHost: 'imap.example.com',
+      imapPort: '993',
+      login: 'user@example.com',
+      password: 'SuperSecret#123',
+      secure: true,
+    });
+
+    const savedEncryptedCreds = prisma.emailConfig.create.mock.calls[0][0].data.encryptedCreds;
+    expect(savedEncryptedCreds).not.toContain('SuperSecret#123');
+
+    const decrypted = decryptPayload<{ login: string; password: string; imapHost: string; imapPort: string }>(savedEncryptedCreds, process.env.EMAIL_CONFIG_CRYPTO_KEY);
+    expect(decrypted.password).toBe('SuperSecret#123');
+    expect(decrypted.login).toBe('user@example.com');
+
+    expect(result).not.toHaveProperty('password');
+    expect(result).not.toHaveProperty('encryptedCreds');
   });
 });
