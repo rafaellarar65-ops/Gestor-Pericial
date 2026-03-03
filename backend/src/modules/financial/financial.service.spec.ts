@@ -1,4 +1,4 @@
-import { FontePagamento } from '@prisma/client';
+import { FontePagamento, PaymentMatchStatus } from '@prisma/client';
 import { FinancialService } from './financial.service';
 
 describe('FinancialService', () => {
@@ -19,6 +19,8 @@ describe('FinancialService', () => {
     },
     unmatchedPayment: {
       findMany: jest.fn(),
+      findFirst: jest.fn(),
+      update: jest.fn(),
       updateMany: jest.fn(),
       createMany: jest.fn(),
     },

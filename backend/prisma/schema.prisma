@@ -112,6 +112,7 @@ enum PaymentMatchStatus {
   MATCHED
   UNMATCHED
   PARTIAL
+  LINKED
 }
 
 enum RuleTrigger {

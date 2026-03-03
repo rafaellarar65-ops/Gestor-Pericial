@@ -30,9 +30,10 @@ const cnjMask = (value: string) => {
 
 const PericiaCreatePage = () => {
   const navigate = useNavigate();
+  const [searchParams] = useSearchParams();
   const queryClient = useQueryClient();
   const [form, setForm] = useState({
-    processoCNJ: '',
+    processoCNJ: searchParams.get('cnj') ?? '',
     juizNome: '',
     autorNome: '',
     reuNome: '',
@@ -74,6 +75,15 @@ const PericiaCreatePage = () => {
       }),
     onSuccess: async (created) => {
       await queryClient.invalidateQueries({ queryKey: ['pericias'] });
+      const returnTo = searchParams.get('returnTo');
+      if (returnTo) {
+        const url = new URL(returnTo, window.location.origin);
+        url.searchParams.set('createdPericiaId', created.id);
+        url.searchParams.set('createdCnj', form.processoCNJ);
+        navigate(url.pathname + url.search);
+        return;
+      }
+
       navigate(`/pericias/${created.id}`);
     },
   });
