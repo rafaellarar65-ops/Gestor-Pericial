@@ -28,6 +28,8 @@ type ActionCard = {
   tone: string;
   actionTone?: string;
   kpiKey?: string;
+  descriptionValueKey?: string;
+  fullCardClick?: boolean;
   Icon: React.ComponentType<{ size?: number; className?: string }>;
 };
 
@@ -88,6 +90,17 @@ const ACTION_CARDS: ActionCard[] = [
     actionTone: 'bg-orange-600/90 hover:bg-orange-700/90',
     kpiKey: 'esclarecimentos',
     Icon: MessageSquareWarning,
+  },
+  {
+    title: 'PAGAMENTOS NÃO VINCULADOS',
+    subtitle: 'Registros pendentes de conciliação financeira',
+    badge: 'PENDÊNCIAS',
+    href: '/pagamentos-nao-vinculados',
+    color: 'bg-violet-600',
+    kpiKey: 'pagamentos_nao_vinculados_pendentes',
+    descriptionValueKey: 'pagamentos_nao_vinculados_soma_liquida_pendente',
+    fullCardClick: true,
+    Icon: DollarSign,
   },
   {
     title: 'A RECEBER',
@@ -236,6 +249,13 @@ const DashboardPage = () => {
       return (card.kpiKey && item.key === card.kpiKey) || normalizedLabel === normalizedCardTitle;
     });
 
+    acc[card.title] = kpi?.value ?? '—';
+    return acc;
+  }, {});
+
+  const kpiDescriptionValueByCard = ACTION_CARDS.reduce<Record<string, string>>((acc, card) => {
+    if (!card.descriptionValueKey) return acc;
+    const kpi = data?.kpis?.find((item) => item.key === card.descriptionValueKey);
     acc[card.title] = kpi?.value ?? '—';
     return acc;
   }, {});
