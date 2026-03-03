@@ -175,6 +175,26 @@ export type InboxItem = {
   createdAt?: string;
 };
 
+
+export type EmailInboxMessage = {
+  uid: number;
+  subject: string;
+  from: string;
+  date?: string;
+  seen: boolean;
+  snippet: string;
+};
+
+export type EmailInboxDetail = {
+  uid: number;
+  subject: string;
+  from: string;
+  to?: string;
+  text?: string;
+  html?: string;
+  date?: string;
+};
+
 export type AgendaEvent = {
   id: string;
   title: string;
