@@ -8,6 +8,9 @@ describe('FinancialService', () => {
       findMany: jest.fn(),
       aggregate: jest.fn(),
     },
+    bankTransaction: {
+      create: jest.fn(),
+    },
     despesa: {
       create: jest.fn(),
       findMany: jest.fn(),
@@ -26,6 +29,9 @@ describe('FinancialService', () => {
       update: jest.fn(),
       updateMany: jest.fn(),
       createMany: jest.fn(),
+    },
+    activityLog: {
+      create: jest.fn(),
     },
     pericia: {
       count: jest.fn(),
@@ -103,7 +109,7 @@ describe('FinancialService', () => {
   });
 
   it('returns zero financialScore when there is no revenue (edge case)', async () => {
-    prisma.$transaction.mockResolvedValue([
+    prisma.$transaction.mockResolvedValueOnce([
       { _sum: { valorLiquido: null, valorBruto: null } },
       { _sum: { valor: null } },
       0,

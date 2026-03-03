@@ -9,6 +9,7 @@ import {
   ImportRecebimentosDto,
   ImportUnmatchedTransactionsDto,
   ReconcileDto,
+  LinkUnmatchedPaymentDto,
   UpdateUnmatchedPaymentDto,
   SplitUnmatchedPaymentDto,
 } from './dto/financial.dto';
@@ -115,7 +116,7 @@ export class FinancialController {
   }
 
   @Post('unmatched/:id/link')
-  linkUnmatched(@Param('id') id: string, @Body() body: { periciaId?: string; note?: string }) {
+  linkUnmatched(@Param('id') id: string, @Body() body: LinkUnmatchedPaymentDto) {
     return this.service.linkUnmatched(id, body);
   }
 
