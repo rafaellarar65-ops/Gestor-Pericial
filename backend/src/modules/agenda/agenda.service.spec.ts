@@ -305,4 +305,34 @@ describe('AgendaService', () => {
     expect(result.mimeType).toBe('application/pdf');
     expect(prisma.schedulingBatch.update).toHaveBeenCalled();
   });
+
+  it('appends status history when status changes', async () => {
+    prisma.agendaEvent.findFirst.mockResolvedValue({
+      id: 'ev-1',
+      status: AgendaEventStatus.AGENDADA,
+      statusHistory: [],
+    });
+    prisma.agendaEvent.update.mockResolvedValue({ id: 'ev-1' });
+
+    await service.updateEvent('ev-1', {
+      status: AgendaEventStatus.CANCELADA,
+      statusChangeReason: 'Paciente não compareceu',
+    });
+
+    expect(prisma.agendaEvent.update).toHaveBeenCalledWith(
+      expect.objectContaining({
+        data: expect.objectContaining({
+          status: AgendaEventStatus.CANCELADA,
+          statusHistory: [
+            expect.objectContaining({
+              from: AgendaEventStatus.AGENDADA,
+              to: AgendaEventStatus.CANCELADA,
+              reason: 'Paciente não compareceu',
+              changedBy: 'u-1',
+            }),
+          ],
+        }),
+      }),
+    );
+  });
 });

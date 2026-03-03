@@ -41,6 +41,14 @@ type BatchInvalidItem = {
 };
 
 
+type StatusHistoryEntry = {
+  from: AgendaEventStatus;
+  to: AgendaEventStatus;
+  changedAt: string;
+  changedBy?: string;
+  reason?: string;
+};
+
 @Injectable()
 export class AgendaService {
   constructor(
