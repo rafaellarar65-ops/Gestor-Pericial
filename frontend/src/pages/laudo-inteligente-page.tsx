@@ -7,6 +7,15 @@ import { Input } from '@/components/ui/input';
 import { useSmartCompletion } from '@/hooks/use-smart-completion';
 import { laudoInteligenteService } from '@/services/laudo-inteligente-service';
 
+type TranscriptionStatus = 'idle' | 'processing' | 'completed' | 'error';
+
+const TRANSCRIPTION_STATUS_LABEL: Record<TranscriptionStatus, string> = {
+  idle: 'Aguardando upload',
+  processing: 'Transcrição em andamento',
+  completed: 'Transcrição concluída',
+  error: 'Falha na transcrição',
+};
+
 const LaudoInteligentePage = () => {
   const { id = '' } = useParams();
   const [nomePericiado, setNomePericiado] = useState('');
@@ -15,6 +24,8 @@ const LaudoInteligentePage = () => {
   const [processoJson, setProcessoJson] = useState<Record<string, unknown>>({});
   const [pdfFile, setPdfFile] = useState<File | null>(null);
   const [templateFile, setTemplateFile] = useState<File | null>(null);
+  const [transcriptionStatus, setTranscriptionStatus] = useState<TranscriptionStatus>('idle');
+  const [transcriptionMessage, setTranscriptionMessage] = useState<string | null>(null);
 
   const contexto = useMemo(() => ({ processoJson, nomePericiado }), [processoJson, nomePericiado]);
 
@@ -23,9 +34,24 @@ const LaudoInteligentePage = () => {
 
   const onExtract = async () => {
     if (!id || !pdfFile) return;
-    const extracted = await laudoInteligenteService.extract(id, pdfFile);
-    setProcessoJson(extracted.dadosProcesso ?? {});
-    setNomePericiado(String(extracted.dadosProcesso?.nomePericiado ?? ''));
+    setTranscriptionStatus('processing');
+    setTranscriptionMessage('Iniciando transcrição do PDF...');
+
+    try {
+      const extracted = await laudoInteligenteService.extract(id, pdfFile);
+      const extractedNomePericiado = String(extracted.dadosProcesso?.nomePericiado ?? '');
+      setProcessoJson(extracted.dadosProcesso ?? {});
+      setNomePericiado(extractedNomePericiado);
+      setTranscriptionStatus('completed');
+      setTranscriptionMessage(
+        extractedNomePericiado
+          ? `Transcrição finalizada com sucesso para ${extractedNomePericiado}.`
+          : 'Transcrição finalizada com sucesso.',
+      );
+    } catch {
+      setTranscriptionStatus('error');
+      setTranscriptionMessage('Não foi possível concluir a transcrição do PDF. Tente novamente.');
+    }
   };
 
   const onReprocess = async () => {
@@ -65,8 +91,24 @@ const LaudoInteligentePage = () => {
       <h1 className="text-2xl font-semibold">Módulo de Edição de Laudo Inteligente</h1>
       <Card className="space-y-3 p-4">
         <p className="text-sm font-medium">1) Extração inicial do PDF (Viagem 1)</p>
-        <Input type="file" accept="application/pdf" onChange={(e) => setPdfFile(e.target.files?.[0] ?? null)} />
-        <Button onClick={onExtract}>Extrair Processo</Button>
+        <Input
+          type="file"
+          accept="application/pdf"
+          data-testid="laudo-pdf-input"
+          onChange={(e) => {
+            setPdfFile(e.target.files?.[0] ?? null);
+            setTranscriptionStatus('idle');
+            setTranscriptionMessage(null);
+          }}
+        />
+        <div className="rounded-md border bg-slate-50 px-3 py-2" data-testid="transcription-feedback" aria-live="polite">
+          <p className="text-xs font-semibold uppercase text-slate-500">Status da transcrição</p>
+          <p className="text-sm font-medium text-slate-700" data-testid="transcription-status">{TRANSCRIPTION_STATUS_LABEL[transcriptionStatus]}</p>
+          {transcriptionMessage && <p className="text-sm text-slate-600" data-testid="transcription-message">{transcriptionMessage}</p>}
+        </div>
+        <Button onClick={onExtract} disabled={!pdfFile || transcriptionStatus === 'processing'}>
+          {transcriptionStatus === 'processing' ? 'Transcrevendo...' : 'Extrair Processo'}
+        </Button>
       </Card>
 
       <Card className="space-y-3 p-4">
