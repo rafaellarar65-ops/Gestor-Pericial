@@ -1,5 +1,5 @@
-import { Injectable, NotFoundException } from '@nestjs/common';
-import { FontePagamento, PaymentMatchStatus, Prisma } from '@prisma/client';
+import { BadRequestException, Injectable, NotFoundException } from '@nestjs/common';
+import { FinancialDirection, FontePagamento, PaymentMatchStatus, Prisma } from '@prisma/client';
 import { RequestContextService } from '../../common/request-context.service';
 import { PrismaService } from '../../prisma/prisma.service';
 import {
@@ -585,6 +585,7 @@ export class FinancialService {
     }
 
     return { imported: rowsToCreate.length, rejected };
+  }
 
   async unmatched() {
     const rows = await this.prisma.unmatchedPayment.findMany({
@@ -774,7 +775,9 @@ export class FinancialService {
       throw new NotFoundException('Pagamento não vinculado não encontrado.');
     }
 
-    const originalAmount = Number(unmatched.amount ?? 0);
+    const targetUnmatched = unmatched;
+
+    const originalAmount = Number(targetUnmatched.amount ?? 0);
     if (originalAmount <= 0) {
       throw new BadRequestException('Pagamento original sem valor válido para split.');
     }
@@ -807,12 +810,12 @@ export class FinancialService {
               tenantId,
               periciaId: installment.periciaId,
               fontePagamento: FontePagamento.OUTRO,
-              dataRecebimento: unmatched.transactionDate ?? unmatched.createdAt,
+              dataRecebimento: targetUnmatched.transactionDate ?? targetUnmatched.createdAt,
               valorBruto: new Prisma.Decimal(installment.amount),
               valorLiquido: new Prisma.Decimal(installment.amount),
-              descricao: `Split de conciliação #${unmatched.id}`,
+              descricao: `Split de conciliação #${targetUnmatched.id}`,
               metadata: {
-                splitFromUnmatchedId: unmatched.id,
+                splitFromUnmatchedId: targetUnmatched.id,
                 splitNote: installment.note ?? null,
               },
             },
@@ -827,11 +830,11 @@ export class FinancialService {
               tenantId,
               periciaId: installment.periciaId,
               direction: FinancialDirection.IN,
-              transactionDate: unmatched.transactionDate ?? unmatched.createdAt,
+              transactionDate: targetUnmatched.transactionDate ?? targetUnmatched.createdAt,
               amount: new Prisma.Decimal(installment.amount),
-              description: installment.note?.trim() || `Split de conciliação #${unmatched.id}`,
+              description: installment.note?.trim() || `Split de conciliação #${targetUnmatched.id}`,
               rawPayload: {
-                splitFromUnmatchedId: unmatched.id,
+                splitFromUnmatchedId: targetUnmatched.id,
                 splitNote: installment.note ?? null,
               },
             },
@@ -840,7 +843,7 @@ export class FinancialService {
       );
 
       const updatedUnmatched = await tx.unmatchedPayment.update({
-        where: { id: unmatched.id },
+        where: { id: targetUnmatched.id },
         data: {
           matchStatus: PaymentMatchStatus.MATCHED,
           notes: `[SPLIT] Conciliado em ${dto.installments.length} parcela(s).`,
@@ -882,60 +885,7 @@ export class FinancialService {
   }
 
 
-  async linkUnmatched(id: string, dto: LinkUnmatchedPaymentDto) {
-    const tenantId = this.context.get('tenantId') ?? '';
-    const userId = this.context.get('userId') ?? null;
 
-    const unmatched = await this.prisma.unmatchedPayment.findFirst({
-      where: { id, tenantId },
-    });
-
-    if (!unmatched) {
-      throw new NotFoundException('Pagamento não conciliado não encontrado.');
-    }
-
-    const rawData = (unmatched.rawData ?? {}) as Record<string, unknown>;
-    const sourceBatch = this.getRawString(rawData, ['batch', 'lote', 'batchId']);
-    const sourceOrigin = this.getRawString(rawData, ['origem', 'origin', 'source']);
-    const sourceDescription = this.getRawString(rawData, ['descricao', 'description', 'historico']);
-    const sourceGross = this.getRawNumber(rawData, ['valorBruto', 'valor', 'amount']);
-    const sourceNet = this.getRawNumber(rawData, ['valorLiquido', 'netAmount']);
-    const sourceDate = this.getRawDate(rawData, ['data', 'transactionDate', 'dataRecebimento']);
-
-    const linkedAt = new Date();
-
-    return this.prisma.$transaction(async (tx) => {
-      const recebimento = await tx.recebimento.create({
-        data: {
-          tenantId,
-          periciaId: dto.periciaId,
-          importBatchId: unmatched.importBatchId ?? undefined,
-          fontePagamento: this.mapFontePagamento(sourceOrigin),
-          dataRecebimento: unmatched.transactionDate ?? sourceDate ?? linkedAt,
-          valorBruto: new Prisma.Decimal(sourceGross ?? Number(unmatched.amount ?? 0)),
-          ...(sourceNet !== null ? { valorLiquido: new Prisma.Decimal(sourceNet) } : {}),
-          descricao: [sourceBatch ? `Lote: ${sourceBatch}` : null, sourceDescription].filter(Boolean).join(' | ') || undefined,
-          metadata: {
-            linkedFromUnmatchedPaymentId: unmatched.id,
-            rawData: rawData as Prisma.InputJsonValue,
-          } as Prisma.InputJsonValue,
-          ...(userId ? { createdBy: userId } : {}),
-        },
-      });
-
-      const updatedUnmatched = await tx.unmatchedPayment.update({
-        where: { id: unmatched.id },
-        data: {
-          matchStatus: "LINKED" as PaymentMatchStatus,
-          linkedPericiaId: dto.periciaId,
-          linkedAt,
-          ...(userId ? { linkedBy: userId, updatedBy: userId } : {}),
-        },
-      });
-
-      return { recebimento, unmatchedPayment: updatedUnmatched };
-    });
-  }
 
   private getRawString(rawData: Record<string, unknown>, keys: string[]) {
     for (const key of keys) {
