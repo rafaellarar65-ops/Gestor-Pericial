@@ -1,0 +1,170 @@
+<analysis>**original_problem_statement:**
+The user's initial request was to set up and run a pre-existing full-stack application (A partir deste código, suba este app). The scope expanded significantly to include a full data migration from a previous Firebase-based system.
+
+**PRODUCT REQUIREMENTS:**
+1.  **Application Setup:** Configure and run the NestJS backend and React frontend.
+2.  **Database Connection:** Connect the application to the user-provided PostgreSQL (Neon) database.
+3.  **Data Migration:**
+    *   Migrate all data from a user-provided Firebase backup (JSON file containing 2,351 'perícias' or expert reports) into the new PostgreSQL database.
+    *   This includes migrating related entities: users, cities, 'varas' (courts), and all 18 types of statuses.
+    *   Ensure specific date fields (e.g., , ) are migrated correctly.
+    *   Preserve the original data structure and relationships as closely as possible.
+4.  **Resolve Login Issues:** Ensure the user can log in via the frontend and see all the migrated data. To simplify this, the user directed that all data and the primary user account be consolidated under a single tenant ID: .
+
+**User's preferred language**:
+The user's primary language is **Portuguese**. The next agent MUST respond in Portuguese only.
+
+**what currently exists?**
+The project is a full-stack application using NestJS (backend), React/Vite (frontend), and Prisma with a PostgreSQL database. The environment is fully configured: dependencies are installed, supervisor is managing services (backend on port 8001, frontend on port 3000, and Redis), and the database migrations have been applied. The application has been through several rounds of debugging to fix CORS, Vite proxy, and preview access issues. A data migration from a user-provided JSON file is in progress, and the agent has successfully moved all data to a single tenant ID () as requested by the user to simplify login.
+
+**Last working item**:
+*   **Last item agent was working:** The agent was validating the user's final request to consolidate all application data under a single tenant ID () to resolve login and data visibility issues. It successfully moved all existing data (869 'perícias' and related entities) to this tenant and confirmed via API that login with this tenant's user was successful.
+*   **Status:** IN PROGRESS
+*   **Agent Testing Done:** Y (API login test was successful)
+*   **Which testing method agent to use?** Frontend testing agent
+*   **User Testing Done:** N
+
+**All Pending/In progress Issue list**:
+*   **Issue 1:** Complete the data migration from the JSON backup. (Priority: P0)
+*   **Issue 2:** Frontend login fails with Erro inesperado na API (401 Unauthorized) despite backend API success. (Priority: P1)
+*   **Issue 3:** Redis service is unstable and disconnects frequently. (Priority: P2)
+
+**Issues Detail:**
+*   **Issue 1: Complete the data migration from the JSON backup.**
+    *   **Attempted fixes:** A batch migration script () was created and executed to handle the large dataset (2,351 records) without timing out. It successfully migrated 869 records before the last check. All migrated data was then moved to the correct tenant ID.
+    *   **Next debug checklist:**
+        1.  Verify if the batch migration script is still running in the background.
+        2.  If it has stopped, restart it to ensure all 2,351 'perícias' and their related financial data are migrated.
+        3.  After completion, run a final count on the  table for the tenant  to confirm all records are present.
+    *   **Why fix this issue and what will be achieved with the fix?** This will fulfill the core user requirement of having all their historical data in the new application.
+    *   **Status:** IN PROGRESS
+    *   **Is recurring issue?** N
+    *   **Should Test frontend/backend/both after fix?** Both
+    *   **Blocked on other issue:** None
+
+*   **Issue 2: Frontend login fails with Erro inesperado na API (401 Unauthorized).**
+    *   **Attempted fixes:** The agent confirmed CORS policies, configured the Vite proxy, reset the user password, and implemented a fix from  to add . The issue persisted. The focus then shifted to consolidating tenants, which has now been done.
+    *   **Next debug checklist:**
+        1.  After confirming the data migration (Issue 1) is complete, perform a visual login test using the  tool.
+        2.  Examine the browser console logs from the screenshot tool output for the  network request.
+        3.  Compare the headers, cookies, and payload of the failing browser request with a successful  request to identify discrepancies.
+    *   **Why fix this issue and what will be achieved with the fix?** The application is unusable until the user can log in through the main interface.
+    *   **Status:** BLOCKED
+    *   **Is recurring issue?** Y
+    *   **Should Test frontend/backend/both after fix?** Frontend
+    *   **Blocked on other issue:** Issue 1 (Data migration needs to be complete to ensure a stable testing environment).
+
+*   **Issue 3: Redis service is unstable.**
+    *   **Attempted fixes:** The agent repeatedly re-installed and restarted Redis manually when it failed. The supervisor configuration was updated, but the service continues to crash.
+    *   **Next debug checklist:**
+        1.  Review the Redis supervisor configuration in  for correctness.
+        2.  Inspect the Redis logs at  for error messages that could explain the crashes.
+    *   **Why fix this issue and what will be achieved with the fix?** A stable Redis connection is critical for the backend's performance and to prevent unexpected errors during operations like login.
+    *   **Status:** NOT STARTED
+    *   **Is recurring issue?** Y
+    *   **Should Test frontend/backend/both after fix?** Backend
+    *   **Blocked on other issue:** None
+
+**In progress Task List**:
+*   **Task 1: Complete Data Migration**
+    *   **Where to resume:** Check the status of the batch migration script at . If it's not running, execute  again to continue migrating the remaining 'perícias'.
+    *   **What will be achieved with this?** All 2,351 'perícias' from the user's backup will be in the database, associated with the correct tenant.
+    *   **Status:** IN PROGRESS
+    *   **Should Test frontend/backend/both after fix?** Both
+    *   **Blocked on something:** The previous script versions were timing out, which was addressed by using a batch approach.
+
+**Upcoming and Future Tasks**
+There are no upcoming or future tasks. The entire focus is on completing the migration and fixing the login to make the application fully operational as per the user's request.
+
+**Completed work in this session**
+*   **Application Environment Setup:** Successfully configured supervisor to run the NestJS backend, Vite frontend, and Redis services. Installed all dependencies and ran database migrations.
+*   **Service & Port Configuration:** Adjusted backend to run on port  and frontend on  to work with the platform's preview environment.
+*   **API and Frontend Fixes:**
+    *   Added a global  prefix to the backend in .
+    *   Configured the Vite proxy in  to correctly route API calls.
+    *   Resolved CORS and preview access () issues.
+*   **Data Migration & Consolidation:**
+    *   Initiated data migration from a user-provided JSON backup.
+    *   Debugged and fixed multiple issues within the migration scripts.
+    *   Successfully consolidated all users, existing 'perícias', and related data under a single tenant ID () as per the user's explicit instruction.
+
+**Known issue recurrence from previous fork**
+N/A
+
+**Code Architecture**
+
+
+**Key Technical Concepts**
+*   **Backend:** NestJS, TypeScript, Prisma, PostgreSQL, Redis, JWT Authentication, Multi-tenancy
+*   **Frontend:** React, TypeScript, Vite, TanStack Query, Zustand, TailwindCSS
+*   **Database:** PostgreSQL (hosted on Neon)
+*   **DevOps:** Supervisor for process management.
+*   **Data Migration:** Custom Node.js scripts using  to read from a JSON backup and write to PostgreSQL.
+
+**key DB schema**
+*   **Pericia:** { id, processoCNJ, cidadeId, statusId, tenantId, dataNomeacao, ... }
+*   **User:** { id, email, passwordHash, tenantId, role }
+*   **Tenant:** { id, name }
+*   **Cidade:** { id, nome, estado, tenantId }
+*   **Vara:** { id, nome, cidadeId, tenantId }
+*   **Status:** { id, nome, cor, ordem, tenantId }
+*   **Recebimento:** { id, periciaId, valor, dataPagamento, tenantId }
+
+**All files of reference**
+*   : Edited to add the global  prefix.
+*   : Edited for server port, proxy, and host permissions.
+*   : Created and set with .
+*   : Created and set with database URL, port, and CORS origins.
+*   : Edited to add .
+*   : Rewritten to manage the NestJS/Vite/Redis stack.
+*   : The current, active script for data migration.
+
+**key api endpoints**
+*   
+*   
+*   
+
+**Critical Info for New Agent**
+*   The primary goal is to finish the data migration and fix the frontend login.
+*   All data must be associated with the single tenant ID: .
+*   The login issue (401 on frontend, 201 on ) is the main blocker for the user. Focus on comparing the successful  request with the failing browser request.
+*   The data migration is being done in batches using the script . You need to ensure this process completes successfully.
+*   Redis has been unstable. If the backend fails, check the Redis service status first (redis                            FATAL     can't find command '/usr/bin/redis-server').
+
+**Last 10 User Messages and any pending HUMAN messages**
+10. : Requests completion of the migration script with ID mapping.
+9. : Provides a new, more complete JSON backup ().
+8. : Asks to adjust the script with  and re-run.
+7. : Authorizes the creation of a JSON-only migration script for speed.
+6. : Sees an image of the API error on login and asks for a status update (E ai).
+5. : Proposes a solution: move all 'pericias' to the old, working tenant ID () and ignore the new one.
+4. : Confirms this is the desired path.
+3. : Confirms moving data to the old tenant.
+2. : Confirms login works with old tenant and fetches 'pericias'.
+1. : Perfeito! Agora vou buscar perícias com esse token: (This was an agent message, not a user one).
+
+There are no pending messages from the user.
+
+**Project Health Check:**
+*   **Broken:** The frontend login is non-functional from the UI, which is the primary access point for the user. The data migration is incomplete.
+*   **Mocked:** N/A
+
+**3rd Party Integrations**
+*   **PostgreSQL (Neon):** The primary database for the application.
+*   **Redis:** Used by the backend for caching or job queues.
+*   **Supabase / Gemini API:** Placeholders exist in  files, but they are not configured or in use.
+
+**Testing status**
+*   **Testing agent used:** NO
+*   **Troubleshoot agent used:** YES (Identified the  issue, though it didn't fully resolve the symptom).
+*   **Test files created:** None.
+*   **Known regressions:** The frontend login is a regression, as it was working at an earlier stage before the complex data and tenant manipulations.
+
+**Credentials to test flow:**
+*   **Email:** 
+*   **Password:** 
+*   **Tenant ID:**  (This is the only tenant that should be used for login and data).
+
+**What agent forgot to execute**
+*   The agent has not verified the completion of the batch data migration script. It was started, but its final status is unknown.
+*   The root cause of the recurring Redis service failures has not been diagnosed, leading to repeated manual restarts and potential application instability.</analysis>

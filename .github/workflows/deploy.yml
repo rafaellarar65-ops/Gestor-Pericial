@@ -1,0 +1,170 @@
+name: Deploy
+
+on:
+  push:
+    branches: [main]
+
+concurrency:
+  group: deploy-main
+  cancel-in-progress: false
+
+jobs:
+  ci-gate:
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Setup Node 20
+        uses: actions/setup-node@v4
+        with:
+          node-version: 20
+          cache: npm
+          cache-dependency-path: |
+            frontend/package-lock.json
+            backend/package-lock.json
+
+      - name: Install deps
+        run: |
+          cd frontend && npm ci
+          cd ../backend && npm ci
+
+      - name: Lint, typecheck, test and build
+        run: |
+          cd frontend
+          npm run lint
+          npx prettier --check .
+          npm run typecheck
+          npm run test
+          npm run build
+          cd ../backend
+          npm run lint -- --no-fix
+          npx prettier --check .
+          npx tsc -p tsconfig.json --noEmit
+          npm test
+          npm run build
+
+  deploy-frontend:
+    runs-on: ubuntu-latest
+    needs: ci-gate
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Setup Node 20
+        uses: actions/setup-node@v4
+        with:
+          node-version: 20
+          cache: npm
+          cache-dependency-path: frontend/package-lock.json
+
+      - name: Install frontend deps
+        working-directory: frontend
+        run: npm ci
+
+      - name: Build frontend
+        working-directory: frontend
+        run: npm run build
+
+      - name: Deploy to Vercel
+        working-directory: frontend
+        env:
+          VERCEL_TOKEN: ${{ secrets.VERCEL_TOKEN }}
+          VERCEL_ORG_ID: ${{ secrets.VERCEL_ORG_ID }}
+          VERCEL_PROJECT_ID: ${{ secrets.VERCEL_PROJECT_ID }}
+        run: |
+          npm i -g vercel@latest
+          vercel pull --yes --environment=production --token "$VERCEL_TOKEN"
+          vercel build --prod --token "$VERCEL_TOKEN"
+          vercel deploy --prebuilt --prod --token "$VERCEL_TOKEN"
+
+  deploy-backend:
+    runs-on: ubuntu-latest
+    needs: ci-gate
+    env:
+      BACKEND_HEALTHCHECK_URL: ${{ secrets.BACKEND_HEALTHCHECK_URL }}
+      DATABASE_URL: ${{ secrets.DATABASE_URL }}
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Setup Node 20
+        uses: actions/setup-node@v4
+        with:
+          node-version: 20
+          cache: npm
+          cache-dependency-path: backend/package-lock.json
+
+      - name: Install backend deps
+        working-directory: backend
+        run: npm ci
+
+      - name: Capture latest Railway deployment id
+        id: prev
+        env:
+          RAILWAY_TOKEN: ${{ secrets.RAILWAY_TOKEN }}
+          RAILWAY_SERVICE: ${{ secrets.RAILWAY_SERVICE }}
+        run: |
+          npm i -g @railway/cli
+          railway whoami || true
+          PREVIOUS_ID=$(railway deployments --service "$RAILWAY_SERVICE" --json | jq -r '.[0].id')
+          echo "previous_id=$PREVIOUS_ID" >> "$GITHUB_OUTPUT"
+
+      - name: Deploy backend (Railway rolling)
+        env:
+          RAILWAY_TOKEN: ${{ secrets.RAILWAY_TOKEN }}
+          RAILWAY_SERVICE: ${{ secrets.RAILWAY_SERVICE }}
+        run: |
+          npm i -g @railway/cli
+          railway up --service "$RAILWAY_SERVICE" --detach
+
+      - name: Run migrations (Prisma)
+        working-directory: backend
+        env:
+          DATABASE_URL: ${{ secrets.DATABASE_URL }}
+        run: npx prisma migrate deploy --schema prisma/schema.prisma
+
+      - name: Health check
+        id: health
+        run: curl -fsSL "$BACKEND_HEALTHCHECK_URL"
+
+      - name: Automatic rollback (Railway)
+        if: failure()
+        env:
+          RAILWAY_TOKEN: ${{ secrets.RAILWAY_TOKEN }}
+          RAILWAY_SERVICE: ${{ secrets.RAILWAY_SERVICE }}
+          PREVIOUS_ID: ${{ steps.prev.outputs.previous_id }}
+        run: |
+          npm i -g @railway/cli
+          if [ -n "$PREVIOUS_ID" ] && [ "$PREVIOUS_ID" != "null" ]; then
+            railway redeploy --service "$RAILWAY_SERVICE" --deployment "$PREVIOUS_ID"
+          else
+            echo "No previous deployment id found; manual rollback required" >&2
+            exit 1
+          fi
+
+  notify:
+    runs-on: ubuntu-latest
+    if: always()
+    needs: [deploy-frontend, deploy-backend]
+    steps:
+      - name: Notify Slack
+        env:
+          SLACK_WEBHOOK_URL: ${{ secrets.SLACK_WEBHOOK_URL }}
+        run: |
+          STATUS="success"
+          COLOR="#2eb886"
+          if [ "${{ needs.deploy-frontend.result }}" != "success" ] || [ "${{ needs.deploy-backend.result }}" != "success" ]; then
+            STATUS="failed"
+            COLOR="#e01e5a"
+          fi
+
+          payload=$(jq -n \
+            --arg status "$STATUS" \
+            --arg sha "${{ github.sha }}" \
+            --arg repo "${{ github.repository }}" \
+            --arg color "$COLOR" \
+            '{attachments:[{color:$color,title:("Deploy " + $status),text:("Repo: " + $repo + "\nSHA: " + $sha)}]}')
+
+          curl -X POST -H 'Content-type: application/json' --data "$payload" "$SLACK_WEBHOOK_URL"

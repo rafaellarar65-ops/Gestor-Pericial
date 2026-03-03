@@ -1,0 +1,33 @@
+# syntax=docker/dockerfile:1.7
+
+FROM node:20-alpine AS deps
+WORKDIR /app
+COPY backend/package*.json ./
+COPY backend/prisma ./prisma
+RUN npm ci
+
+FROM deps AS build
+WORKDIR /app
+COPY backend/ ./
+RUN npx prisma generate && npm run build
+
+FROM node:20-alpine AS prod-deps
+WORKDIR /app
+COPY backend/package*.json ./
+COPY backend/prisma ./prisma
+RUN npm ci --omit=dev && npx prisma generate && npm cache clean --force
+
+FROM node:20-alpine AS runtime
+RUN apk add --no-cache openssl
+WORKDIR /app
+ENV NODE_ENV=production
+COPY --from=prod-deps /app/node_modules ./node_modules
+COPY --from=build /app/dist ./dist
+COPY backend/package.json ./package.json
+COPY backend/prisma ./prisma
+COPY backend/scripts/docker-entrypoint.sh ./docker-entrypoint.sh
+RUN chmod +x docker-entrypoint.sh
+EXPOSE 3000
+HEALTHCHECK --interval=30s --timeout=5s --start-period=30s --retries=3 \
+  CMD wget -qO- http://127.0.0.1:${PORT:-3000}/health >/dev/null || exit 1
+CMD ["./docker-entrypoint.sh"]
