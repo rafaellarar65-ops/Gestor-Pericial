@@ -4,6 +4,7 @@ import { Type } from 'class-transformer';
 import {
   ArrayMinSize,
   IsArray,
+  IsBoolean,
   IsDefined,
   IsDateString,
   IsEnum,
@@ -11,7 +12,6 @@ import {
   IsNumber,
   IsOptional,
   IsString,
-  IsIn,
   IsUUID,
   Min,
   ValidateNested,
@@ -127,12 +127,6 @@ export class ImportRecebimentosDto {
 }
 
 
-export class LinkUnmatchedPaymentDto {
-  @ApiProperty()
-  @IsUUID()
-  periciaId!: string;
-}
-
 export class ReconcileDto {
   @ApiProperty({ type: [String] })
   @IsArray()
@@ -144,9 +138,9 @@ export class ReconcileDto {
   @IsString()
   note?: string;
 
-  @ApiPropertyOptional({ enum: [PaymentMatchStatus.LINKED, PaymentMatchStatus.DISCARDED] })
+  @ApiPropertyOptional({ enum: [PaymentMatchStatus.LINKED] })
   @IsOptional()
-  @IsIn([PaymentMatchStatus.LINKED, PaymentMatchStatus.DISCARDED])
+  @IsIn([PaymentMatchStatus.LINKED])
   status?: PaymentMatchStatus;
 
   @ApiPropertyOptional()
