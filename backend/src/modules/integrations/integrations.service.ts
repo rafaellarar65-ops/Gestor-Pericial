@@ -96,23 +96,37 @@ export class IntegrationsService {
 
   async googleOAuthCallback(dto: GoogleOAuthCallbackDto) {
     const tenantId = this.context.get('tenantId') ?? '';
+    const statePayload = this.validateOAuthState(dto.state, tenantId);
+
+    const oauth2Client = this.createGoogleOAuthClient(statePayload.redirectUri);
+    const { tokens } = await this.withRetry(() => oauth2Client.getToken(dto.code));
+
+    if (!tokens.access_token) {
+      throw new HttpException('Falha ao obter access_token do Google OAuth.', HttpStatus.BAD_REQUEST);
+    }
+
+    oauth2Client.setCredentials(tokens);
+
+    const oauth2 = google.oauth2({ version: 'v2', auth: oauth2Client });
+    const userInfo = await this.withRetry(() => oauth2.userinfo.get());
+    const email = dto.email ?? userInfo.data.email ?? null;
 
     return this.prisma.calendarIntegration.upsert({
       where: { tenantId_provider: { tenantId, provider: 'GOOGLE' } },
       create: {
         tenantId,
         provider: 'GOOGLE',
-        email: dto.email ?? 'google-user@example.com',
-        accessToken: `token-${dto.code.slice(0, 8)}`,
-        refreshToken: `refresh-${dto.code.slice(0, 8)}`,
-        tokenExpiresAt: new Date(Date.now() + 60 * 60 * 1000),
+        email,
+        accessToken: tokens.access_token,
+        refreshToken: tokens.refresh_token ?? null,
+        tokenExpiresAt: tokens.expiry_date ? new Date(tokens.expiry_date) : null,
         active: true,
       },
       update: {
-        email: dto.email ?? undefined,
-        accessToken: `token-${dto.code.slice(0, 8)}`,
-        refreshToken: `refresh-${dto.code.slice(0, 8)}`,
-        tokenExpiresAt: new Date(Date.now() + 60 * 60 * 1000),
+        email: email ?? undefined,
+        accessToken: tokens.access_token,
+        refreshToken: tokens.refresh_token ?? undefined,
+        tokenExpiresAt: tokens.expiry_date ? new Date(tokens.expiry_date) : undefined,
         active: true,
       },
     });
@@ -326,6 +340,8 @@ export class IntegrationsService {
     if (!integration?.active) {
       throw new HttpException('Integração Google Calendar não está ativa.', HttpStatus.BAD_REQUEST);
     }
+
+    await this.refreshGoogleTokenIfNeeded(integration);
 
     const [events, tasks] = await Promise.all([
       integration.syncEvents
