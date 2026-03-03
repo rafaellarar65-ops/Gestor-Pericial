@@ -1015,14 +1015,15 @@ model UnmatchedPayment {
   notes           String?
   createdAt       DateTime           @default(now())
   updatedAt       DateTime           @updatedAt
+  periciaId       String?            @db.Uuid
   createdBy       String?            @db.Uuid
   updatedBy       String?            @db.Uuid
 
-  tenant      Tenant       @relation(fields: [tenantId], references: [id], onDelete: Cascade)
-  importBatch ImportBatch? @relation(fields: [importBatchId], references: [id], onDelete: SetNull)
+  tenant      Tenant           @relation(fields: [tenantId], references: [id], onDelete: Cascade)
+  importBatch ImportBatch?     @relation(fields: [importBatchId], references: [id], onDelete: SetNull)
+  pericia     Pericia?         @relation(fields: [periciaId], references: [id], onDelete: SetNull)
 
-  @@index([tenantId, status, receivedAt])
-  @@index([tenantId, cnjNormalized])
+  @@index([tenantId, matchStatus, transactionDate])
 }
 
 model Despesa {
