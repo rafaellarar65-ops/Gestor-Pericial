@@ -173,9 +173,9 @@ export class ReconcileDto {
   @IsString()
   note?: string;
 
-  @ApiPropertyOptional({ enum: [PaymentMatchStatus.LINKED, PaymentMatchStatus.DISCARDED] })
+  @ApiPropertyOptional({ enum: [PaymentMatchStatus.LINKED] })
   @IsOptional()
-  @IsIn([PaymentMatchStatus.LINKED, PaymentMatchStatus.DISCARDED])
+  @IsIn([PaymentMatchStatus.LINKED])
   status?: PaymentMatchStatus;
 
   @ApiPropertyOptional()
