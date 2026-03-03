@@ -443,6 +443,48 @@ export class RegisterTelepericiaAttemptDto {
   whatsappStatus?: string;
 }
 
+
+
+export class ToggleUrgentPericiaDto {
+  @ApiProperty()
+  @IsBoolean()
+  isUrgent!: boolean;
+}
+
+export class TelepericiaQueueQueryDto {
+  @ApiPropertyOptional({ default: 1 })
+  @Type(() => Number)
+  @IsOptional()
+  @IsInt()
+  @Min(1)
+  page = 1;
+
+  @ApiPropertyOptional({ default: 50 })
+  @Type(() => Number)
+  @IsOptional()
+  @IsInt()
+  @Min(1)
+  @Max(200)
+  limit = 50;
+
+  @ApiPropertyOptional({ enum: ['PENDENTE', 'ENVIADA', 'ENTREGUE', 'RESPONDIDA', 'ERRO'] })
+  @IsOptional()
+  @IsIn(['PENDENTE', 'ENVIADA', 'ENTREGUE', 'RESPONDIDA', 'ERRO'])
+  whatsappStatus?: 'PENDENTE' | 'ENVIADA' | 'ENTREGUE' | 'RESPONDIDA' | 'ERRO';
+
+  @ApiPropertyOptional()
+  @IsOptional()
+  @IsString()
+  search?: string;
+}
+
+export class RegisterTelepericiaAttemptDto {
+  @ApiPropertyOptional()
+  @IsOptional()
+  @IsString()
+  whatsappStatus?: string;
+}
+
 export class ImportPericiasDto {
   @ApiProperty({ type: [CreatePericiasDto] })
   @IsArray()
