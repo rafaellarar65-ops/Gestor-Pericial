@@ -2,6 +2,7 @@ import { ApiProperty, ApiPropertyOptional } from '@nestjs/swagger';
 import { FontePagamento } from '@prisma/client';
 import { Type } from 'class-transformer';
 import {
+  IsBoolean,
   IsArray,
   IsDateString,
   IsEnum,
@@ -88,6 +89,26 @@ export class ReconcileDto {
   @ApiProperty()
   @IsString()
   note!: string;
+}
+
+export class LinkUnmatchedPaymentDto {
+  @ApiPropertyOptional()
+  @IsOptional()
+  @IsUUID()
+  periciaId?: string;
+
+  @ApiPropertyOptional()
+  @IsOptional()
+  @IsString()
+  note?: string;
+
+  @ApiPropertyOptional({
+    description: 'Quando true, cria um Recebimento associado em vez de apenas transação bancária.',
+    default: true,
+  })
+  @IsOptional()
+  @IsBoolean()
+  createRecebimento?: boolean;
 }
 
 export class UpdateUnmatchedPaymentDto {

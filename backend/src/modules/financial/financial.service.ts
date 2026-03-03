@@ -1,4 +1,4 @@
-import { Injectable, NotFoundException } from '@nestjs/common';
+import { BadRequestException, Injectable, NotFoundException } from '@nestjs/common';
 import { PaymentMatchStatus, Prisma } from '@prisma/client';
 import { RequestContextService } from '../../common/request-context.service';
 import { PrismaService } from '../../prisma/prisma.service';
@@ -7,8 +7,15 @@ import {
   CreateRecebimentoDto,
   ImportRecebimentosDto,
   ReconcileDto,
+  LinkUnmatchedPaymentDto,
   UpdateUnmatchedPaymentDto,
 } from './dto/financial.dto';
+
+type ReconciliationReference = {
+  type: 'BANK_TRANSACTION' | 'RECEBIMENTO';
+  id: string;
+  periciaId: string;
+};
 
 type RawUnmatchedData = {
   cnj?: string;
@@ -16,6 +23,7 @@ type RawUnmatchedData = {
   source?: string;
   origin?: 'AI_PRINT' | 'MANUAL_CSV' | 'INDIVIDUAL' | string;
   receivedAt?: string;
+  reconciliation?: ReconciliationReference;
   [key: string]: unknown;
 };
 
@@ -156,21 +164,111 @@ export class FinancialService {
     return { ...updated, amount: updated.amount ? Number(updated.amount) : null };
   }
 
-  async linkUnmatched(id: string, body: { periciaId?: string; note?: string }) {
+  async linkUnmatched(id: string, body: LinkUnmatchedPaymentDto) {
     const existing = await this.prisma.unmatchedPayment.findUnique({ where: { id } });
     if (!existing) throw new NotFoundException('Pagamento não vinculado não encontrado.');
+    if (!body.periciaId) throw new BadRequestException('periciaId é obrigatório para vinculação manual.');
+    const periciaId = body.periciaId;
 
     const note = body.note?.trim() || 'Vinculado manualmente';
+    const tenantId = this.context.get('tenantId') ?? '';
+
+    const reconciliationResult: {
+      entityType: ReconciliationReference['type'];
+      entityId: string;
+      periciaId: string;
+    } = await this.prisma.$transaction(async (tx) => {
+      const amount = existing.amount ?? new Prisma.Decimal(0);
+      const transactionDate = existing.transactionDate ?? this.parseDate(((existing.rawData ?? {}) as RawUnmatchedData).receivedAt) ?? new Date();
+
+      if (body.createRecebimento ?? true) {
+        const recebimento = await tx.recebimento.create({
+          data: {
+            tenantId,
+            periciaId,
+            fontePagamento: 'OUTRO',
+            dataRecebimento: transactionDate,
+            valorBruto: amount,
+            valorLiquido: amount,
+            descricao: note,
+            metadata: {
+              source: 'UNMATCHED_PAYMENT_LINK',
+              unmatchedPaymentId: existing.id,
+            },
+          },
+        });
+
+        return {
+          entityType: 'RECEBIMENTO' as const,
+          entityId: recebimento.id,
+          periciaId,
+        };
+      }
+
+      const bankTransaction = await tx.bankTransaction.create({
+        data: {
+          tenantId,
+          periciaId,
+          direction: 'IN',
+          transactionDate,
+          amount,
+          description: note,
+          rawPayload: {
+            source: 'UNMATCHED_PAYMENT_LINK',
+            unmatchedPaymentId: existing.id,
+            rawData: existing.rawData,
+          },
+        },
+      });
+
+      return {
+        entityType: 'BANK_TRANSACTION' as const,
+        entityId: bankTransaction.id,
+        periciaId,
+      };
+    });
+
+    const nextRaw = this.withReconciliationReference((existing.rawData ?? {}) as RawUnmatchedData, {
+      type: reconciliationResult.entityType,
+      id: reconciliationResult.entityId,
+      periciaId: reconciliationResult.periciaId,
+    });
 
     const updated = await this.prisma.unmatchedPayment.update({
       where: { id },
       data: {
         matchStatus: PaymentMatchStatus.MATCHED,
-        notes: body.periciaId ? `${note} | periciaId:${body.periciaId}` : note,
+        notes: note,
+        rawData: nextRaw as Prisma.InputJsonValue,
       },
     });
 
-    return { ...updated, amount: updated.amount ? Number(updated.amount) : null };
+    await this.prisma.activityLog.create({
+      data: {
+        tenantId,
+        entityType: 'UnmatchedPayment',
+        entityId: existing.id,
+        action: 'RECONCILE',
+        payloadJson: {
+          mode: 'MANUAL_LINK',
+          reconciledEntityType: reconciliationResult.entityType,
+          reconciledEntityId: reconciliationResult.entityId,
+          periciaId: reconciliationResult.periciaId,
+          note,
+        },
+      },
+    });
+
+    return {
+      ...updated,
+      amount: updated.amount ? Number(updated.amount) : null,
+      finalStatus: updated.matchStatus,
+      reconciledEntity: {
+        type: reconciliationResult.entityType,
+        id: reconciliationResult.entityId,
+        periciaId: reconciliationResult.periciaId,
+      },
+    };
   }
 
   async discardUnmatched(id: string, note?: string) {
@@ -210,12 +308,49 @@ export class FinancialService {
   }
 
   async reconcile(dto: ReconcileDto) {
-    const result = await this.prisma.unmatchedPayment.updateMany({
-      where: { id: { in: dto.unmatchedIds } },
-      data: { matchStatus: PaymentMatchStatus.MATCHED, ...(dto.note ? { notes: dto.note } : {}) },
-    });
+    const tenantId = this.context.get('tenantId') ?? '';
+    const unmatched = await this.prisma.unmatchedPayment.findMany({ where: { id: { in: dto.unmatchedIds } } });
 
-    return { reconciled: result.count };
+    const updated = await Promise.all(
+      unmatched.map(async (item) => {
+        const reconciliation = this.extractReconciliationReference(item.rawData);
+        const nextRaw = this.withReconciliationReference((item.rawData ?? {}) as RawUnmatchedData, reconciliation ?? null);
+
+        const row = await this.prisma.unmatchedPayment.update({
+          where: { id: item.id },
+          data: {
+            matchStatus: PaymentMatchStatus.MATCHED,
+            ...(dto.note ? { notes: dto.note } : {}),
+            rawData: nextRaw as Prisma.InputJsonValue,
+          },
+        });
+
+        await this.prisma.activityLog.create({
+          data: {
+            tenantId,
+            entityType: 'UnmatchedPayment',
+            entityId: item.id,
+            action: 'RECONCILE',
+            payloadJson: {
+              mode: 'SUGGESTION',
+              reconciledEntityType: reconciliation?.type ?? null,
+              reconciledEntityId: reconciliation?.id ?? null,
+              periciaId: reconciliation?.periciaId ?? null,
+              note: dto.note,
+            },
+          },
+        });
+
+        return {
+          id: row.id,
+          finalStatus: row.matchStatus,
+          reconciledEntityId: reconciliation?.id ?? null,
+          reconciledEntityType: reconciliation?.type ?? null,
+        };
+      }),
+    );
+
+    return { reconciled: updated.length, results: updated };
   }
 
   async analytics() {
@@ -288,6 +423,36 @@ export class FinancialService {
 
   chargeAutomation() {
     return { enqueued: true, queue: 'charge-dispatch', message: 'Cobranças automáticas enfileiradas.' };
+  }
+
+
+  private withReconciliationReference(raw: RawUnmatchedData, reference: ReconciliationReference | null): RawUnmatchedData {
+    if (!reference) return raw;
+    return {
+      ...raw,
+      reconciliation: {
+        type: reference.type,
+        id: reference.id,
+        periciaId: reference.periciaId,
+      },
+    };
+  }
+
+  private extractReconciliationReference(raw: unknown): ReconciliationReference | null {
+    if (!raw || typeof raw !== 'object') return null;
+
+    const candidate = (raw as { reconciliation?: unknown }).reconciliation;
+    if (!candidate || typeof candidate !== 'object') return null;
+
+    const type = (candidate as { type?: unknown }).type;
+    const id = (candidate as { id?: unknown }).id;
+    const periciaId = (candidate as { periciaId?: unknown }).periciaId;
+
+    if ((type !== 'BANK_TRANSACTION' && type !== 'RECEBIMENTO') || typeof id !== 'string' || typeof periciaId !== 'string') {
+      return null;
+    }
+
+    return { type, id, periciaId };
   }
 
   private parseDate(value?: string): Date | null {
