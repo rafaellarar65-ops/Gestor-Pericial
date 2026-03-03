@@ -56,6 +56,17 @@ const mapAgendaRow = (item: Record<string, string | number | undefined>, index: 
 
 const usageTone = (value: number) => (value > 95 ? 'bg-red-500' : value > 85 ? 'bg-amber-500' : 'bg-emerald-500');
 
+const isOverlapping = (candidate: AgendaRow, events: AgendaRow[]) =>
+  events.some((other) => {
+    if (other.id === candidate.id) return false;
+    if ((other.location || 'Sem recurso') !== (candidate.location || 'Sem recurso')) return false;
+    const aStart = new Date(candidate.startAt).getTime();
+    const aEnd = new Date(candidate.endAt).getTime();
+    const bStart = new Date(other.startAt).getTime();
+    const bEnd = new Date(other.endAt).getTime();
+    return aStart < bEnd && bStart < aEnd;
+  });
+
 const Page = () => {
   const queryClient = useQueryClient();
   const { data = [], isLoading, isError } = useDomainData('agenda', '/agenda/events');

@@ -109,11 +109,12 @@ export class PericiasService {
     return this.findAll(query);
   }
 
-  async findOne(id: string) {
-    const record = await this.prisma.pericia.findFirst({
-      where: { id },
-      include: { cidade: true, vara: true, tipoPericia: true, modalidade: true, status: true, local: true },
-    });
+    const statuses = statusIds.length
+      ? await this.prisma.status.findMany({
+          where: { id: { in: statusIds } },
+          select: { id: true, codigo: true, nome: true },
+        })
+      : [];
 
     if (!record) throw new NotFoundException('Perícia não encontrada.');
     return record;

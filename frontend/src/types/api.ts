@@ -187,6 +187,8 @@ export type EmailTemplate = {
   bodyHtml?: string;
   bodyText?: string;
   variables?: string[];
+  placeholdersUsed?: string[];
+  variablesMapping?: Record<string, string>;
   active?: boolean;
 };
 
@@ -499,6 +501,27 @@ export type DashboardSystemSettings = {
 };
 
 
+
+export type TelepericiaQueueItem = {
+  id: string;
+  processoCNJ: string;
+  periciadoNome?: string;
+  autorNome?: string;
+  dataAgendamento?: string;
+  isUrgent: boolean;
+  urgentCheckedAt?: string;
+  telepericiaStatusChangedAt?: string;
+  whatsappStatus?: string;
+  telepericiaConfirmedAt?: string;
+  telepericiaLastAttemptAt?: string;
+  createdAt: string;
+  status?: { id: string; nome: string; codigo?: string } | null;
+};
+
+export type TelepericiaQueueResponse = {
+  items: TelepericiaQueueItem[];
+  pagination: { page: number; limit: number; total: number };
+};
 
 export type TelepericiaQueueItem = {
   id: string;

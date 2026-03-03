@@ -720,26 +720,45 @@ export class AgendaService {
       const items = Array.isArray(result.items) ? result.items : [];
 
       return {
-        id: row.id,
-        createdAt: row.createdAt,
-        cityNames: Array.isArray(criteria.cityNames) ? (criteria.cityNames as string[]) : [],
-        date: typeof criteria.date === 'string' ? criteria.date : '',
-        startTime: typeof criteria.startTime === 'string' ? criteria.startTime : '',
-        durationMinutes: typeof criteria.durationMinutes === 'number' ? criteria.durationMinutes : 0,
-        intervalMinutes: typeof criteria.intervalMinutes === 'number' ? criteria.intervalMinutes : 0,
-        location: typeof criteria.location === 'string' ? criteria.location : undefined,
-        modalidade: typeof criteria.modalidade === 'string' ? criteria.modalidade : undefined,
-        source: criteria.source === 'WORD' ? 'WORD' : 'CSV',
-        status: 'CONFIRMADO',
-        items: items.map((item) => {
-          const entry = item as Record<string, unknown>;
-          return {
-            periciaId: typeof entry.periciaId === 'string' ? entry.periciaId : '',
-            scheduledAt: typeof entry.scheduledAt === 'string' ? entry.scheduledAt : '',
-          };
-        }),
+        title: `Bloco de Laudo #${index + 1}`,
+        type: AgendaEventType.BLOCO_TRABALHO,
+        startAt: date.toISOString(),
+        endAt: endDate.toISOString(),
+        aiSuggested: true,
+        conflict,
       };
     });
+
+    return {
+      assumptions: {
+        avg_minutes_per_laudo: dto.avg_minutes_per_laudo,
+        backlog: dto.backlog,
+        required_minutes: requiredMinutes,
+        min_buffer_minutes: dto.min_buffer_minutes,
+      },
+      suggestions,
+    };
+  }
+
+  async applyLaudoBlocks(items: Array<{ title: string; startAt: string; endAt: string; periciaId?: string }>) {
+    const tenantId = this.context.get('tenantId') as string;
+    const created = await this.prisma.$transaction(
+      items.map((item) =>
+        this.prisma.agendaEvent.create({
+          data: {
+            tenantId,
+            title: item.title,
+            startAt: new Date(item.startAt),
+            endAt: new Date(item.endAt),
+            type: AgendaEventType.BLOCO_TRABALHO,
+            ...(item.periciaId ? { periciaId: item.periciaId } : {}),
+            metadata: { aiSuggested: true } as Prisma.InputJsonValue,
+          },
+        }),
+      ),
+    );
+
+    return { created: created.length };
   }
 
   calendarSync() {

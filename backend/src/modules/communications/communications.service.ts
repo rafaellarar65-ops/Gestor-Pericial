@@ -33,6 +33,8 @@ type UolhostCreds = {
 
 type Channel = 'whatsapp_template' | 'whatsapp_freeform' | 'clipboard' | 'wa_me_prefill';
 
+type Channel = 'whatsapp_template' | 'whatsapp_freeform' | 'clipboard' | 'wa_me_prefill';
+
 @Injectable()
 export class CommunicationsService {
   private readonly allowedPlaceholders = new Set([

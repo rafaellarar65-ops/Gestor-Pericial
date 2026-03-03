@@ -416,3 +416,46 @@ export class SplitUnmatchedPaymentDto {
   @Type(() => SplitInstallmentDto)
   installments!: SplitInstallmentDto[];
 }
+
+export class UpdateUnmatchedPaymentDto {
+  @ApiPropertyOptional()
+  @IsOptional()
+  @Type(() => Number)
+  @IsNumber({ maxDecimalPlaces: 2 })
+  amount?: number;
+
+  @ApiPropertyOptional()
+  @IsOptional()
+  @IsDateString()
+  receivedAt?: string;
+
+  @ApiPropertyOptional()
+  @IsOptional()
+  @IsString()
+  payerName?: string;
+
+  @ApiPropertyOptional()
+  @IsOptional()
+  @IsString()
+  cnj?: string;
+
+  @ApiPropertyOptional()
+  @IsOptional()
+  @IsString()
+  description?: string;
+
+  @ApiPropertyOptional()
+  @IsOptional()
+  @IsString()
+  source?: string;
+
+  @ApiPropertyOptional({ enum: ['AI_PRINT', 'MANUAL_CSV', 'INDIVIDUAL'] })
+  @IsOptional()
+  @IsEnum(['AI_PRINT', 'MANUAL_CSV', 'INDIVIDUAL'])
+  origin?: 'AI_PRINT' | 'MANUAL_CSV' | 'INDIVIDUAL';
+
+  @ApiPropertyOptional()
+  @IsOptional()
+  @IsString()
+  notes?: string;
+}
