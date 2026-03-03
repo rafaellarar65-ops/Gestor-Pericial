@@ -5,6 +5,7 @@ import {
   CreateDespesaDto,
   CreateRecebimentoDto,
   ImportRecebimentosDto,
+  ImportUnmatchedTransactionsDto,
   ReconcileDto,
   UpdateUnmatchedPaymentDto,
 } from './dto/financial.dto';
@@ -40,6 +41,12 @@ export class FinancialController {
   @Post('import-batch')
   importBatch(@Body() dto: ImportRecebimentosDto) {
     return this.service.importBatch(dto);
+  }
+
+
+  @Post('unmatched')
+  importUnmatched(@Body() dto: ImportUnmatchedTransactionsDto) {
+    return this.service.importUnmatched(dto);
   }
 
   @Get('unmatched')
