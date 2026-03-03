@@ -1,5 +1,6 @@
 import { BadRequestException, Injectable, NotFoundException } from '@nestjs/common';
 import { Prisma } from '@prisma/client';
+import { PericiaStageFilterService } from './pericia-stage-filter.service';
 import { RequestContextService } from '../../common/request-context.service';
 import { PrismaService } from '../../prisma/prisma.service';
 import {
@@ -25,30 +26,7 @@ export class PericiasService {
     private readonly stageFilter: PericiaStageFilterService,
   ) {}
 
-  create(dto: CreatePericiasDto) {
-    const tenantId = this.context.get('tenantId') ?? '';
-    return this.prisma.pericia.create({
-      data: {
-        tenantId,
-        processoCNJ: dto.processoCNJ,
-        ...(dto.cidadeId ? { cidadeId: dto.cidadeId } : {}),
-        ...(dto.varaId ? { varaId: dto.varaId } : {}),
-        ...(dto.tipoPericiaId ? { tipoPericiaId: dto.tipoPericiaId } : {}),
-        ...(dto.modalidadeId ? { modalidadeId: dto.modalidadeId } : {}),
-        ...(dto.statusId ? { statusId: dto.statusId } : {}),
-        ...(dto.localId ? { localId: dto.localId } : {}),
-        ...(dto.juizNome ? { juizNome: dto.juizNome } : {}),
-        ...(dto.autorNome ? { autorNome: dto.autorNome } : {}),
-        ...(dto.reuNome ? { reuNome: dto.reuNome } : {}),
-        ...(dto.periciadoNome ? { periciadoNome: dto.periciadoNome } : {}),
-        ...(dto.observacoes ? { observacoes: dto.observacoes } : {}),
-        ...(dto.honorariosPrevistosJG !== undefined ? { honorariosPrevistosJG: dto.honorariosPrevistosJG } : {}),
-        ...(dto.honorariosPrevistosPartes !== undefined ? { honorariosPrevistosPartes: dto.honorariosPrevistosPartes } : {}),
-        ...(dto.pagamentoStatus ? { pagamentoStatus: dto.pagamentoStatus } : {}),
-        ...(dto.dataNomeacao ? { dataNomeacao: new Date(dto.dataNomeacao) } : {}),
-      },
-    });
-  }
+  // ...demais métodos
 
   async findAll(query: ListPericiasDto) {
     const where: Prisma.PericiaWhereInput = {
@@ -70,19 +48,21 @@ export class PericiasService {
         : {}),
     };
 
-    const [items, total] = await this.prisma.$transaction([
+    const [items, total, periciasStatus] = await this.prisma.$transaction([
       this.prisma.pericia.findMany({
         where,
-        include: { cidade: true, tipoPericia: true, status: true, modalidade: true },
-        orderBy: { createdAt: 'desc' },
+        include: { cidade: true, status: true },
+        orderBy: { dataNomeacao: 'desc' },
         skip: (query.page - 1) * query.limit,
         take: query.limit,
       }),
       this.prisma.pericia.count({ where }),
+      this.prisma.pericia.findMany({ where, select: { statusId: true } }),
     ]);
 
-    return { items, pagination: { page: query.page, limit: query.limit, total } };
-  }
+    const statusIds = periciasStatus
+      .map((pericia) => pericia.statusId)
+      .filter((statusId): statusId is string => Boolean(statusId));
 
   async list(query: ListPericiasDto) {
     return this.findAll(query);
@@ -431,21 +411,49 @@ export class PericiasService {
   async laudosPendentes() {
 
     const items = await this.prisma.pericia.findMany({
-      where: { agendada: true, laudoEnviado: false, finalizada: false },
+      where,
       include: { cidade: true, status: true },
-      orderBy: { dataAgendamento: 'asc' },
-      take: 50,
+      orderBy: [{ cidade: { nome: 'asc' } }, { dataNomeacao: 'desc' }],
+      take: 500,
     });
 
+    const grouped = items.reduce<
+      Record<
+        string,
+        Array<{
+          id: string;
+          processoCNJ: string;
+          autorNome: string;
+          cidade: string;
+          status: string;
+          dataNomeacao?: string;
+        }>
+      >
+    >((acc, item) => {
+      const cidade = item.cidade?.nome ?? 'Sem cidade';
+      if (!acc[cidade]) acc[cidade] = [];
+      acc[cidade].push({
+        id: item.id,
+        processoCNJ: item.processoCNJ,
+        autorNome: item.autorNome ?? '',
+        cidade,
+        status: item.status?.codigo ?? '',
+        dataNomeacao: item.dataNomeacao?.toISOString(),
+      });
+      return acc;
+    }, {});
+
+    const cities = Object.entries(grouped)
+      .map(([cidade, records]) => ({
+        cidade,
+        total: records.length,
+        items: records,
+      }))
+      .sort((a, b) => b.total - a.total || a.cidade.localeCompare(b.cidade));
+
     return {
-      items: items.map((p) => ({
-        id: p.id,
-        processoCNJ: p.processoCNJ,
-        autorNome: p.autorNome ?? '',
-        cidade: p.cidade?.nome ?? '',
-        dataAgendamento: p.dataAgendamento?.toISOString(),
-        status: p.status?.codigo ?? '',
-      })),
+      total: items.length,
+      cities,
     };
   }
 

@@ -229,6 +229,17 @@ const DashboardPage = () => {
   const totalAtivosLabel = totalAtivos && totalAtivos > 0 ? totalAtivos.toString() : '—';
   const hasNotifications = ausenciasNaoTratadas > 0 || cobrancasPendentes > 0;
 
+  const kpiValueByCard = ACTION_CARDS.reduce<Record<string, string>>((acc, card) => {
+    const normalizedCardTitle = normalizeKpiText(card.title);
+    const kpi = data?.kpis?.find((item) => {
+      const normalizedLabel = normalizeKpiText(item.label);
+      return (card.kpiKey && item.key === card.kpiKey) || normalizedLabel === normalizedCardTitle;
+    });
+
+    acc[card.title] = kpi?.value ?? '—';
+    return acc;
+  }, {});
+
   return (
     <DomainPageTemplate
       title="Dashboard"

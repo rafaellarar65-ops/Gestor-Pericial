@@ -39,6 +39,13 @@ export class FinancialController {
     return this.service.listDespesas();
   }
 
+
+  @Post('import-ai-print')
+  @ApiOperation({ summary: 'Importa print financeiro com IA' })
+  importAiPrint(@Body() dto: ImportAiPrintDto): Promise<FinancialImportAiPrintResponseDto> {
+    return this.service.importAiPrint(dto);
+  }
+
   @Post('import-batch')
   importBatch(@Body() dto: ImportRecebimentosDto) {
     return this.service.importBatch(dto);

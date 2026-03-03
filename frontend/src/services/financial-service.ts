@@ -25,6 +25,25 @@ type RecebimentoRaw = {
   createdAt?: string;
 };
 
+export type FinancialAiPrintResponse = {
+  global: {
+    totalBruto?: number | string;
+    totalLiquido?: number | string;
+    totalImpostos?: number | string;
+    dataPagamento?: string;
+    detectedSource?: string;
+  };
+  items: Array<{
+    cnj?: string;
+    bruto?: number | string;
+    desconto?: number | string;
+    liquido?: number | string;
+    data?: string;
+    status?: string;
+    periciaId?: string;
+  }>;
+};
+
 export const financialService = {
   list: async (): Promise<ApiListResponse<FinancialItem>> => {
     const { data } = await apiClient.get<RecebimentoRaw[] | ApiListResponse<FinancialItem>>('/financial/recebimentos');
