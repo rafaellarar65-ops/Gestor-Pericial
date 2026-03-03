@@ -1,8 +1,11 @@
 import { apiClient } from '@/lib/api-client';
 import type {
   ApiListResponse,
+  CsvImportSource,
   Despesa,
   FinancialAnalytics,
+  FinancialImportBatch,
+  FinancialImportResult,
   FinancialItem,
   RevenueForecast,
   Recebimento,
@@ -115,4 +118,29 @@ export const financialService = {
     const { data } = await apiClient.get<RevenueForecast>('/financial/revenue-forecast');
     return data;
   },
+
+  importCsv: async (payload: {
+    csvContent: string;
+    sourceType: CsvImportSource;
+    sourceLabel?: string;
+  }): Promise<FinancialImportResult> => {
+    const { data } = await apiClient.post<FinancialImportResult>('/financial/import-csv', payload);
+    return data;
+  },
+
+  listImportBatches: async (): Promise<FinancialImportBatch[]> => {
+    const { data } = await apiClient.get<FinancialImportBatch[]>('/financial/import-batches');
+    return Array.isArray(data) ? data : [];
+  },
+
+  listUnmatchedPaymentsV2: async (): Promise<UnmatchedPayment[]> => {
+    const { data } = await apiClient.get<UnmatchedPayment[]>('/financial/unmatched-payments');
+    return Array.isArray(data) ? data : [];
+  },
+
+  linkUnmatchedPaymentV2: async (id: string, payload: { periciaId: string }): Promise<{ linked: boolean; recebimentoId: string }> => {
+    const { data } = await apiClient.post<{ linked: boolean; recebimentoId: string }>(`/financial/unmatched-payments/${id}/link`, payload);
+    return data;
+  },
+
 };

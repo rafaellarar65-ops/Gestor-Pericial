@@ -206,6 +206,37 @@ export type WeeklyWorkload = {
   conflicts: number;
 };
 
+
+export type CsvImportSource = 'TJ' | 'AJG' | 'PARTES';
+
+export type FinancialImportSummary = {
+  total: number;
+  matched: number;
+  unmatched: number;
+  totals: {
+    valorBruto: number;
+    valorLiquido: number;
+    inss: number;
+    irpf: number;
+    desconto: number;
+  };
+};
+
+export type FinancialImportResult = {
+  batchId: string;
+  summary: FinancialImportSummary;
+};
+
+export type FinancialImportBatch = {
+  id: string;
+  importedAt: string;
+  totalRecords: number;
+  matchedRecords: number;
+  unmatchedRecords: number;
+  status?: string | null;
+  metadata?: Record<string, unknown> | null;
+};
+
 export type RevenueForecast = {
   forecast_total: number;
   confidence: string;
