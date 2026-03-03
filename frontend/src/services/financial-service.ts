@@ -1,6 +1,7 @@
 import { apiClient } from '@/lib/api-client';
 import type {
   ApiListResponse,
+  ConciliationSuggestionsResponse,
   Despesa,
   FinancialAnalytics,
   FinancialItem,
@@ -103,6 +104,22 @@ export const financialService = {
 
   discardUnmatchedPayment: async (id: string, note?: string): Promise<UnmatchedPayment> => {
     const { data } = await apiClient.post<UnmatchedPayment>(`/financial/unmatched/${id}/discard`, { note });
+    return data;
+  },
+
+
+  runConciliationForTransaction: async (id: string): Promise<ConciliationSuggestionsResponse> => {
+    const { data } = await apiClient.post<ConciliationSuggestionsResponse>(`/financial/conciliation/transactions/${id}/run`);
+    return data;
+  },
+
+  runConciliationBatch: async (transactionIds?: string[]): Promise<{ processed: number }> => {
+    const { data } = await apiClient.post<{ processed: number }>('/financial/conciliation/batch/run', { transactionIds });
+    return data;
+  },
+
+  getConciliationSuggestions: async (id: string): Promise<ConciliationSuggestionsResponse> => {
+    const { data } = await apiClient.get<ConciliationSuggestionsResponse>(`/financial/conciliation/transactions/${id}/suggestions`);
     return data;
   },
 

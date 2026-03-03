@@ -105,6 +105,24 @@ export type UnmatchedPayment = {
   createdAt?: string;
 };
 
+
+export type ConciliationSuggestion = {
+  periciaId: string;
+  score: number;
+  components: {
+    cnj: number;
+    amount: number;
+    vara: number;
+  };
+};
+
+export type ConciliationSuggestionsResponse = {
+  transactionId: string;
+  threshold: number;
+  calculatedAt?: string | null;
+  suggestions: ConciliationSuggestion[];
+};
+
 export type Despesa = {
   id: string;
   categoria: string;
