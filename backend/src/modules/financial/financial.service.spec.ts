@@ -1,3 +1,4 @@
+import { BadRequestException } from '@nestjs/common';
 import { FontePagamento } from '@prisma/client';
 import { FinancialService } from './financial.service';
 
@@ -20,6 +21,10 @@ describe('FinancialService', () => {
     unmatchedPayment: {
       findMany: jest.fn(),
       updateMany: jest.fn(),
+      create: jest.fn(),
+    },
+    bankTransaction: {
+      create: jest.fn(),
     },
     pericia: {
       count: jest.fn(),
@@ -59,4 +64,52 @@ describe('FinancialService', () => {
     const result = await service.analytics();
     expect(result.financialScore).toBe(0);
   });
+
+
+
+  it('imports OFX and normalizes into unmatched + bank transactions', async () => {
+    prisma.$transaction.mockResolvedValue(undefined);
+
+    const file = {
+      originalname: 'extrato.ofx',
+      mimetype: 'application/ofx',
+      buffer: Buffer.from(`
+<OFX>
+  <BANKMSGSRSV1>
+    <STMTTRNRS>
+      <STMTRS>
+        <BANKTRANLIST>
+          <STMTTRN>
+            <TRNTYPE>CREDIT
+            <DTPOSTED>20240110103000
+            <TRNAMT>150.55
+            <FITID>ABC123
+            <NAME>TRIBUNAL
+            <MEMO>Pagamento honorarios
+          </STMTTRN>
+        </BANKTRANLIST>
+      </STMTRS>
+    </STMTTRNRS>
+  </BANKMSGSRSV1>
+</OFX>
+`),
+    } as Express.Multer.File;
+
+    const result = await service.importUnmatchedFile(file);
+
+    expect(result.imported).toBe(1);
+    expect(result.origin).toBe('OFX_IMPORT');
+    expect(prisma.$transaction).toHaveBeenCalledTimes(1);
+  });
+
+  it('throws clear error for invalid OFX', async () => {
+    const file = {
+      originalname: 'extrato.ofx',
+      mimetype: 'application/ofx',
+      buffer: Buffer.from('arquivo-invalido'),
+    } as Express.Multer.File;
+
+    await expect(service.importUnmatchedFile(file)).rejects.toBeInstanceOf(BadRequestException);
+  });
+
 });

@@ -1,5 +1,7 @@
-import { Body, Controller, Delete, Get, Param, Patch, Post, Query } from '@nestjs/common';
-import { ApiBearerAuth, ApiOperation, ApiTags } from '@nestjs/swagger';
+import { BadRequestException, Body, Controller, Delete, Get, Param, Patch, Post, Query, UploadedFile, UseInterceptors } from '@nestjs/common';
+import { ApiBearerAuth, ApiBody, ApiConsumes, ApiOperation, ApiTags } from '@nestjs/swagger';
+import { FileInterceptor } from '@nestjs/platform-express';
+import { memoryStorage } from 'multer';
 import { FinancialService } from './financial.service';
 import {
   CreateDespesaDto,
@@ -40,6 +42,23 @@ export class FinancialController {
   @Post('import-batch')
   importBatch(@Body() dto: ImportRecebimentosDto) {
     return this.service.importBatch(dto);
+  }
+
+
+  @Post('unmatched/import')
+  @ApiOperation({ summary: 'Importa transações não vinculadas via CSV/OFX' })
+  @ApiConsumes('multipart/form-data')
+  @ApiBody({
+    schema: {
+      type: 'object',
+      required: ['file'],
+      properties: { file: { type: 'string', format: 'binary' } },
+    },
+  })
+  @UseInterceptors(FileInterceptor('file', { storage: memoryStorage(), limits: { fileSize: 10 * 1024 * 1024 } }))
+  importUnmatched(@UploadedFile() file?: Express.Multer.File) {
+    if (!file) throw new BadRequestException('Arquivo obrigatório para importação.');
+    return this.service.importUnmatchedFile(file);
   }
 
   @Get('unmatched')

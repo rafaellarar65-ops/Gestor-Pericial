@@ -13,52 +13,12 @@ import { formatCurrency } from '@/lib/formatters';
 
 const displayDate = (value?: string | null) => (value ? new Date(value).toLocaleDateString('pt-BR') : '-');
 
-const normalizeHeader = (header: string) =>
-  header
-    .trim()
-    .toLowerCase()
-    .normalize('NFD')
-    .replace(/\p{Diacritic}/gu, '');
-
-const parseCsv = async (file: File): Promise<Array<Record<string, string>>> => {
-  const text = await file.text();
-  const lines = text
-    .split(/\r?\n/)
-    .map((line) => line.trim())
-    .filter(Boolean);
-
-  if (!lines.length) return [];
-
-  const separator = lines[0].includes(';') ? ';' : ',';
-  const headers = lines[0].split(separator).map((h) => normalizeHeader(h).replace(/[^a-z0-9]/g, ''));
-
-  return lines.slice(1).map((line) => {
-    const values = line.split(separator).map((v) => v.trim().replace(/^"|"$/g, ''));
-    return headers.reduce<Record<string, string>>((acc, header, idx) => {
-      acc[header] = values[idx] ?? '';
-      return acc;
-    }, {});
-  });
-};
-
-const mapCsvItems = (rows: Array<Record<string, string>>) =>
-  rows.map((row) => ({
-    amount: Number((row.valor ?? row.amount ?? row.vlr ?? '0').replace('.', '').replace(',', '.')),
-    transactionDate: row.data ?? row.datapagamento ?? row.transactiondate ?? undefined,
-    receivedAt: row.datarecebimento ?? row.receivedat ?? row.data ?? undefined,
-    payerName: row.pagador ?? row.payername ?? row.nome ?? undefined,
-    cnj: row.cnj ?? row.processo ?? row.processocnj ?? undefined,
-    description: row.descricao ?? row.description ?? undefined,
-    source: row.fonte ?? row.source ?? 'CSV_UPLOAD',
-    origin: 'MANUAL_CSV',
-  }));
-
 const ConciliacaoPage = () => {
   const queryClient = useQueryClient();
   const [activeTab, setActiveTab] = useState('Individual');
   const [selectedId, setSelectedId] = useState<string | null>(null);
   const [selectedBatchIds, setSelectedBatchIds] = useState<string[]>([]);
-  const [csvFile, setCsvFile] = useState<File | null>(null);
+  const [importFile, setImportFile] = useState<File | null>(null);
 
   const unmatchedQuery = useQuery({
     queryKey: ['financial-unmatched-payments'],
@@ -117,19 +77,21 @@ const ConciliacaoPage = () => {
 
   const uploadMutation = useMutation({
     mutationFn: async (file: File) => {
-      const rows = await parseCsv(file);
-      const items = mapCsvItems(rows);
-      if (!items.length) throw new Error('CSV sem registros válidos para importar.');
-      await apiClient.post('/financial/unmatched', items);
-      return items.length;
+      const formData = new FormData();
+      formData.append('file', file);
+      const { data } = await apiClient.post<{ imported: number; origin: string }>('/financial/unmatched/import', formData, {
+        headers: { 'Content-Type': 'multipart/form-data' },
+      });
+      return data;
     },
-    onSuccess: async (count) => {
-      toast.success(`${count} itens importados para conciliação.`);
-      setCsvFile(null);
+    onSuccess: async ({ imported, origin }) => {
+      const label = origin === 'OFX_IMPORT' ? 'OFX' : 'CSV';
+      toast.success(`${imported} itens importados para conciliação (${label}).`);
+      setImportFile(null);
       await refreshUnmatched();
     },
-    onError: (error) => {
-      const message = error instanceof Error ? error.message : 'Falha ao importar CSV.';
+    onError: (error: unknown) => {
+      const message = error instanceof Error ? error.message : 'Falha ao importar arquivo.';
       toast.error(message);
     },
   });
@@ -177,16 +139,16 @@ const ConciliacaoPage = () => {
       </div>
 
       <Card className="space-y-3 p-4">
-        <h2 className="text-base font-medium">Importar extrato CSV</h2>
-        <input type="file" accept=".csv" onChange={(e) => setCsvFile(e.target.files?.[0] ?? null)} />
-        {!csvFile ? <EmptyState title="Selecione um arquivo para importar." /> : null}
+        <h2 className="text-base font-medium">Importar extrato CSV/OFX</h2>
+        <input type="file" accept=".csv,.ofx,application/ofx" onChange={(e) => setImportFile(e.target.files?.[0] ?? null)} />
+        {!importFile ? <EmptyState title="Selecione um arquivo CSV ou OFX para importar." /> : null}
         <div>
-          <Button disabled={!csvFile || uploadMutation.isPending} onClick={() => csvFile && uploadMutation.mutate(csvFile)}>
-            {uploadMutation.isPending ? 'Importando...' : 'Importar CSV'}
+          <Button disabled={!importFile || uploadMutation.isPending} onClick={() => importFile && uploadMutation.mutate(importFile)}>
+            {uploadMutation.isPending ? 'Importando...' : 'Importar arquivo'}
           </Button>
         </div>
         {uploadMutation.isPending ? <LoadingState /> : null}
-        {uploadMutation.isError ? <ErrorState message="Falha no upload do CSV." /> : null}
+        {uploadMutation.isError ? <ErrorState message="Falha no upload do arquivo." /> : null}
       </Card>
 
       <Tabs tabs={['Individual', 'Em Lote']} activeTab={activeTab} onChange={setActiveTab} />
