@@ -87,7 +87,7 @@ export type Recebimento = {
 };
 
 
-export type UnmatchedPaymentOrigin = 'AI_PRINT' | 'MANUAL_CSV' | 'INDIVIDUAL';
+export type UnmatchedPaymentOrigin = 'AI_PRINT' | 'MANUAL_CSV' | 'OFX_IMPORT' | 'INDIVIDUAL';
 
 export type UnmatchedPayment = {
   id: string;

@@ -175,10 +175,10 @@ export class UpdateUnmatchedPaymentDto {
   @IsString()
   source?: string;
 
-  @ApiPropertyOptional({ enum: ['AI_PRINT', 'MANUAL_CSV', 'INDIVIDUAL'] })
+  @ApiPropertyOptional({ enum: ['AI_PRINT', 'MANUAL_CSV', 'OFX_IMPORT', 'INDIVIDUAL'] })
   @IsOptional()
-  @IsEnum(['AI_PRINT', 'MANUAL_CSV', 'INDIVIDUAL'])
-  origin?: 'AI_PRINT' | 'MANUAL_CSV' | 'INDIVIDUAL';
+  @IsEnum(['AI_PRINT', 'MANUAL_CSV', 'OFX_IMPORT', 'INDIVIDUAL'])
+  origin?: 'AI_PRINT' | 'MANUAL_CSV' | 'OFX_IMPORT' | 'INDIVIDUAL';
 
   @ApiPropertyOptional()
   @IsOptional()

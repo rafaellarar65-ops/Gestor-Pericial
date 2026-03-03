@@ -182,19 +182,21 @@ const ConciliacaoPage = () => {
 
   const uploadMutation = useMutation({
     mutationFn: async (file: File) => {
-      const rows = await parseCsv(file);
-      const items = mapCsvItems(rows);
-      if (!items.length) throw new Error('CSV sem registros válidos para importar.');
-      await apiClient.post('/financial/unmatched', items);
-      return items.length;
+      const formData = new FormData();
+      formData.append('file', file);
+      const { data } = await apiClient.post<{ imported: number; origin: string }>('/financial/unmatched/import', formData, {
+        headers: { 'Content-Type': 'multipart/form-data' },
+      });
+      return data;
     },
-    onSuccess: async (count) => {
-      toast.success(`${count} itens importados para conciliação.`);
-      setCsvFile(null);
+    onSuccess: async ({ imported, origin }) => {
+      const label = origin === 'OFX_IMPORT' ? 'OFX' : 'CSV';
+      toast.success(`${imported} itens importados para conciliação (${label}).`);
+      setImportFile(null);
       await refreshUnmatched();
     },
-    onError: (error) => {
-      const message = error instanceof Error ? error.message : 'Falha ao importar CSV.';
+    onError: (error: unknown) => {
+      const message = error instanceof Error ? error.message : 'Falha ao importar arquivo.';
       toast.error(message);
     },
   });
@@ -281,16 +283,16 @@ const ConciliacaoPage = () => {
       </div>
 
       <Card className="space-y-3 p-4">
-        <h2 className="text-base font-medium">Importar extrato CSV</h2>
-        <input type="file" accept=".csv" onChange={(e) => setCsvFile(e.target.files?.[0] ?? null)} />
-        {!csvFile ? <EmptyState title="Selecione um arquivo para importar." /> : null}
+        <h2 className="text-base font-medium">Importar extrato CSV/OFX</h2>
+        <input type="file" accept=".csv,.ofx,application/ofx" onChange={(e) => setImportFile(e.target.files?.[0] ?? null)} />
+        {!importFile ? <EmptyState title="Selecione um arquivo CSV ou OFX para importar." /> : null}
         <div>
-          <Button disabled={!csvFile || uploadMutation.isPending} onClick={() => csvFile && uploadMutation.mutate(csvFile)}>
-            {uploadMutation.isPending ? 'Importando...' : 'Importar CSV'}
+          <Button disabled={!importFile || uploadMutation.isPending} onClick={() => importFile && uploadMutation.mutate(importFile)}>
+            {uploadMutation.isPending ? 'Importando...' : 'Importar arquivo'}
           </Button>
         </div>
         {uploadMutation.isPending ? <LoadingState /> : null}
-        {uploadMutation.isError ? <ErrorState message="Falha no upload do CSV." /> : null}
+        {uploadMutation.isError ? <ErrorState message="Falha no upload do arquivo." /> : null}
       </Card>
 
       <Tabs tabs={['Individual', 'Em Lote']} activeTab={activeTab} onChange={setActiveTab} />
