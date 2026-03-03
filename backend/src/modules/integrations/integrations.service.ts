@@ -81,6 +81,81 @@ export class IntegrationsService {
     });
   }
 
+
+  async disconnectGoogleCalendar() {
+    const tenantId = this.context.get('tenantId') ?? '';
+    const userId = this.context.get('userId') ?? null;
+    const integration = await this.prisma.calendarIntegration.findUnique({
+      where: { tenantId_provider: { tenantId, provider: 'GOOGLE' } },
+    });
+
+    if (!integration) {
+      throw new HttpException('Integração Google Calendar não encontrada.', HttpStatus.NOT_FOUND);
+    }
+
+    let revokeStatus: 'not_attempted' | 'revoked' | 'failed' = 'not_attempted';
+    let revokeError: string | null = null;
+
+    if (integration.accessToken) {
+      try {
+        const response = await fetch('https://oauth2.googleapis.com/revoke', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/x-www-form-urlencoded' },
+          body: new URLSearchParams({ token: integration.accessToken }),
+        });
+
+        if (!response.ok) {
+          revokeStatus = 'failed';
+          revokeError = `Google revoke retornou status ${response.status}`;
+        } else {
+          revokeStatus = 'revoked';
+        }
+      } catch (error) {
+        revokeStatus = 'failed';
+        revokeError = error instanceof Error ? error.message : 'Erro desconhecido ao revogar token';
+      }
+    }
+
+    const disconnectedAt = new Date();
+    const updatedIntegration = await this.prisma.calendarIntegration.update({
+      where: { id: integration.id },
+      data: {
+        accessToken: null,
+        refreshToken: null,
+        tokenExpiresAt: null,
+        selectedCalendarId: null,
+        selectedCalendarName: null,
+        lastSyncAt: null,
+        active: false,
+      },
+    });
+
+    await this.prisma.activityLog.create({
+      data: {
+        tenantId,
+        entityType: 'CALENDAR_INTEGRATION',
+        entityId: integration.id,
+        action: 'GOOGLE_DISCONNECT',
+        payloadJson: {
+          provider: 'GOOGLE',
+          revokeStatus,
+          ...(revokeError ? { revokeError } : {}),
+          disconnectedAt: disconnectedAt.toISOString(),
+        },
+        createdBy: userId,
+      },
+    });
+
+    return {
+      status: 'disconnected',
+      provider: 'GOOGLE',
+      revokeStatus,
+      ...(revokeError ? { revokeError } : {}),
+      disconnectedAt,
+      active: updatedIntegration.active,
+    };
+  }
+
   async getGoogleCalendarStatus() {
     const tenantId = this.context.get('tenantId') ?? '';
     return this.prisma.calendarIntegration.findUnique({ where: { tenantId_provider: { tenantId, provider: 'GOOGLE' } } });

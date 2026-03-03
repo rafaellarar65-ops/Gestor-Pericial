@@ -1,4 +1,4 @@
-import { Body, Controller, Get, Param, Patch, Post, Query } from '@nestjs/common';
+import { Body, Controller, Delete, Get, Param, Patch, Post, Query } from '@nestjs/common';
 import { ApiBearerAuth, ApiOperation, ApiTags } from '@nestjs/swagger';
 import {
   DatajudCnjDto,
@@ -41,6 +41,12 @@ export class IntegrationsController {
   @Get('google/status')
   googleStatus() {
     return this.service.getGoogleCalendarStatus();
+  }
+
+  @Delete('google')
+  @ApiOperation({ summary: 'Desconecta integração do Google Calendar' })
+  disconnectGoogle() {
+    return this.service.disconnectGoogleCalendar();
   }
 
   @Get('google/calendars')
