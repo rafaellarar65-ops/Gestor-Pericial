@@ -87,7 +87,7 @@ export type Recebimento = {
 };
 
 
-export type UnmatchedPaymentOrigin = 'AI_PRINT' | 'MANUAL_CSV' | 'INDIVIDUAL';
+export type UnmatchedPaymentOrigin = 'AI_PRINT' | 'MANUAL_CSV' | 'OFX_IMPORT' | 'INDIVIDUAL';
 
 export type UnmatchedPayment = {
   id: string;
@@ -105,6 +105,24 @@ export type UnmatchedPayment = {
   createdAt?: string;
 };
 
+
+export type ConciliationSuggestion = {
+  periciaId: string;
+  score: number;
+  components: {
+    cnj: number;
+    amount: number;
+    vara: number;
+  };
+};
+
+export type ConciliationSuggestionsResponse = {
+  transactionId: string;
+  threshold: number;
+  calculatedAt?: string | null;
+  suggestions: ConciliationSuggestion[];
+};
+
 export type Despesa = {
   id: string;
   categoria: string;
@@ -113,6 +131,31 @@ export type Despesa = {
   dataCompetencia: string;
   periciaId?: string;
   createdAt?: string;
+};
+
+
+export type ConciliationStats = {
+  totals: {
+    reconciled: number;
+    unreconciled: number;
+    ignored: number;
+    total: number;
+  };
+  autoMatching: {
+    automaticMatches: number;
+    totalReconciliable: number;
+    rate: number;
+  };
+  originDistribution: {
+    CSV: number;
+    OFX: number;
+    INDIVIDUAL: number;
+  };
+  financialVolume: {
+    reconciled: number;
+    pending: number;
+    ignored: number;
+  };
 };
 
 export type FinancialAnalytics = {
@@ -165,14 +208,23 @@ export type TemplatePreview = {
 
 export type InboxItem = {
   id: string;
-  message?: string;
-  tags?: string[];
+  uid?: number;
+  messageId?: string;
   from?: string;
-  to?: string;
-  channel?: string;
-  status?: string;
-  body?: string;
+  subject?: string;
+  snippet?: string;
+  date?: string;
+  flags?: string[];
+  hasAttachments?: boolean;
   createdAt?: string;
+};
+
+export type InboxListResponse = {
+  items: InboxItem[];
+  page: number;
+  limit: number;
+  nextCursor?: string | null;
+  hasNextPage: boolean;
 };
 
 export type AgendaEvent = {
@@ -243,6 +295,96 @@ export type RevenueForecast = {
   signals: string[];
   assumptions: string[];
   series: Array<{ date: string; amount: number; accumulated: number }>;
+};
+
+
+export type WeeklyWorkloadDay = {
+  date: string;
+  allocated_minutes: number;
+  work_window_minutes: number;
+  utilization: number;
+  conflicts: number;
+};
+
+export type WeeklyWorkload = {
+  week_start: string;
+  week_end: string;
+  days: WeeklyWorkloadDay[];
+  allocated_minutes: number;
+  work_window_minutes: number;
+  utilization: number;
+  conflicts: number;
+};
+
+export type RevenueForecast = {
+  forecast_total: number;
+  confidence: string;
+  signals: string[];
+  assumptions: string[];
+  series: Array<{ date: string; amount: number; accumulated: number }>;
+};
+
+
+export type SchedulingBatchHistory = {
+  id: string;
+  createdAt: string;
+  cityNames: string[];
+  date: string;
+  startTime: string;
+  durationMinutes: number;
+  intervalMinutes: number;
+  location?: string;
+  modalidade?: string;
+  source: 'CSV' | 'WORD';
+  status: 'PENDENTE' | 'CONFIRMADO';
+  items: Array<{
+    periciaId: string;
+    processoCNJ?: string;
+    cidade?: string;
+    scheduledAt: string;
+  }>;
+};
+
+
+export type SchedulingBatchHistory = {
+  id: string;
+  createdAt: string;
+  cityNames: string[];
+  date: string;
+  startTime: string;
+  durationMinutes: number;
+  intervalMinutes: number;
+  location?: string;
+  modalidade?: string;
+  source: 'CSV' | 'WORD';
+  status: 'PENDENTE' | 'CONFIRMADO';
+  items: Array<{
+    periciaId: string;
+    processoCNJ?: string;
+    cidade?: string;
+    scheduledAt: string;
+  }>;
+};
+
+
+export type SchedulingBatchHistory = {
+  id: string;
+  createdAt: string;
+  cityNames: string[];
+  date: string;
+  startTime: string;
+  durationMinutes: number;
+  intervalMinutes: number;
+  location?: string;
+  modalidade?: string;
+  source: 'CSV' | 'WORD';
+  status: 'PENDENTE' | 'CONFIRMADO';
+  items: Array<{
+    periciaId: string;
+    processoCNJ?: string;
+    cidade?: string;
+    scheduledAt: string;
+  }>;
 };
 
 export type AgendaTask = {

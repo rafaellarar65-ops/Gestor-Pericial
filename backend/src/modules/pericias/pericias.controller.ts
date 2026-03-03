@@ -3,6 +3,7 @@ import { ApiBearerAuth, ApiOperation, ApiTags } from '@nestjs/swagger';
 import { Request } from 'express';
 import { Roles } from '../../common/decorators/roles.decorator';
 import {
+  BatchSchedulePericiasDto,
   BatchUpdatePericiasDto,
   ChangeStatusPericiaDto,
   CreatePericiasDto,
@@ -90,6 +91,12 @@ export class PericiasController {
   @Roles('ADMIN')
   batchUpdate(@Body() dto: BatchUpdatePericiasDto) {
     return this.service.batchUpdate(dto);
+  }
+
+  @Post('batch-schedule')
+  @Roles('ADMIN')
+  batchSchedule(@Body() dto: BatchSchedulePericiasDto) {
+    return this.service.batchSchedule(dto);
   }
 
   @Post('import-csv')

@@ -1,6 +1,6 @@
 import { ApiProperty, ApiPropertyOptional } from '@nestjs/swagger';
 import { ExamStatus } from '@prisma/client';
-import { IsEnum, IsNotEmpty, IsObject, IsOptional, IsString, IsUUID } from 'class-validator';
+import { IsBase64, IsEnum, IsNotEmpty, IsObject, IsOptional, IsString, IsUUID, MaxLength } from 'class-validator';
 
 export class CreatePreLaudoDto {
   @ApiProperty()
@@ -86,4 +86,13 @@ export class CoherenceCheckDto {
   @ApiProperty()
   @IsUUID()
   preLaudoId!: string;
+}
+
+export class TranscribeLaudoDto {
+  @ApiProperty({ description: 'Áudio em base64 sem prefixo data: URI', maxLength: 13_981_016 })
+  @IsString()
+  @IsNotEmpty()
+  @IsBase64()
+  @MaxLength(13_981_016)
+  audioBase64!: string;
 }

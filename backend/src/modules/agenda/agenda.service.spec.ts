@@ -1,40 +1,46 @@
-import { NotFoundException } from '@nestjs/common';
+import { BadRequestException, NotFoundException } from '@nestjs/common';
 import { AgendaEventStatus, AgendaEventType } from '@prisma/client';
 import { AgendaService } from './agenda.service';
 
 describe('AgendaService', () => {
+  const context = {
+    get: jest.fn((key: string) => (key === 'tenantId' ? 't-1' : 'u-1')),
+  };
+
   const prisma = {
     agendaEvent: {
       create: jest.fn(),
       findMany: jest.fn(),
       findFirst: jest.fn(),
-      update: jest.fn(),
-    },
-    agendaTask: {
-      create: jest.fn(),
-      findMany: jest.fn(),
-    },
-    schedulingBatch: {
-      create: jest.fn(),
-      findFirst: jest.fn(),
+      updateMany: jest.fn(),
       update: jest.fn(),
     },
     pericia: {
       findMany: jest.fn(),
     },
+    schedulingBatch: {
+      create: jest.fn(),
+    },
+    agendaTask: {
+      create: jest.fn(),
+      findMany: jest.fn(),
+    },
+    pericia: {
+      update: jest.fn(),
+    },
+    schedulingBatch: {
+      create: jest.fn(),
+      findMany: jest.fn(),
+    },
     $transaction: jest.fn(),
   } as any;
-
-  const context = {
-    get: jest.fn((key: string) => (key === 'tenantId' ? 't-1' : 'u-1')),
-  };
 
   let service: AgendaService;
 
   beforeEach(() => {
-    jest.clearAllMocks();
+    jest.resetAllMocks();
+    context.get.mockImplementation((key: string) => (key === 'tenantId' ? 't-1' : 'u-1'));
     prisma.$transaction.mockImplementation(async (ops: Array<Promise<unknown>>) => Promise.all(ops));
-    prisma.schedulingBatch.create.mockResolvedValue({ id: 'batch-1' });
     service = new AgendaService(prisma, context as any);
   });
 
@@ -55,11 +61,14 @@ describe('AgendaService', () => {
   });
 
   it('updates event by id + tenantId and returns updated entity', async () => {
-    prisma.agendaEvent.findFirst.mockResolvedValueOnce({ id: 'ev-1', tenantId: 't-1', status: AgendaEventStatus.AGENDADA });
+    prisma.agendaEvent.findFirst.mockResolvedValue({ id: 'ev-1', tenantId: 't-1' });
     prisma.agendaEvent.update.mockResolvedValue({ id: 'ev-1', tenantId: 't-1', title: 'Atualizado' });
 
     const result = await service.updateEvent('ev-1', { title: 'Atualizado' });
 
+    expect(prisma.agendaEvent.findFirst).toHaveBeenCalledWith({
+      where: { id: 'ev-1', tenantId: 't-1' },
+    });
     expect(prisma.agendaEvent.update).toHaveBeenCalledWith({
       where: { id: 'ev-1' },
       data: expect.objectContaining({ title: 'Atualizado' }),
@@ -71,54 +80,208 @@ describe('AgendaService', () => {
     prisma.agendaEvent.findFirst.mockResolvedValue(null);
 
     await expect(service.updateEvent('404', { title: 'x' })).rejects.toThrow(NotFoundException);
+    expect(prisma.agendaEvent.findFirst).toHaveBeenCalledWith({
+      where: { id: '404', tenantId: 't-1' },
+    });
   });
 
-  it('batch scheduling keeps tenantId and creates metadata in scheduling batch', async () => {
+  it('batch scheduling keeps tenantId in all transactional event creations', async () => {
     prisma.agendaEvent.create.mockImplementation(({ data }: { data: { title: string } }) => Promise.resolve({ id: data.title }));
 
     const result = await service.batchScheduling({
       items: [
-        { title: 'Evento A', type: AgendaEventType.OUTRO, startAt: new Date().toISOString() },
-        { title: 'Evento B', type: AgendaEventType.OUTRO, startAt: new Date().toISOString() },
+        {
+          title: 'Evento A',
+          type: AgendaEventType.OUTRO,
+          startAt: new Date().toISOString(),
+        },
+        {
+          title: 'Evento B',
+          type: AgendaEventType.OUTRO,
+          startAt: new Date().toISOString(),
+        },
       ],
-      metadata: { date: '2026-01-01', cityNames: ['A'] },
     });
 
-    expect(prisma.schedulingBatch.create).toHaveBeenCalledWith(
+    expect(prisma.$transaction).toHaveBeenCalledTimes(1);
+    expect(prisma.agendaEvent.create).toHaveBeenNthCalledWith(
+      1,
       expect.objectContaining({
-        data: expect.objectContaining({
-          tenantId: 't-1',
-          criteriaJson: expect.objectContaining({ batchSize: 2 }),
-        }),
+        data: expect.objectContaining({ tenantId: 't-1', title: 'Evento A' }),
+      }),
+    );
+    expect(prisma.agendaEvent.create).toHaveBeenNthCalledWith(
+      2,
+      expect.objectContaining({
+        data: expect.objectContaining({ tenantId: 't-1', title: 'Evento B' }),
       }),
     );
     expect(result).toEqual({ created: 2 });
   });
 
-  it('suggests batch slots grouped by city and without agenda conflicts', async () => {
-    prisma.agendaEvent.findMany.mockResolvedValue([
-      {
-        startAt: new Date('2026-03-20T09:00:00.000Z'),
-        endAt: new Date('2026-03-20T10:00:00.000Z'),
-      },
-    ]);
+  it('batch scheduling keeps tenantId in all transactional event creations', async () => {
+    prisma.agendaEvent.create.mockImplementation(({ data }: { data: { title: string } }) => Promise.resolve({ id: data.title }));
+    prisma.pericia.findMany.mockResolvedValue([]);
+    prisma.agendaEvent.findFirst.mockResolvedValue(null);
+    prisma.schedulingBatch.create.mockResolvedValue({ id: 'b-1' });
 
-    const result = await service.suggestBatchScheduling({
-      date: '2026-03-20',
-      startTime: '09:00',
-      intervalMinutes: 10,
-      defaultDurationMinutes: 60,
-      modalidadeDurationMinutes: { online: 45 },
+    const result = await service.batchScheduling({
       items: [
-        { periciaId: 'e95c48be-a1da-4444-8ff2-65e0864f8b51', cidade: 'Curitiba', modalidade: 'online' },
-        { periciaId: 'a4c6290f-f1a3-4d0d-a292-40fb4a7f337d', cidade: 'Araucária' },
-      ],
+        {
+            title: 'Evento A',
+            type: AgendaEventType.OUTRO,
+            startAt: '2030-01-10T10:00:00.000Z',
+          },
+          {
+            title: 'Evento B',
+            type: AgendaEventType.OUTRO,
+            startAt: '2030-01-10T11:00:00.000Z',
+          },
+        ],
+      });
+
+    expect(prisma.$transaction).toHaveBeenCalledTimes(1);
+    expect(prisma.agendaEvent.create).toHaveBeenNthCalledWith(
+      1,
+      expect.objectContaining({
+        data: expect.objectContaining({ tenantId: 't-1', title: 'Evento A' }),
+      }),
+    );
+    expect(prisma.agendaEvent.create).toHaveBeenNthCalledWith(
+      2,
+      expect.objectContaining({
+        data: expect.objectContaining({ tenantId: 't-1', title: 'Evento B' }),
+      }),
+    );
+    expect(result).toEqual({ created: 2 });
+  });
+
+  it('rejects batch scheduling with detailed invalid items', async () => {
+    prisma.pericia.findMany.mockResolvedValue([]);
+    prisma.agendaEvent.findFirst.mockResolvedValue({
+      id: 'ev-conflict',
+      startAt: new Date('2027-01-10T10:00:00.000Z'),
+      endAt: new Date('2027-01-10T11:00:00.000Z'),
     });
 
-    expect(result.groupedByCity).toEqual(['Araucária', 'Curitiba']);
-    expect(result.suggestions).toHaveLength(2);
-    expect(new Date(result.suggestions[0].startAt).toISOString()).toBe('2026-03-20T10:05:00.000Z');
-    expect(result.suggestions[1].estimatedDurationMinutes).toBe(45);
+    await expect(
+      service.batchScheduling({
+        items: [
+          {
+            title: 'Evento A',
+            type: AgendaEventType.OUTRO,
+            startAt: '2027-01-10T10:00:00.000Z',
+            city: 'Belo Horizonte',
+          },
+          {
+            title: 'Evento B',
+            type: AgendaEventType.OUTRO,
+            startAt: '2027-01-10T10:00:00.000Z',
+            city: 'Belo Horizonte',
+          },
+        ],
+      }),
+    ).rejects.toThrow(BadRequestException);
+  });
+
+  it('appends status history when status changes', async () => {
+    prisma.agendaEvent.findFirst.mockResolvedValue({
+      id: 'ev-1',
+      status: AgendaEventStatus.AGENDADA,
+      statusHistory: [],
+    });
+    expect(prisma.agendaTask.create).toHaveBeenCalledWith(
+      expect.objectContaining({
+        data: expect.objectContaining({
+          tenantId: 't-1',
+          periciaId: 'pericia-1',
+          status: AgendaTaskStatus.TODO,
+        }),
+      }),
+    );
+    expect(prisma.schedulingBatch.create).toHaveBeenCalledTimes(1);
+    expect(result).toEqual({
+      createdEventsCount: 2,
+      updatedPericiasCount: 1,
+      createdTasksCount: 1,
+      eventIds: ['event-1', 'event-2'],
+      updatedPericiaIds: ['pericia-1'],
+      taskIds: ['task-1'],
+    });
+  });
+
+  it('rolls back entire batch when a transactional operation fails (forced integration-style error)', async () => {
+    const db = {
+      events: [] as string[],
+      pericias: [] as string[],
+      tasks: [] as string[],
+      batches: [] as string[],
+    };
+
+    prisma.$transaction.mockImplementation(async (cb: (tx: any) => unknown) => {
+      const staged = {
+        events: [...db.events],
+        pericias: [...db.pericias],
+        tasks: [...db.tasks],
+        batches: [...db.batches],
+      };
+
+      const tx = {
+        agendaEvent: {
+          create: async ({ data }: { data: { title: string } }) => {
+            const id = `event-${staged.events.length + 1}`;
+            staged.events.push(id);
+            return { id, periciaId: data.title.includes('com-pericia') ? 'pericia-1' : null };
+          },
+        },
+        pericia: {
+          update: async () => {
+            staged.pericias.push('pericia-1');
+            return { id: 'pericia-1' };
+          },
+        },
+        agendaTask: {
+          create: async () => {
+            throw new Error('FORCED_TASK_ERROR');
+          },
+        },
+        schedulingBatch: {
+          create: async () => {
+            staged.batches.push('batch-1');
+            return { id: 'batch-1' };
+          },
+        },
+      };
+
+      try {
+        const result = await cb(tx);
+        db.events = staged.events;
+        db.pericias = staged.pericias;
+        db.tasks = staged.tasks;
+        db.batches = staged.batches;
+        return result;
+      } catch (error) {
+        throw error;
+      }
+    });
+
+    await expect(
+      service.batchScheduling({
+        items: [
+          {
+            title: 'evento-com-pericia',
+            periciaId: 'pericia-1',
+            type: AgendaEventType.OUTRO,
+            startAt: '2026-01-02T09:00:00.000Z',
+          },
+        ],
+      }),
+    ).rejects.toThrow('FORCED_TASK_ERROR');
+
+    expect(db.events).toHaveLength(0);
+    expect(db.pericias).toHaveLength(0);
+    expect(db.tasks).toHaveLength(0);
+    expect(db.batches).toHaveLength(0);
   });
 
   it('exports batch scheduling pdf and updates batch metadata', async () => {
@@ -141,5 +304,65 @@ describe('AgendaService', () => {
     expect(result.fileName).toContain('batch-1');
     expect(result.mimeType).toBe('application/pdf');
     expect(prisma.schedulingBatch.update).toHaveBeenCalled();
+  });
+
+  it('appends status history when status changes', async () => {
+    prisma.agendaEvent.findFirst.mockResolvedValue({
+      id: 'ev-1',
+      status: AgendaEventStatus.AGENDADA,
+      statusHistory: [],
+    });
+    prisma.agendaEvent.update.mockResolvedValue({ id: 'ev-1' });
+
+    await service.updateEvent('ev-1', {
+      status: AgendaEventStatus.CANCELADA,
+      statusChangeReason: 'Paciente não compareceu',
+    });
+
+    expect(prisma.agendaEvent.update).toHaveBeenCalledWith(
+      expect.objectContaining({
+        data: expect.objectContaining({
+          status: AgendaEventStatus.CANCELADA,
+          statusHistory: [
+            expect.objectContaining({
+              from: AgendaEventStatus.AGENDADA,
+              to: AgendaEventStatus.CANCELADA,
+              reason: 'Paciente não compareceu',
+              changedBy: 'u-1',
+            }),
+          ],
+        }),
+      }),
+    );
+  });
+
+  it('appends status history when status changes', async () => {
+    prisma.agendaEvent.findFirst.mockResolvedValue({
+      id: 'ev-1',
+      status: AgendaEventStatus.AGENDADA,
+      statusHistory: [],
+    });
+    prisma.agendaEvent.update.mockResolvedValue({ id: 'ev-1' });
+
+    await service.updateEvent('ev-1', {
+      status: AgendaEventStatus.CANCELADA,
+      statusChangeReason: 'Paciente não compareceu',
+    });
+
+    expect(prisma.agendaEvent.update).toHaveBeenCalledWith(
+      expect.objectContaining({
+        data: expect.objectContaining({
+          status: AgendaEventStatus.CANCELADA,
+          statusHistory: [
+            expect.objectContaining({
+              from: AgendaEventStatus.AGENDADA,
+              to: AgendaEventStatus.CANCELADA,
+              reason: 'Paciente não compareceu',
+              changedBy: 'u-1',
+            }),
+          ],
+        }),
+      }),
+    );
   });
 });

@@ -1,6 +1,6 @@
 import { defineConfig, devices } from '@playwright/test';
 
-const baseURL = process.env.E2E_BASE_URL ?? 'http://localhost:5173';
+const baseURL = process.env.E2E_BASE_URL ?? 'http://localhost:3000';
 
 export default defineConfig({
   testDir: './',
@@ -13,7 +13,7 @@ export default defineConfig({
   reporter: [['html', { open: 'never' }], ['line']],
   use: {
     baseURL,
-    trace: 'retain-on-failure',
+    trace: 'on-first-retry',
     screenshot: 'only-on-failure',
     video: 'retain-on-failure',
     navigationTimeout: 30_000,
@@ -22,7 +22,7 @@ export default defineConfig({
   },
   projects: [
     {
-      name: 'chromium-desktop',
+      name: 'desktop-chrome',
       use: {
         ...devices['Desktop Chrome'],
         browserName: 'chromium',
@@ -30,18 +30,10 @@ export default defineConfig({
       },
     },
     {
-      name: 'firefox-desktop',
+      name: 'iphone-13',
       use: {
-        ...devices['Desktop Firefox'],
-        browserName: 'firefox',
-        viewport: { width: 1440, height: 900 },
-      },
-    },
-    {
-      name: 'chromium-mobile',
-      use: {
-        ...devices['Pixel 7'],
-        browserName: 'chromium',
+        ...devices['iPhone 13'],
+        browserName: 'webkit',
       },
     },
   ],

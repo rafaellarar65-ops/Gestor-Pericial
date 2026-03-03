@@ -4,6 +4,7 @@ import { Download, LinkIcon, Upload } from 'lucide-react';
 import { toast } from 'sonner';
 import { Button } from '@/components/ui/button';
 import { Card } from '@/components/ui/card';
+import { Dialog } from '@/components/ui/dialog';
 import { Input } from '@/components/ui/input';
 import { Tabs } from '@/components/ui/tabs';
 import { formatCurrency } from '@/lib/formatters';
@@ -223,6 +224,4 @@ const ImportacoesPage = () => {
       )}
     </div>
   );
-};
-
-export default ImportacoesPage;
+}

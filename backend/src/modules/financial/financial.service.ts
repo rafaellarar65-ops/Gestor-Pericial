@@ -6,7 +6,9 @@ import {
   CreateDespesaDto,
   CreateRecebimentoDto,
   ImportRecebimentosDto,
+  ImportUnmatchedTransactionsDto,
   ReconcileDto,
+  SplitUnmatchedPaymentDto,
   UpdateUnmatchedPaymentDto,
 } from './dto/financial.dto';
 import { ImportCsvDto, type ImportSourceType, LinkUnmatchedPaymentDto } from './dto/import.dto';
@@ -24,13 +26,37 @@ type ParsedCsvPayment = {
   rawLine: Record<string, string>;
 };
 
+type ReconciliationReference = {
+  type: 'BANK_TRANSACTION' | 'RECEBIMENTO';
+  id: string;
+  periciaId: string;
+};
+
 type RawUnmatchedData = {
   cnj?: string;
   description?: string;
+  memo?: string;
+  document?: string;
+  direction?: FinancialDirection;
   source?: string;
-  origin?: 'AI_PRINT' | 'MANUAL_CSV' | 'INDIVIDUAL' | string;
+  origin?: 'AI_PRINT' | 'MANUAL_CSV' | 'OFX_IMPORT' | 'INDIVIDUAL' | string;
   receivedAt?: string;
+  reconciliation?: ReconciliationReference;
   [key: string]: unknown;
+};
+
+type ImportedBankRecord = {
+  transactionDate: Date;
+  amount: number;
+  payerName?: string;
+  description?: string;
+  memo?: string;
+  document?: string;
+  direction: FinancialDirection;
+  externalId?: string;
+  source: string;
+  origin: 'MANUAL_CSV' | 'OFX_IMPORT';
+  rawPayload: Record<string, unknown>;
 };
 
 @Injectable()
@@ -39,6 +65,39 @@ export class FinancialService {
     private readonly prisma: PrismaService,
     private readonly context: RequestContextService,
   ) {}
+
+  private serializeUnmatchedPayment(payment: {
+    id: string;
+    cnjRaw: string | null;
+    cnjNormalized: string | null;
+    source: string | null;
+    originType: string;
+    grossValue: Prisma.Decimal | null;
+    discountValue: Prisma.Decimal | null;
+    netValue: Prisma.Decimal | null;
+    receivedAt: Date | null;
+    description: string | null;
+    status: PaymentMatchStatus;
+    linkedPericiaId: string | null;
+    linkedAt: Date | null;
+    linkedBy: string | null;
+    notes: string | null;
+    rawData: Prisma.JsonValue;
+    importBatchId: string | null;
+    createdAt: Date;
+    updatedAt: Date;
+  }) {
+    return {
+      ...payment,
+      grossValue: payment.grossValue ? Number(payment.grossValue) : null,
+      discountValue: payment.discountValue ? Number(payment.discountValue) : null,
+      netValue: payment.netValue ? Number(payment.netValue) : null,
+      receivedAt: payment.receivedAt?.toISOString() ?? null,
+      linkedAt: payment.linkedAt?.toISOString() ?? null,
+      createdAt: payment.createdAt.toISOString(),
+      updatedAt: payment.updatedAt.toISOString(),
+    };
+  }
 
   createRecebimento(dto: CreateRecebimentoDto) {
     const tenantId = this.context.get('tenantId') ?? '';
@@ -55,11 +114,59 @@ export class FinancialService {
     });
   }
 
-  listRecebimentos(periciaId?: string) {
+  listRecebimentos(periciaId?: string, search?: string) {
+    const tenantId = this.context.get('tenantId') ?? '';
+    const trimmedSearch = search?.trim();
+
     return this.prisma.recebimento.findMany({
-      where: periciaId ? { periciaId } : undefined,
+      where: {
+        tenantId,
+        ...(periciaId ? { periciaId } : {}),
+        ...(trimmedSearch
+          ? {
+              OR: [
+                { descricao: { contains: trimmedSearch, mode: 'insensitive' } },
+                { pericia: { autorNome: { contains: trimmedSearch, mode: 'insensitive' } } },
+                {
+                  pericia: {
+                    OR: [
+                      { processoCNJ: { contains: trimmedSearch } },
+                      { processoCNJDigits: { contains: trimmedSearch.replace(/\D/g, '') } },
+                    ],
+                  },
+                },
+              ],
+            }
+          : {}),
+      },
+      include: {
+        pericia: {
+          select: {
+            processoCNJ: true,
+            autorNome: true,
+          },
+        },
+      },
       orderBy: { dataRecebimento: 'desc' },
     });
+  }
+
+  async updateRecebimento(id: string, dto: UpdateRecebimentoDto) {
+    return this.prisma.recebimento.update({
+      where: { id },
+      data: {
+        ...(dto.origem ? { fontePagamento: dto.origem } : {}),
+        ...(dto.dataRecebimento ? { dataRecebimento: new Date(dto.dataRecebimento) } : {}),
+        ...(dto.valorLiquido !== undefined ? { valorLiquido: new Prisma.Decimal(dto.valorLiquido) } : {}),
+        ...(dto.descricao !== undefined ? { descricao: dto.descricao } : {}),
+      },
+    });
+  }
+
+  async bulkDeleteRecebimentos(dto: BulkDeleteRecebimentosDto) {
+    const tenantId = this.context.get('tenantId') ?? '';
+    const result = await this.prisma.recebimento.deleteMany({ where: { tenantId, id: { in: dto.ids } } });
+    return { deleted: result.count };
   }
 
   createDespesa(dto: CreateDespesaDto) {
@@ -80,40 +187,142 @@ export class FinancialService {
     return this.prisma.despesa.findMany({ orderBy: { dataCompetencia: 'desc' } });
   }
 
+
+  async importAiPrint(dto: ImportAiPrintDto): Promise<FinancialImportAiPrintResponseDto> {
+    // Contrato dedicado para integração com motor de IA.
+    // Neste momento retornamos estrutura padrão para o front preencher e validar candidatos.
+    void dto;
+    return {
+      global: {
+        totalBruto: 0,
+        totalLiquido: 0,
+        totalImpostos: 0,
+        dataPagamento: new Date().toISOString().slice(0, 10),
+      },
+      items: [],
+    };
+  }
+
   async importBatch(dto: ImportRecebimentosDto) {
+    return this.importBatchBySource(FinancialImportSource.MANUAL_CSV, dto);
+  }
+
+  importBatchAiPrint(dto: ImportRecebimentosDto) {
+    return this.importBatchBySource(FinancialImportSource.AI_PRINT, dto);
+  }
+
+  importBatchManualCsv(dto: ImportRecebimentosDto) {
+    return this.importBatchBySource(FinancialImportSource.MANUAL_CSV, dto);
+  }
+
+  importBatchIndividual(dto: ImportRecebimentosDto) {
+    return this.importBatchBySource(FinancialImportSource.INDIVIDUAL, dto);
+  }
+
+  private normalizeCnj(cnj: string): string {
+    return cnj.replace(/\D/g, '');
+  }
+
+  private formatCnj(digits: string): string {
+    if (digits.length !== 20) return digits;
+    return `${digits.slice(0, 7)}-${digits.slice(7, 9)}.${digits.slice(9, 13)}.${digits.slice(13, 14)}.${digits.slice(14, 16)}.${digits.slice(16, 20)}`;
+  }
+
+  private async importBatchBySource(source: FinancialImportSource, dto: ImportRecebimentosDto) {
     const tenantId = this.context.get('tenantId') ?? '';
+
+    const gross = dto.rows.reduce((acc, item) => acc + item.valorBruto, 0);
+    const net = dto.rows.reduce((acc, item) => acc + (item.valorLiquido ?? item.valorBruto), 0);
+    const tax = dto.rows.reduce((acc, item) => acc + (item.imposto ?? Math.max(0, item.valorBruto - (item.valorLiquido ?? item.valorBruto))), 0);
+
     const batch = await this.prisma.importBatch.create({
       data: {
         tenantId,
         ...(dto.sourceFileName ? { sourceFileName: dto.sourceFileName } : {}),
         totalRecords: dto.rows.length,
         status: 'PROCESSING',
+        metadata: { source },
       },
     });
 
-    await this.prisma.$transaction(
-      dto.rows.map((row) =>
-        this.prisma.recebimento.create({
+    const itemsLinked: ImportRecebimentoItemDto[] = [];
+    const itemsUnmatched: ImportRecebimentoItemDto[] = [];
+
+    for (const row of dto.rows) {
+      const cnjDigits = this.normalizeCnj(row.processoCNJ);
+      const pericia = await this.prisma.pericia.findFirst({
+        where: {
+          tenantId,
+          OR: [
+            { processoCNJDigits: cnjDigits },
+            { processoCNJ: row.processoCNJ },
+            { processoCNJ: this.formatCnj(cnjDigits) },
+          ],
+        },
+        select: { id: true },
+      });
+
+      if (pericia) {
+        itemsLinked.push(row);
+        await this.prisma.recebimento.create({
           data: {
             tenantId,
             importBatchId: batch.id,
-            periciaId: row.periciaId,
+            periciaId: pericia.id,
             fontePagamento: row.fontePagamento,
             dataRecebimento: new Date(row.dataRecebimento),
             valorBruto: new Prisma.Decimal(row.valorBruto),
             ...(row.valorLiquido ? { valorLiquido: new Prisma.Decimal(row.valorLiquido) } : {}),
             ...(row.descricao ? { descricao: row.descricao } : {}),
+            metadata: { source, processoCNJOriginal: row.processoCNJ, processoCNJNormalizado: cnjDigits },
           },
-        }),
-      ),
-    );
+        });
+        continue;
+      }
+
+      itemsUnmatched.push(row);
+      await this.prisma.unmatchedPayment.create({
+        data: {
+          tenantId,
+          importBatchId: batch.id,
+          rawData: { ...row, source, processoCNJNormalizado: cnjDigits },
+          amount: new Prisma.Decimal(row.valorLiquido ?? row.valorBruto),
+          transactionDate: new Date(row.dataRecebimento),
+          notes: 'Perícia não encontrada por CNJ normalizado',
+        },
+      });
+    }
 
     await this.prisma.importBatch.update({
       where: { id: batch.id },
-      data: { matchedRecords: dto.rows.length, unmatchedRecords: 0, status: 'DONE' },
+      data: {
+        matchedRecords: itemsLinked.length,
+        unmatchedRecords: itemsUnmatched.length,
+        status: 'DONE',
+        metadata: {
+          source,
+          summary: {
+            itemsLinked: itemsLinked.length,
+            itemsUnmatched: itemsUnmatched.length,
+            gross,
+            net,
+            tax,
+            count: dto.rows.length,
+          },
+        },
+      },
     });
 
-    return { batchId: batch.id, imported: dto.rows.length };
+    return {
+      batchId: batch.id,
+      source,
+      itemsLinked: itemsLinked.length,
+      itemsUnmatched: itemsUnmatched.length,
+      gross,
+      net,
+      tax,
+      count: dto.rows.length,
+    };
   }
 
   parseCsv(content: string, sourceType: ImportSourceType, sourceLabel?: string): ParsedCsvPayment[] {
@@ -330,7 +539,52 @@ export class FinancialService {
     await this.prisma.unmatchedPayment.delete({ where: { id: paymentId } });
 
     return { linked: true, recebimentoId: recebimento.id };
-  }
+
+  async importUnmatched(dto: ImportUnmatchedTransactionsDto) {
+    const tenantId = this.context.get('tenantId') ?? '';
+    const rejected: Array<{ index: number; reason: string; row: unknown }> = [];
+
+    const rowsToCreate: Prisma.UnmatchedPaymentCreateManyInput[] = [];
+
+    dto.rows.forEach((row, index) => {
+      const parsedAmount = this.parseMoney(row.amount);
+      if (parsedAmount === null) {
+        rejected.push({ index, reason: 'Valor monetário inválido.', row });
+        return;
+      }
+
+      const parsedDate = this.parseDate(row.transactionDate) ?? this.parseDate(row.receivedAt);
+      if (!parsedDate) {
+        rejected.push({ index, reason: 'Data inválida (transactionDate/receivedAt).', row });
+        return;
+      }
+
+      const rawData: RawUnmatchedData = {
+        amount: row.amount,
+        transactionDate: row.transactionDate,
+        receivedAt: row.receivedAt,
+        payerName: row.payerName,
+        cnj: row.cnj,
+        description: row.description,
+        source: row.source,
+        origin: row.origin ?? 'INDIVIDUAL',
+      };
+
+      rowsToCreate.push({
+        tenantId,
+        amount: parsedAmount,
+        transactionDate: parsedDate,
+        payerName: row.payerName?.trim() || null,
+        matchStatus: PaymentMatchStatus.UNMATCHED,
+        rawData: rawData as Prisma.InputJsonValue,
+      });
+    });
+
+    if (rowsToCreate.length > 0) {
+      await this.prisma.unmatchedPayment.createMany({ data: rowsToCreate });
+    }
+
+    return { imported: rowsToCreate.length, rejected };
 
   async unmatched() {
     const rows = await this.prisma.unmatchedPayment.findMany({
@@ -386,21 +640,111 @@ export class FinancialService {
     return { ...updated, amount: updated.amount ? Number(updated.amount) : null };
   }
 
-  async linkUnmatched(id: string, body: { periciaId?: string; note?: string }) {
+  async linkUnmatched(id: string, body: LinkUnmatchedPaymentDto) {
     const existing = await this.prisma.unmatchedPayment.findUnique({ where: { id } });
     if (!existing) throw new NotFoundException('Pagamento não vinculado não encontrado.');
+    if (!body.periciaId) throw new BadRequestException('periciaId é obrigatório para vinculação manual.');
+    const periciaId = body.periciaId;
 
     const note = body.note?.trim() || 'Vinculado manualmente';
+    const tenantId = this.context.get('tenantId') ?? '';
+
+    const reconciliationResult: {
+      entityType: ReconciliationReference['type'];
+      entityId: string;
+      periciaId: string;
+    } = await this.prisma.$transaction(async (tx) => {
+      const amount = existing.amount ?? new Prisma.Decimal(0);
+      const transactionDate = existing.transactionDate ?? this.parseDate(((existing.rawData ?? {}) as RawUnmatchedData).receivedAt) ?? new Date();
+
+      if (body.createRecebimento ?? true) {
+        const recebimento = await tx.recebimento.create({
+          data: {
+            tenantId,
+            periciaId,
+            fontePagamento: 'OUTRO',
+            dataRecebimento: transactionDate,
+            valorBruto: amount,
+            valorLiquido: amount,
+            descricao: note,
+            metadata: {
+              source: 'UNMATCHED_PAYMENT_LINK',
+              unmatchedPaymentId: existing.id,
+            },
+          },
+        });
+
+        return {
+          entityType: 'RECEBIMENTO' as const,
+          entityId: recebimento.id,
+          periciaId,
+        };
+      }
+
+      const bankTransaction = await tx.bankTransaction.create({
+        data: {
+          tenantId,
+          periciaId,
+          direction: 'IN',
+          transactionDate,
+          amount,
+          description: note,
+          rawPayload: {
+            source: 'UNMATCHED_PAYMENT_LINK',
+            unmatchedPaymentId: existing.id,
+            rawData: existing.rawData,
+          },
+        },
+      });
+
+      return {
+        entityType: 'BANK_TRANSACTION' as const,
+        entityId: bankTransaction.id,
+        periciaId,
+      };
+    });
+
+    const nextRaw = this.withReconciliationReference((existing.rawData ?? {}) as RawUnmatchedData, {
+      type: reconciliationResult.entityType,
+      id: reconciliationResult.entityId,
+      periciaId: reconciliationResult.periciaId,
+    });
 
     const updated = await this.prisma.unmatchedPayment.update({
       where: { id },
       data: {
         matchStatus: PaymentMatchStatus.MATCHED,
-        notes: body.periciaId ? `${note} | periciaId:${body.periciaId}` : note,
+        notes: note,
+        rawData: nextRaw as Prisma.InputJsonValue,
       },
     });
 
-    return { ...updated, amount: updated.amount ? Number(updated.amount) : null };
+    await this.prisma.activityLog.create({
+      data: {
+        tenantId,
+        entityType: 'UnmatchedPayment',
+        entityId: existing.id,
+        action: 'RECONCILE',
+        payloadJson: {
+          mode: 'MANUAL_LINK',
+          reconciledEntityType: reconciliationResult.entityType,
+          reconciledEntityId: reconciliationResult.entityId,
+          periciaId: reconciliationResult.periciaId,
+          note,
+        },
+      },
+    });
+
+    return {
+      ...updated,
+      amount: updated.amount ? Number(updated.amount) : null,
+      finalStatus: updated.matchStatus,
+      reconciledEntity: {
+        type: reconciliationResult.entityType,
+        id: reconciliationResult.entityId,
+        periciaId: reconciliationResult.periciaId,
+      },
+    };
   }
 
   async discardUnmatched(id: string, note?: string) {
@@ -416,6 +760,104 @@ export class FinancialService {
     });
 
     return { ...updated, amount: updated.amount ? Number(updated.amount) : null, status: 'DISCARDED' as const };
+  }
+
+
+  async splitUnmatched(unmatchedId: string, dto: SplitUnmatchedPaymentDto) {
+    const tenantId = this.context.get('tenantId') ?? '';
+
+    const unmatched = await this.prisma.unmatchedPayment.findFirst({
+      where: { id: unmatchedId, tenantId },
+    });
+
+    if (!unmatched) {
+      throw new NotFoundException('Pagamento não vinculado não encontrado.');
+    }
+
+    const originalAmount = Number(unmatched.amount ?? 0);
+    if (originalAmount <= 0) {
+      throw new BadRequestException('Pagamento original sem valor válido para split.');
+    }
+
+    const installmentTotal = dto.installments.reduce((sum, item) => sum + Number(item.amount), 0);
+    const decimalTolerance = 0.01;
+    if (Math.abs(originalAmount - installmentTotal) > decimalTolerance) {
+      throw new BadRequestException('Soma das parcelas deve ser igual ao valor original.');
+    }
+
+    const uniquePericiaIds = [...new Set(dto.installments.map((item) => item.periciaId))];
+    const validPericias = await this.prisma.pericia.findMany({
+      where: {
+        id: { in: uniquePericiaIds },
+        tenantId,
+        deletedAt: null,
+      },
+      select: { id: true },
+    });
+
+    if (validPericias.length !== uniquePericiaIds.length) {
+      throw new BadRequestException('Uma ou mais perícias são inválidas para o tenant atual.');
+    }
+
+    const result = await this.prisma.$transaction(async (tx) => {
+      const createdRecebimentos = await Promise.all(
+        dto.installments.map((installment) =>
+          tx.recebimento.create({
+            data: {
+              tenantId,
+              periciaId: installment.periciaId,
+              fontePagamento: FontePagamento.OUTRO,
+              dataRecebimento: unmatched.transactionDate ?? unmatched.createdAt,
+              valorBruto: new Prisma.Decimal(installment.amount),
+              valorLiquido: new Prisma.Decimal(installment.amount),
+              descricao: `Split de conciliação #${unmatched.id}`,
+              metadata: {
+                splitFromUnmatchedId: unmatched.id,
+                splitNote: installment.note ?? null,
+              },
+            },
+          }),
+        ),
+      );
+
+      const createdTransactions = await Promise.all(
+        dto.installments.map((installment) =>
+          tx.bankTransaction.create({
+            data: {
+              tenantId,
+              periciaId: installment.periciaId,
+              direction: FinancialDirection.IN,
+              transactionDate: unmatched.transactionDate ?? unmatched.createdAt,
+              amount: new Prisma.Decimal(installment.amount),
+              description: installment.note?.trim() || `Split de conciliação #${unmatched.id}`,
+              rawPayload: {
+                splitFromUnmatchedId: unmatched.id,
+                splitNote: installment.note ?? null,
+              },
+            },
+          }),
+        ),
+      );
+
+      const updatedUnmatched = await tx.unmatchedPayment.update({
+        where: { id: unmatched.id },
+        data: {
+          matchStatus: PaymentMatchStatus.MATCHED,
+          notes: `[SPLIT] Conciliado em ${dto.installments.length} parcela(s).`,
+        },
+      });
+
+      return {
+        unmatchedId: updatedUnmatched.id,
+        status: updatedUnmatched.matchStatus,
+        installments: dto.installments.length,
+        totalAmount: originalAmount,
+        recebimentos: createdRecebimentos.map((item) => ({ id: item.id, periciaId: item.periciaId, amount: Number(item.valorBruto) })),
+        bankTransactions: createdTransactions.map((item) => ({ id: item.id, periciaId: item.periciaId, amount: Number(item.amount) })),
+      };
+    });
+
+    return result;
   }
 
   async deleteUnmatched(id: string, reason?: string) {
@@ -439,13 +881,225 @@ export class FinancialService {
     return { deleted: true, id };
   }
 
-  async reconcile(dto: ReconcileDto) {
-    const result = await this.prisma.unmatchedPayment.updateMany({
-      where: { id: { in: dto.unmatchedIds } },
-      data: { matchStatus: PaymentMatchStatus.MATCHED, ...(dto.note ? { notes: dto.note } : {}) },
+
+  async linkUnmatched(id: string, dto: LinkUnmatchedPaymentDto) {
+    const tenantId = this.context.get('tenantId') ?? '';
+    const userId = this.context.get('userId') ?? null;
+
+    const unmatched = await this.prisma.unmatchedPayment.findFirst({
+      where: { id, tenantId },
     });
 
-    return { reconciled: result.count };
+    if (!unmatched) {
+      throw new NotFoundException('Pagamento não conciliado não encontrado.');
+    }
+
+    const rawData = (unmatched.rawData ?? {}) as Record<string, unknown>;
+    const sourceBatch = this.getRawString(rawData, ['batch', 'lote', 'batchId']);
+    const sourceOrigin = this.getRawString(rawData, ['origem', 'origin', 'source']);
+    const sourceDescription = this.getRawString(rawData, ['descricao', 'description', 'historico']);
+    const sourceGross = this.getRawNumber(rawData, ['valorBruto', 'valor', 'amount']);
+    const sourceNet = this.getRawNumber(rawData, ['valorLiquido', 'netAmount']);
+    const sourceDate = this.getRawDate(rawData, ['data', 'transactionDate', 'dataRecebimento']);
+
+    const linkedAt = new Date();
+
+    return this.prisma.$transaction(async (tx) => {
+      const recebimento = await tx.recebimento.create({
+        data: {
+          tenantId,
+          periciaId: dto.periciaId,
+          importBatchId: unmatched.importBatchId ?? undefined,
+          fontePagamento: this.mapFontePagamento(sourceOrigin),
+          dataRecebimento: unmatched.transactionDate ?? sourceDate ?? linkedAt,
+          valorBruto: new Prisma.Decimal(sourceGross ?? Number(unmatched.amount ?? 0)),
+          ...(sourceNet !== null ? { valorLiquido: new Prisma.Decimal(sourceNet) } : {}),
+          descricao: [sourceBatch ? `Lote: ${sourceBatch}` : null, sourceDescription].filter(Boolean).join(' | ') || undefined,
+          metadata: {
+            linkedFromUnmatchedPaymentId: unmatched.id,
+            rawData: rawData as Prisma.InputJsonValue,
+          } as Prisma.InputJsonValue,
+          ...(userId ? { createdBy: userId } : {}),
+        },
+      });
+
+      const updatedUnmatched = await tx.unmatchedPayment.update({
+        where: { id: unmatched.id },
+        data: {
+          matchStatus: "LINKED" as PaymentMatchStatus,
+          linkedPericiaId: dto.periciaId,
+          linkedAt,
+          ...(userId ? { linkedBy: userId, updatedBy: userId } : {}),
+        },
+      });
+
+      return { recebimento, unmatchedPayment: updatedUnmatched };
+    });
+  }
+
+  private getRawString(rawData: Record<string, unknown>, keys: string[]) {
+    for (const key of keys) {
+      const value = rawData[key];
+      if (typeof value === 'string' && value.trim()) return value.trim();
+    }
+
+    return null;
+  }
+
+  private getRawNumber(rawData: Record<string, unknown>, keys: string[]) {
+    for (const key of keys) {
+      const value = rawData[key];
+      if (typeof value === 'number' && Number.isFinite(value)) return value;
+      if (typeof value === 'string') {
+        const parsed = Number(value.replace('.', '').replace(',', '.').replace(/[^\d.-]/g, ''));
+        if (Number.isFinite(parsed)) return parsed;
+      }
+    }
+
+    return null;
+  }
+
+  private getRawDate(rawData: Record<string, unknown>, keys: string[]) {
+    for (const key of keys) {
+      const value = rawData[key];
+      if (typeof value !== 'string') continue;
+      const date = new Date(value);
+      if (!Number.isNaN(date.getTime())) return date;
+    }
+
+    return null;
+  }
+
+  private mapFontePagamento(origin: string | null): FontePagamento {
+    const normalized = (origin ?? '').toUpperCase();
+    if (normalized.includes('TJ') || normalized.includes('TRIBUNAL')) return FontePagamento.TJ;
+    if (normalized.includes('AUTOR')) return FontePagamento.PARTE_AUTORA;
+    if (normalized.includes('RÉ') || normalized.includes('REU') || normalized.includes('RÉU')) return FontePagamento.PARTE_RE;
+    if (normalized.includes('SEGURADORA')) return FontePagamento.SEGURADORA;
+    return FontePagamento.OUTRO;
+  }
+
+  async reconcile(dto: ReconcileDto) {
+    const tenantId = this.context.get('tenantId') ?? '';
+    const unmatched = await this.prisma.unmatchedPayment.findMany({ where: { id: { in: dto.unmatchedIds } } });
+
+    const updated = await Promise.all(
+      unmatched.map(async (item) => {
+        const reconciliation = this.extractReconciliationReference(item.rawData);
+        const nextRaw = this.withReconciliationReference((item.rawData ?? {}) as RawUnmatchedData, reconciliation ?? null);
+
+        const row = await this.prisma.unmatchedPayment.update({
+          where: { id: item.id },
+          data: {
+            matchStatus: PaymentMatchStatus.MATCHED,
+            ...(dto.note ? { notes: dto.note } : {}),
+            rawData: nextRaw as Prisma.InputJsonValue,
+          },
+        });
+
+        await this.prisma.activityLog.create({
+          data: {
+            tenantId,
+            entityType: 'UnmatchedPayment',
+            entityId: item.id,
+            action: 'RECONCILE',
+            payloadJson: {
+              mode: 'SUGGESTION',
+              reconciledEntityType: reconciliation?.type ?? null,
+              reconciledEntityId: reconciliation?.id ?? null,
+              periciaId: reconciliation?.periciaId ?? null,
+              note: dto.note,
+            },
+          },
+        });
+
+        return {
+          id: row.id,
+          finalStatus: row.matchStatus,
+          reconciledEntityId: reconciliation?.id ?? null,
+          reconciledEntityType: reconciliation?.type ?? null,
+        };
+      }),
+    );
+
+    return { reconciled: updated.length, results: updated };
+  }
+
+
+  async conciliationStats() {
+    const rows = await this.prisma.unmatchedPayment.findMany({
+      select: { amount: true, matchStatus: true, notes: true, rawData: true },
+    });
+
+    const parseOrigin = (rawData: unknown) => {
+      const raw = (rawData ?? {}) as RawUnmatchedData;
+      const origin = typeof raw.origin === 'string' ? raw.origin : 'INDIVIDUAL';
+      if (origin === 'MANUAL_CSV') return 'CSV';
+      if (origin === 'AI_PRINT') return 'OFX';
+      return 'INDIVIDUAL';
+    };
+
+    const isIgnored = (row: { matchStatus: PaymentMatchStatus; notes: string | null }) =>
+      row.matchStatus === PaymentMatchStatus.PARTIAL && (row.notes ?? '').includes('[DISCARDED]');
+
+    const total = rows.length;
+    const ignored = rows.filter((row) => isIgnored(row as { matchStatus: PaymentMatchStatus; notes: string | null })).length;
+    const matched = rows.filter((row) => row.matchStatus === PaymentMatchStatus.MATCHED).length;
+    const pending = total - matched - ignored;
+
+    const autoMatched = rows.filter((row) => {
+      if (row.matchStatus !== PaymentMatchStatus.MATCHED) return false;
+      const note = (row.notes ?? '').toLowerCase();
+      return note.includes('auto') || note.includes('lote por cnj');
+    }).length;
+
+    const autoMatchRate = matched > 0 ? Number(((autoMatched / matched) * 100).toFixed(2)) : 0;
+
+    const byOrigin = rows.reduce(
+      (acc, row) => {
+        const key = parseOrigin(row.rawData);
+        acc[key] += 1;
+        return acc;
+      },
+      { CSV: 0, OFX: 0, INDIVIDUAL: 0 },
+    );
+
+    const matchedVolume = rows.reduce((sum, row) => {
+      if (row.matchStatus !== PaymentMatchStatus.MATCHED) return sum;
+      return sum + Number(row.amount ?? 0);
+    }, 0);
+
+    const pendingVolume = rows.reduce((sum, row) => {
+      if (row.matchStatus === PaymentMatchStatus.MATCHED || isIgnored(row as { matchStatus: PaymentMatchStatus; notes: string | null })) {
+        return sum;
+      }
+      return sum + Number(row.amount ?? 0);
+    }, 0);
+
+    const ignoredVolume = rows.reduce((sum, row) => {
+      if (!isIgnored(row as { matchStatus: PaymentMatchStatus; notes: string | null })) return sum;
+      return sum + Number(row.amount ?? 0);
+    }, 0);
+
+    return {
+      totals: {
+        reconciled: matched,
+        unreconciled: pending,
+        ignored,
+        total,
+      },
+      autoMatching: {
+        automaticMatches: autoMatched,
+        totalReconciliable: matched,
+        rate: autoMatchRate,
+      },
+      originDistribution: byOrigin,
+      financialVolume: {
+        reconciled: Number(matchedVolume.toFixed(2)),
+        pending: Number(pendingVolume.toFixed(2)),
+        ignored: Number(ignoredVolume.toFixed(2)),
+      },
+    };
   }
 
   async analytics() {
@@ -557,11 +1211,177 @@ export class FinancialService {
     if (sourceType === 'TJ') return FontePagamento.TJ;
     if (sourceType === 'PARTES') return FontePagamento.PARTE_AUTORA;
     return FontePagamento.OUTRO;
-  }
+  private parseMoney(value: number | string | null | undefined): Prisma.Decimal | null {
+    if (value === null || value === undefined) return null;
+    if (typeof value === 'number') {
+      if (!Number.isFinite(value)) return null;
+      return new Prisma.Decimal(value);
+    }
+
+    const normalized = value
+      .toString()
+      .trim()
+      .replace(/\s/g, '')
+      .replace(/R\$/gi, '')
+      .replace(/\.(?=\d{3}(\D|$))/g, '')
+      .replace(',', '.');
+
+    if (!normalized || !/^-?\d+(\.\d+)?$/.test(normalized)) return null;
+
+    try {
+      return new Prisma.Decimal(normalized);
+    } catch {
+      return null;
+    }
 
   private parseDate(value?: string): Date | null {
     if (!value) return null;
-    const date = new Date(value);
+
+    const normalized = value.trim();
+    const directDate = new Date(normalized);
+    if (!Number.isNaN(directDate.getTime())) return directDate;
+
+    const brFormat = normalized.match(/^(\d{2})\/(\d{2})\/(\d{4})(?:\s+(\d{2}):(\d{2})(?::(\d{2}))?)?$/);
+    if (brFormat) {
+      const [, dd, mm, yyyy, hh = '00', min = '00', sec = '00'] = brFormat;
+      const date = new Date(Number(yyyy), Number(mm) - 1, Number(dd), Number(hh), Number(min), Number(sec));
+      return Number.isNaN(date.getTime()) ? null : date;
+    }
+
+    return null;
+  }
+
+  private parseCsv(content: string): ImportedBankRecord[] {
+    const lines = content
+      .split(/\r?\n/)
+      .map((line) => line.trim())
+      .filter(Boolean);
+
+    if (!lines.length) return [];
+
+    const separator = lines[0].includes(';') ? ';' : ',';
+    const headers = lines[0].split(separator).map((header) => this.normalizeHeader(header).replace(/[^a-z0-9]/g, ''));
+
+    return lines
+      .slice(1)
+      .map((line) => {
+        const values = line.split(separator).map((value) => value.trim().replace(/^"|"$/g, ''));
+        const row = headers.reduce<Record<string, string>>((acc, header, idx) => {
+          acc[header] = values[idx] ?? '';
+          return acc;
+        }, {});
+
+        const amount = this.parseAmount(row.valor ?? row.amount ?? row.vlr);
+        const transactionDate = this.parseDate(row.data ?? row.datapagamento ?? row.transactiondate ?? row.receivedat);
+
+        if (amount === null || !transactionDate) return null;
+
+        const direction = amount < 0 ? FinancialDirection.OUT : FinancialDirection.IN;
+        const normalizedAmount = Math.abs(amount);
+
+        return {
+          transactionDate,
+          amount: normalizedAmount,
+          payerName: row.pagador ?? row.payername ?? row.nome ?? undefined,
+          description: row.descricao ?? row.description ?? undefined,
+          memo: row.memo ?? row.historico ?? undefined,
+          document: row.documento ?? row.doc ?? undefined,
+          direction,
+          source: row.fonte ?? row.source ?? 'CSV_UPLOAD',
+          origin: 'MANUAL_CSV' as const,
+          rawPayload: row,
+        };
+      })
+      .filter((row) => row !== null) as ImportedBankRecord[];
+  }
+
+  private parseOfx(content: string): ImportedBankRecord[] {
+    if (!/<OFX>|<STMTTRN>/i.test(content)) {
+      throw new BadRequestException('OFX inválido. Estrutura OFX não reconhecida.');
+    }
+
+    const transactions = content.match(/<STMTTRN>([\s\S]*?)(?=<STMTTRN>|<\/BANKTRANLIST>|$)/gi) ?? [];
+
+    return transactions
+      .map((transactionBlock) => {
+        const fitId = this.extractOfxField(transactionBlock, 'FITID');
+        const trnType = this.extractOfxField(transactionBlock, 'TRNTYPE')?.toUpperCase();
+        const dtPosted = this.extractOfxField(transactionBlock, 'DTPOSTED');
+        const trnAmtRaw = this.extractOfxField(transactionBlock, 'TRNAMT');
+        const memo = this.extractOfxField(transactionBlock, 'MEMO');
+        const name = this.extractOfxField(transactionBlock, 'NAME');
+        const checkNum = this.extractOfxField(transactionBlock, 'CHECKNUM');
+
+        const transactionDate = this.parseOfxDate(dtPosted);
+        const trnAmount = this.parseAmount(trnAmtRaw);
+        if (!transactionDate || trnAmount === null) return null;
+
+        const inferredDirection = trnAmount < 0 ? FinancialDirection.OUT : FinancialDirection.IN;
+        const typeDirection = trnType && ['DEBIT', 'PAYMENT', 'ATM', 'POS', 'FEE', 'CHECK'].includes(trnType)
+          ? FinancialDirection.OUT
+          : trnType && ['CREDIT', 'DEP', 'DIRECTDEP', 'INT', 'DIV'].includes(trnType)
+            ? FinancialDirection.IN
+            : inferredDirection;
+
+        return {
+          transactionDate,
+          amount: Math.abs(trnAmount),
+          payerName: name ?? undefined,
+          description: memo ?? name ?? undefined,
+          memo: memo ?? undefined,
+          document: checkNum ?? fitId ?? undefined,
+          direction: typeDirection,
+          externalId: fitId ?? undefined,
+          source: 'OFX_UPLOAD',
+          origin: 'OFX_IMPORT' as const,
+          rawPayload: {
+            fitId,
+            trnType,
+            dtPosted,
+            trnAmt: trnAmtRaw,
+            memo,
+            name,
+            checkNum,
+          },
+        };
+      })
+      .filter((row) => row !== null) as ImportedBankRecord[];
+  }
+
+  private extractOfxField(block: string, field: string): string | null {
+    const regex = new RegExp(`<${field}>([^\r\n<]+)`, 'i');
+    const match = block.match(regex);
+    return match?.[1]?.trim() || null;
+  }
+
+  private parseAmount(value?: string | null): number | null {
+    if (!value) return null;
+    const normalized = value.replace(/\s/g, '').replace(/\.(?=\d{3}(\D|$))/g, '').replace(',', '.');
+    const amount = Number(normalized);
+    return Number.isFinite(amount) ? amount : null;
+  }
+
+  private parseOfxDate(value: string | null): Date | null {
+    if (!value) return null;
+    const compact = value.replace(/[^0-9]/g, '');
+    if (compact.length < 8) return null;
+
+    const year = Number(compact.slice(0, 4));
+    const month = Number(compact.slice(4, 6)) - 1;
+    const day = Number(compact.slice(6, 8));
+    const hour = Number(compact.slice(8, 10) || '0');
+    const minute = Number(compact.slice(10, 12) || '0');
+    const second = Number(compact.slice(12, 14) || '0');
+
+    const date = new Date(Date.UTC(year, month, day, hour, minute, second));
     return Number.isNaN(date.getTime()) ? null : date;
+  }
+
+  private normalizeHeader(header: string): string {
+    return header
+      .trim()
+      .toLowerCase()
+      .normalize('NFD')
+      .replace(/\p{Diacritic}/gu, '');
   }
 }

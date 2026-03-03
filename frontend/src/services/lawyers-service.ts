@@ -1,5 +1,5 @@
 import { apiClient } from '@/lib/api-client';
-import type { EmailTemplate, InboxItem, Lawyer, MessageTemplate, MessageTemplateChannel, TemplatePreview } from '@/types/api';
+import type { EmailTemplate, InboxItem, InboxListResponse, Lawyer, MessageTemplate, MessageTemplateChannel, TemplatePreview } from '@/types/api';
 
 export const lawyersService = {
   list: async (): Promise<Lawyer[]> => {
@@ -71,9 +71,9 @@ export const messageTemplatesService = {
 };
 
 export const communicationInboxService = {
-  list: async (filter?: string): Promise<InboxItem[]> => {
-    const { data } = await apiClient.get<InboxItem[]>('/communications/inbox', { params: filter ? { filter } : undefined });
-    return Array.isArray(data) ? data : [];
+  list: async (params?: { filter?: string; from?: string; subject?: string; cursor?: string; page?: number; limit?: number }): Promise<InboxListResponse> => {
+    const { data } = await apiClient.get<InboxListResponse>('/communications/inbox', { params });
+    return data ?? { items: [], page: 1, limit: params?.limit ?? 20, hasNextPage: false, nextCursor: null };
   },
 
   resendTemplate: async (payload: { messageIds: string[]; templateId: string }): Promise<{ resent: number }> => {
@@ -88,6 +88,44 @@ export const communicationInboxService = {
 
   linkInbound: async (payload: { messageIds: string[]; periciaId?: string; processoId?: string }): Promise<{ linked: number }> => {
     const { data } = await apiClient.post<{ linked: number }>('/communications/inbox/actions/link-inbound', payload);
+    return data;
+  },
+};
+
+
+export const emailImapService = {
+  saveConfig: async (payload: {
+    fromEmail: string;
+    fromName?: string;
+    smtpHost: string;
+    smtpPort: string;
+    imapHost: string;
+    imapPort: string;
+    login: string;
+    password: string;
+    secure?: boolean;
+  }) => {
+    const { data } = await apiClient.post('/communications/email-imap/config', payload);
+    return data;
+  },
+
+  listInbox: async (): Promise<EmailInboxMessage[]> => {
+    const { data } = await apiClient.get<EmailInboxMessage[]>('/communications/email-imap/inbox');
+    return Array.isArray(data) ? data : [];
+  },
+
+  getByUid: async (uid: number): Promise<EmailInboxDetail> => {
+    const { data } = await apiClient.get<EmailInboxDetail>(`/communications/email-imap/inbox/${uid}`);
+    return data;
+  },
+
+  markRead: async (uid: number): Promise<{ uid: number; read: boolean }> => {
+    const { data } = await apiClient.patch<{ uid: number; read: boolean }>(`/communications/email-imap/inbox/${uid}/read`);
+    return data;
+  },
+
+  reply: async (uid: number, payload: { from: string; to: string; text?: string; html?: string }): Promise<{ sent: boolean }> => {
+    const { data } = await apiClient.post<{ sent: boolean }>(`/communications/email-imap/reply/${uid}`, payload);
     return data;
   },
 };

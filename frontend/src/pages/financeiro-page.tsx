@@ -18,8 +18,8 @@ import {
 import { Link } from 'react-router-dom';
 import { toast } from 'sonner';
 
-import { Dialog } from '@/components/ui/dialog';
 import { Button } from '@/components/ui/button';
+import { Dialog } from '@/components/ui/dialog';
 import { Input } from '@/components/ui/input';
 import { LoadingState, EmptyState, ErrorState } from '@/components/ui/state';
 import { Tabs } from '@/components/ui/tabs';
@@ -27,13 +27,9 @@ import { financialService } from '@/services/financial-service';
 import type { FinancialAnalytics, Recebimento } from '@/types/api';
 import { formatCurrency } from '@/lib/formatters';
 
-const FONTE_OPTIONS = [
-  { value: 'TJ', label: 'Tribunal de Justiça (TJ)' },
-  { value: 'PARTE_AUTORA', label: 'Parte Autora' },
-  { value: 'PARTE_RE', label: 'Parte Ré' },
-  { value: 'SEGURADORA', label: 'Seguradora' },
-  { value: 'OUTRO', label: 'Outro' },
-] as const;
+const VIEW_MODES: AnalyticsViewMode[] = ['FINANCE', 'PRODUCTION', 'WORKFLOW'];
+const PERIODS: AnalyticsPeriod[] = ['YEAR', 'LAST_30', 'LAST_90', 'CUSTOM'];
+const GRANULARITIES: AnalyticsGranularity[] = ['DAY', 'WEEK', 'MONTH'];
 
 const PERIOD_OPTIONS = [
   { value: 'ALL', label: 'Todo período' },
@@ -108,21 +104,40 @@ const INITIAL_FORM: FormState = {
 
 export default function FinanceiroPage() {
   const queryClient = useQueryClient();
+  const navigate = useNavigate();
+  const [searchParams, setSearchParams] = useSearchParams();
   const [dialogOpen, setDialogOpen] = useState(false);
   const [activeTab, setActiveTab] = useState<TabId>('Recebimentos');
   const [busca, setBusca] = useState('');
   const [fonteFiltro, setFonteFiltro] = useState<'ALL' | FontePagamento>('ALL');
   const [periodoFiltro, setPeriodoFiltro] = useState<PeriodFilter>('ALL');
   const [form, setForm] = useState<FormState>(INITIAL_FORM);
+  const [selectedUnmatched, setSelectedUnmatched] = useState<UnmatchedPayment | null>(null);
+  const [cnjQuery, setCnjQuery] = useState('');
+  const [selectedPericiaId, setSelectedPericiaId] = useState('');
 
-  const { data: recebimentos = [], isLoading, isError, error } = useQuery<Recebimento[]>({
-    queryKey: ['recebimentos'],
-    queryFn: financialService.listRecebimentos,
+  const { data: cidades = [] } = useQuery({
+    queryKey: ['config-cidades'],
+    queryFn: () => configService.list('cidades'),
   });
 
   const { data: analytics } = useQuery<FinancialAnalytics>({
     queryKey: ['financial-analytics'],
     queryFn: financialService.analytics,
+  });
+
+  const { data: unmatchedList = [] } = useQuery<UnmatchedPayment[]>({
+    queryKey: ['financial-unmatched'],
+    queryFn: financialService.listUnmatched,
+  });
+
+  const periciasSearchQuery = useQuery({
+    queryKey: ['pericias-search-cnj', cnjQuery],
+    enabled: cnjQuery.trim().length >= 8,
+    queryFn: async () => {
+      const result = await periciaService.list(1, { limit: 10, search: cnjQuery.trim() });
+      return result.items;
+    },
   });
 
   const mutation = useMutation({
@@ -225,9 +240,18 @@ export default function FinanceiroPage() {
       .sort((a, b) => b.total - a.total);
   }, [recebimentos]);
 
+  const periciasEncontradas = useMemo(() => periciasSearchQuery.data ?? [], [periciasSearchQuery.data]);
+
+  function openLinkDialog(item: UnmatchedPayment) {
+    setSelectedUnmatched(item);
+    setCnjQuery(extractCnjFromRawData(item.rawData));
+    setSelectedPericiaId('');
+    setLinkDialogOpen(true);
+  }
+
   function handleSubmit(e: React.FormEvent) {
     e.preventDefault();
-    if (!form.dataRecebimento || !form.valorBruto) {
+    if (!form.periciaId || !form.dataRecebimento || !form.valorBruto) {
       toast.error('Preencha os campos obrigatórios.');
       return;
     }
@@ -241,9 +265,16 @@ export default function FinanceiroPage() {
     });
   }
 
-  function handleChange(field: keyof FormState, value: string) {
-    setForm((prev) => ({ ...prev, [field]: value }));
+  function openCadastroProcesso() {
+    if (!selectedUnmatched) return;
+    const params = new URLSearchParams();
+    params.set('cnj', cnjQuery);
+    params.set('returnTo', `/financeiro?linkUnmatched=${selectedUnmatched.id}`);
+    navigate(`/pericias/nova?${params.toString()}`);
   }
+
+  if (isLoading) return <LoadingState />;
+  if (isError) return <ErrorState message={error instanceof Error ? error.message : 'Erro ao carregar recebimentos'} />;
 
   return (
     <div className="min-h-screen bg-gray-50">
@@ -285,7 +316,6 @@ export default function FinanceiroPage() {
             </div>
           </div>
         </div>
-      </div>
 
       <div className="mx-auto max-w-6xl space-y-5 px-6 py-6">
         <Tabs tabs={[...TAB_IDS]} activeTab={activeTab} onChange={(tab) => setActiveTab(tab as TabId)} />
@@ -524,6 +554,31 @@ export default function FinanceiroPage() {
             </div>
           </div>
         )}
+
+        <section className="rounded-xl border border-gray-200 bg-white p-4 shadow-sm">
+          <div className="mb-3 flex items-center justify-between">
+            <h2 className="text-lg font-semibold text-slate-800">Pagamentos não conciliados</h2>
+            <span className="text-sm text-gray-500">{unmatchedList.length} pendentes</span>
+          </div>
+          {unmatchedList.length === 0 ? <p className="text-sm text-gray-500">Nenhum pagamento não conciliado.</p> : (
+            <div className="space-y-2">
+              {unmatchedList.map((item) => (
+                <div key={item.id} className="flex flex-col gap-2 rounded-lg border border-gray-200 p-3 sm:flex-row sm:items-center sm:justify-between">
+                  <div>
+                    <p className="text-sm font-medium text-slate-700">{String(item.payerName ?? 'Pagador não identificado')}</p>
+                    <p className="text-xs text-gray-500">{extractCnjFromRawData(item.rawData) || 'CNJ não identificado'} • {formatDate(item.transactionDate)}</p>
+                  </div>
+                  <div className="flex items-center gap-3">
+                    <span className="text-sm font-semibold text-emerald-700">{formatCurrency(item.amount)}</span>
+                    <Button size="sm" onClick={() => openLinkDialog(item)} className="inline-flex items-center gap-1">
+                      <Link2 className="h-4 w-4" /> Vincular
+                    </Button>
+                  </div>
+                </div>
+              ))}
+            </div>
+          )}
+        </section>
       </div>
 
       <Dialog
@@ -618,25 +673,49 @@ export default function FinanceiroPage() {
           </div>
 
           <div className="flex justify-end gap-2 pt-2">
-            <Button
-              type="button"
-              variant="outline"
-              onClick={() => {
-                setDialogOpen(false);
-                setForm(INITIAL_FORM);
-              }}
-            >
-              Cancelar
-            </Button>
-            <Button
-              type="submit"
-              disabled={mutation.isPending}
-              className="bg-emerald-600 text-white hover:bg-emerald-700"
-            >
-              {mutation.isPending ? 'Salvando...' : 'Salvar Recebimento'}
-            </Button>
+            <Button type="button" variant="outline" onClick={() => { setDialogOpen(false); setForm(INITIAL_FORM); }}>Cancelar</Button>
+            <Button type="submit" disabled={mutation.isPending} className="bg-emerald-600 text-white hover:bg-emerald-700">{mutation.isPending ? 'Salvando...' : 'Salvar Recebimento'}</Button>
           </div>
         </form>
+      </Dialog>
+
+      <Dialog open={linkDialogOpen} onClose={() => setLinkDialogOpen(false)} title="Vincular pagamento não conciliado" className="max-w-2xl">
+        <div className="space-y-4">
+          <div>
+            <label className="mb-1 block text-sm font-medium text-slate-700">CNJ</label>
+            <div className="flex gap-2">
+              <Input value={cnjQuery} onChange={(e) => setCnjQuery(e.target.value)} placeholder="0000000-00.0000.0.00.0000" />
+              <Button type="button" variant="outline" className="inline-flex items-center gap-1"><Search className="h-4 w-4" />Buscar</Button>
+            </div>
+          </div>
+
+          <div className="max-h-52 space-y-2 overflow-y-auto rounded-md border p-2">
+            {periciasSearchQuery.isLoading ? <p className="text-sm text-gray-500">Buscando perícias...</p> : null}
+            {periciasEncontradas.map((pericia: Pericia) => (
+              <button key={pericia.id} type="button" onClick={() => setSelectedPericiaId(pericia.id)} className={`w-full rounded-md border px-3 py-2 text-left text-sm ${selectedPericiaId === pericia.id ? 'border-emerald-500 bg-emerald-50' : 'border-gray-200'}`}>
+                <p className="font-medium text-slate-800">{pericia.processoCNJ}</p>
+                <p className="text-xs text-gray-500">{pericia.autorNome} • {pericia.cidade}</p>
+              </button>
+            ))}
+            {!periciasSearchQuery.isLoading && periciasEncontradas.length === 0 ? <p className="text-sm text-gray-500">Nenhuma perícia encontrada para este CNJ.</p> : null}
+          </div>
+
+          <div className="flex items-center justify-between rounded-md border border-amber-200 bg-amber-50 px-3 py-2 text-sm text-amber-900">
+            <span>Não encontrou? Cadastre o processo e retorne para este modal.</span>
+            <Button type="button" variant="outline" onClick={openCadastroProcesso}>Cadastrar processo</Button>
+          </div>
+
+          <div className="flex justify-end gap-2">
+            <Button type="button" variant="outline" onClick={() => setLinkDialogOpen(false)}>Cancelar</Button>
+            <Button
+              type="button"
+              disabled={!selectedUnmatched || !selectedPericiaId || linkMutation.isPending}
+              onClick={() => selectedUnmatched && linkMutation.mutate({ unmatchedId: selectedUnmatched.id, periciaId: selectedPericiaId })}
+            >
+              {linkMutation.isPending ? 'Vinculando...' : 'Vincular pagamento'}
+            </Button>
+          </div>
+        </div>
       </Dialog>
     </div>
   );

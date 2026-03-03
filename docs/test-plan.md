@@ -78,6 +78,11 @@ Garantir qualidade funcional, segurança (LGPD/RBAC), confiabilidade e conformid
   - `npm --prefix tests run test:e2e`
   - `npm --prefix tests run test:e2e:headed`
 
+## Padrão operacional da suíte E2E (Playwright)
+- **Base URL oficial:** `http://localhost:3000`, com override por `E2E_BASE_URL` para CI e ambientes remotos.
+- **Política de evidências:** trace em `on-first-retry`, screenshot em `only-on-failure` e vídeo em `retain-on-failure`.
+- **Matriz obrigatória de execução:** `desktop-chrome` e `iphone-13`.
+
 ## Critérios de saída
 - 100% dos testes BLOCKER aprovados.
 - 0 falhas críticas abertas.

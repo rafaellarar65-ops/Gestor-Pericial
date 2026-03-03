@@ -15,6 +15,7 @@ import {
   IsIn,
   IsInt,
   IsNotEmpty,
+  IsObject,
   IsOptional,
   IsString,
   IsUUID,
@@ -300,6 +301,86 @@ export class BatchScheduleItemDto {
   externalLastModifiedAt?: string;
 
 
+  @ApiPropertyOptional({ enum: AgendaEventStatus })
+  @IsOptional()
+  @IsEnum(AgendaEventStatus)
+  status?: AgendaEventStatus;
+
+  @ApiPropertyOptional({ enum: AgendaEventSource })
+  @IsOptional()
+  @IsEnum(AgendaEventSource)
+  source?: AgendaEventSource;
+
+  @ApiPropertyOptional()
+  @IsOptional()
+  @IsBoolean()
+  aiSuggested?: boolean;
+
+  @ApiPropertyOptional({ enum: ExternalSyncStatus })
+  @IsOptional()
+  @IsEnum(ExternalSyncStatus)
+  syncStatus?: ExternalSyncStatus;
+
+  @ApiPropertyOptional()
+  @IsOptional()
+  @IsString()
+  externalProvider?: string;
+
+  @ApiPropertyOptional()
+  @IsOptional()
+  @IsString()
+  externalEventId?: string;
+
+  @ApiPropertyOptional()
+  @IsOptional()
+  @IsString()
+  externalEtag?: string;
+
+  @ApiPropertyOptional()
+  @IsOptional()
+  @IsDateString()
+  externalLastModifiedAt?: string;
+
+  @ApiPropertyOptional({ enum: AgendaEventStatus })
+  @IsOptional()
+  @IsEnum(AgendaEventStatus)
+  status?: AgendaEventStatus;
+
+  @ApiPropertyOptional({ enum: AgendaEventSource })
+  @IsOptional()
+  @IsEnum(AgendaEventSource)
+  source?: AgendaEventSource;
+
+  @ApiPropertyOptional()
+  @IsOptional()
+  @IsBoolean()
+  aiSuggested?: boolean;
+
+  @ApiPropertyOptional({ enum: ExternalSyncStatus })
+  @IsOptional()
+  @IsEnum(ExternalSyncStatus)
+  syncStatus?: ExternalSyncStatus;
+
+  @ApiPropertyOptional()
+  @IsOptional()
+  @IsString()
+  externalProvider?: string;
+
+  @ApiPropertyOptional()
+  @IsOptional()
+  @IsString()
+  externalEventId?: string;
+
+  @ApiPropertyOptional()
+  @IsOptional()
+  @IsString()
+  externalEtag?: string;
+
+  @ApiPropertyOptional()
+  @IsOptional()
+  @IsDateString()
+  externalLastModifiedAt?: string;
+
   @ApiProperty()
   @IsDateString()
   startAt!: string;
@@ -353,6 +434,11 @@ export class BatchScheduleMetadataDto {
 }
 
 export class BatchScheduleDto {
+  @ApiPropertyOptional({ type: BatchScheduleMetadataDto })
+  @IsOptional()
+  @IsObject()
+  metadata?: BatchScheduleMetadataDto;
+
   @ApiProperty({ type: [BatchScheduleItemDto] })
   @IsArray()
   @ValidateNested({ each: true })
@@ -437,6 +523,45 @@ export class ExportBatchPdfDto {
   @IsOptional()
   @IsBoolean()
   includeRoute?: boolean;
+}
+
+export class AiSuggestLaudoBlocksDto {
+  @ApiPropertyOptional({ description: 'Data de referência da semana (YYYY-MM-DD)' })
+  @IsOptional()
+  @IsString()
+  startDate?: string;
+
+  @ApiProperty({ example: 90 })
+  @IsInt()
+  @Min(15)
+  avg_minutes_per_laudo!: number;
+
+  @ApiProperty({ example: 8 })
+  @IsInt()
+  @Min(1)
+  backlog!: number;
+
+  @ApiProperty({ type: [String], example: ['09:00', '14:00'] })
+  @IsArray()
+  @IsString({ each: true })
+  preferred_windows!: string[];
+
+  @ApiProperty({ example: 45 })
+  @IsInt()
+  @Min(15)
+  min_buffer_minutes!: number;
+}
+
+export class ExportWeeklyPdfDto {
+  @ApiPropertyOptional({ description: 'Data de referência da semana (YYYY-MM-DD)' })
+  @IsOptional()
+  @IsString()
+  startDate?: string;
+
+  @ApiPropertyOptional({ enum: ['compacto', 'detalhado'], default: 'compacto' })
+  @IsOptional()
+  @IsIn(['compacto', 'detalhado'])
+  mode?: 'compacto' | 'detalhado';
 }
 
 export class AiSuggestLaudoBlocksDto {

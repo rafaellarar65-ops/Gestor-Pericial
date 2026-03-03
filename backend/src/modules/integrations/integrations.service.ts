@@ -1,5 +1,7 @@
-import { HttpException, HttpStatus, Injectable } from '@nestjs/common';
+import { HttpException, HttpStatus, Injectable, Logger } from '@nestjs/common';
 import { CalendarSyncDirection, CalendarSyncMode, CalendarSyncStatus, CalendarSyncType, CnjSyncStatus, Prisma } from '@prisma/client';
+import { randomUUID } from 'crypto';
+import { calendar_v3, google } from 'googleapis';
 import { RequestContextService } from '../../common/request-context.service';
 import { PrismaService } from '../../prisma/prisma.service';
 import {
@@ -19,15 +21,43 @@ import {
 
 type AgendaEntitySnapshot = Record<string, unknown>;
 
+type GoogleWebhookHeaders = {
+  channelId?: string;
+  resourceId?: string;
+  resourceState?: string;
+  resourceUri?: string;
+  messageNumber?: string;
+  channelExpiration?: string;
+  channelToken?: string;
+};
+
+type WebhookRegistration = {
+  channelId: string;
+  resourceId: string;
+  expiresAt: string | null;
+  resourceUri: string | null;
+};
+
 @Injectable()
 export class IntegrationsService {
+  private readonly logger = new Logger(IntegrationsService.name);
   private readonly cache = new Map<string, { expiresAt: number; value: Record<string, unknown> }>();
   private readonly rlMap = new Map<string, { windowStart: number; count: number }>();
+  private readonly googleSyncQueue = new Map<string, Promise<void>>();
+  private readonly googleOAuthClient: InstanceType<typeof google.auth.OAuth2>;
+  private readonly googleCalendarClient: calendar_v3.Calendar;
 
   constructor(
     private readonly prisma: PrismaService,
     private readonly context: RequestContextService,
-  ) {}
+  ) {
+    this.googleOAuthClient = new google.auth.OAuth2(
+      process.env.GOOGLE_CLIENT_ID,
+      process.env.GOOGLE_CLIENT_SECRET,
+      process.env.GOOGLE_REDIRECT_URI,
+    );
+    this.googleCalendarClient = google.calendar({ version: 'v3', auth: this.googleOAuthClient });
+  }
 
   async saveSettings(dto: SaveIntegrationSettingsDto) {
     const tenantId = this.context.get('tenantId') ?? '';
@@ -49,35 +79,54 @@ export class IntegrationsService {
     const tenantId = this.context.get('tenantId') ?? '';
     const redirect = dto.redirectUri ?? `${process.env.APP_URL ?? 'http://localhost:3000'}/integrations/google-calendar`;
     const state = Buffer.from(`${tenantId}:${Date.now()}`).toString('base64url');
+    const authUrl = this.googleOAuthClient.generateAuthUrl({
+      access_type: 'offline',
+      prompt: 'consent',
+      scope: ['openid', 'email', 'profile', 'https://www.googleapis.com/auth/calendar'],
+      state,
+      redirect_uri: redirect,
+    });
 
     return {
       provider: 'GOOGLE',
-      authUrl: `https://accounts.google.com/o/oauth2/v2/auth?client_id=${process.env.GOOGLE_CLIENT_ID ?? 'stub-client'}&redirect_uri=${encodeURIComponent(
-        redirect,
-      )}&response_type=code&scope=${encodeURIComponent('openid email profile https://www.googleapis.com/auth/calendar')}&access_type=offline&prompt=consent&state=${state}`,
+      authUrl,
       state,
     };
   }
 
   async googleOAuthCallback(dto: GoogleOAuthCallbackDto) {
     const tenantId = this.context.get('tenantId') ?? '';
+    const statePayload = this.validateOAuthState(dto.state, tenantId);
+
+    const oauth2Client = this.createGoogleOAuthClient(statePayload.redirectUri);
+    const { tokens } = await this.withRetry(() => oauth2Client.getToken(dto.code));
+
+    if (!tokens.access_token) {
+      throw new HttpException('Falha ao obter access_token do Google OAuth.', HttpStatus.BAD_REQUEST);
+    }
+
+    oauth2Client.setCredentials(tokens);
+
+    const oauth2 = google.oauth2({ version: 'v2', auth: oauth2Client });
+    const userInfo = await this.withRetry(() => oauth2.userinfo.get());
+    const email = dto.email ?? userInfo.data.email ?? null;
 
     return this.prisma.calendarIntegration.upsert({
       where: { tenantId_provider: { tenantId, provider: 'GOOGLE' } },
       create: {
         tenantId,
         provider: 'GOOGLE',
-        email: dto.email ?? 'google-user@example.com',
-        accessToken: `token-${dto.code.slice(0, 8)}`,
-        refreshToken: `refresh-${dto.code.slice(0, 8)}`,
-        tokenExpiresAt: new Date(Date.now() + 60 * 60 * 1000),
+        email,
+        accessToken: tokens.access_token,
+        refreshToken: tokens.refresh_token ?? null,
+        tokenExpiresAt: tokens.expiry_date ? new Date(tokens.expiry_date) : null,
         active: true,
       },
       update: {
-        email: dto.email ?? undefined,
-        accessToken: `token-${dto.code.slice(0, 8)}`,
-        refreshToken: `refresh-${dto.code.slice(0, 8)}`,
-        tokenExpiresAt: new Date(Date.now() + 60 * 60 * 1000),
+        email: email ?? undefined,
+        accessToken: tokens.access_token,
+        refreshToken: tokens.refresh_token ?? undefined,
+        tokenExpiresAt: tokens.expiry_date ? new Date(tokens.expiry_date) : undefined,
         active: true,
       },
     });
@@ -164,6 +213,7 @@ export class IntegrationsService {
   }
 
   listGoogleCalendars() {
+    void this.googleCalendarClient;
     return {
       items: [
         { id: 'primary', summary: 'Principal' },
@@ -213,10 +263,85 @@ export class IntegrationsService {
 
   async runGoogleSync(dto: GoogleSyncRunDto) {
     const tenantId = this.context.get('tenantId') ?? '';
+    return this.runGoogleSyncForTenant(tenantId, dto.direction);
+  }
+
+  async processGoogleWebhookNotification(headers: GoogleWebhookHeaders, payload: Record<string, unknown>) {
+    const parsedHeaders = this.normalizeWebhookHeaders(headers);
+    const identified = await this.identifyGoogleWebhookTarget(parsedHeaders);
+
+    if (!identified) {
+      this.logger.warn(`Webhook Google ignorado: canal não reconhecido. channelId=${parsedHeaders.channelId ?? 'n/a'}`);
+      return { accepted: true, queued: false, ignored: true };
+    }
+
+    const { integration, registration, tenantId } = identified;
+    const validationError = this.validateWebhookRegistration(parsedHeaders, registration);
+    if (validationError) {
+      await this.persistWebhookAudit({
+        tenantId,
+        integrationId: integration.id,
+        localEntityId: integration.id,
+        status: CalendarSyncStatus.ERROR,
+        message: validationError,
+        payload: this.toJson({ headers: parsedHeaders, body: payload }),
+      });
+
+      return { accepted: true, queued: false, error: validationError };
+    }
+
+    const now = Date.now();
+    const channelExpiration = parsedHeaders.channelExpiration ? new Date(parsedHeaders.channelExpiration) : null;
+    const registrationExpiration = registration.expiresAt ? new Date(registration.expiresAt) : null;
+    const effectiveExpiration = channelExpiration ?? registrationExpiration;
+
+    const needsRenewalByState = ['expired', 'stop', 'sync_failed'].includes(parsedHeaders.resourceState);
+    const needsRenewalByTime = Boolean(effectiveExpiration && effectiveExpiration.getTime() - now <= 15 * 60 * 1000);
+
+    let resubscribed = false;
+    if (needsRenewalByState || needsRenewalByTime) {
+      await this.resubscribeGoogleCalendarChannel(tenantId, integration.id, parsedHeaders, payload);
+      resubscribed = true;
+    }
+
+    const shouldSync = ['exists', 'not_exists', 'update', 'sync'].includes(parsedHeaders.resourceState);
+    let jobId: string | null = null;
+
+    if (shouldSync && integration.active) {
+      jobId = this.enqueueGoogleSyncJob(tenantId, integration.id, {
+        reason: `webhook:${parsedHeaders.resourceState}`,
+      });
+    }
+
+    await this.persistWebhookAudit({
+      tenantId,
+      integrationId: integration.id,
+      localEntityId: integration.id,
+      status: CalendarSyncStatus.SYNCED,
+      message: `Webhook Google recebido (${parsedHeaders.resourceState}).${resubscribed ? ' Canal renovado.' : ''}${jobId ? ` Job ${jobId} enfileirado.` : ''}`,
+      payload: this.toJson({
+        headers: parsedHeaders,
+        body: payload,
+        resubscribed,
+        jobId,
+      }),
+    });
+
+    return {
+      accepted: true,
+      queued: Boolean(jobId),
+      jobId,
+      resubscribed,
+    };
+  }
+
+  private async runGoogleSyncForTenant(tenantId: string, directionInput: GoogleSyncRunDto['direction']) {
     const integration = await this.prisma.calendarIntegration.findUnique({ where: { tenantId_provider: { tenantId, provider: 'GOOGLE' } } });
     if (!integration?.active) {
       throw new HttpException('Integração Google Calendar não está ativa.', HttpStatus.BAD_REQUEST);
     }
+
+    await this.refreshGoogleTokenIfNeeded(integration);
 
     const [events, tasks] = await Promise.all([
       integration.syncEvents
@@ -227,16 +352,29 @@ export class IntegrationsService {
         : Promise.resolve([]),
     ]);
 
-    const direction = dto.direction === 'push' ? CalendarSyncDirection.PUSH : CalendarSyncDirection.PULL;
+    const syncMode = integration.mode ?? CalendarSyncMode.MIRROR;
+    const shouldRunPull = syncMode === CalendarSyncMode.TWO_WAY;
+    const direction = directionInput === 'push' ? CalendarSyncDirection.PUSH : CalendarSyncDirection.PULL;
     let conflicts = 0;
     let synced = 0;
+    let hasErrors = false;
 
     for (const event of events) {
-      const status = this.calculateSyncStatus(event.updatedAt, event.externalLastModifiedAt, event.lastSyncAt);
+      const status = this.reconcileSyncStatus({
+        syncMode,
+        localUpdatedAt: event.updatedAt,
+        externalLastModifiedAt: event.externalLastModifiedAt,
+        lastSyncAt: event.lastSyncAt,
+        localEtag: event.externalEtag,
+        externalEtag: event.externalEtag,
+      });
+      const eventSyncStatus = status === CalendarSyncStatus.CONFLICT ? 'CONFLICT' : status === CalendarSyncStatus.SYNCED ? 'SYNCED' : 'ERROR';
       await this.prisma.agendaEvent.update({
         where: { id: event.id },
         data: {
+          syncStatus: eventSyncStatus,
           lastSyncAt: status === CalendarSyncStatus.CONFLICT ? event.lastSyncAt : new Date(),
+          externalLastModifiedAt: shouldRunPull ? new Date() : event.externalLastModifiedAt,
         },
       });
       await this.prisma.syncAuditLog.create({
@@ -260,7 +398,12 @@ export class IntegrationsService {
     }
 
     for (const task of tasks) {
-      const status = this.calculateSyncStatus(task.updatedAt, null, task.lastSyncAt);
+      const status = this.reconcileSyncStatus({
+        syncMode,
+        localUpdatedAt: task.updatedAt,
+        externalLastModifiedAt: null,
+        lastSyncAt: task.lastSyncAt,
+      });
       await this.prisma.agendaTask.update({
         where: { id: task.id },
         data: {
@@ -287,9 +430,545 @@ export class IntegrationsService {
       else synced += 1;
     }
 
-    await this.prisma.calendarIntegration.update({ where: { id: integration.id }, data: { lastSyncAt: new Date() } });
+    if (!hasErrors) {
+      await this.prisma.calendarIntegration.update({ where: { id: integration.id }, data: { lastSyncAt: new Date() } });
+    }
 
-    return { synced, conflicts, direction: dto.direction };
+    return { synced, conflicts, direction: directionInput };
+  }
+
+  private enqueueGoogleSyncJob(tenantId: string, integrationId: string, meta: { reason: string }) {
+    const jobId = randomUUID();
+    const queueKey = `${tenantId}:${integrationId}`;
+    const previous = this.googleSyncQueue.get(queueKey) ?? Promise.resolve();
+
+    const next = previous
+      .catch(() => undefined)
+      .then(async () => {
+        await this.runGoogleSyncForTenant(tenantId, 'pull');
+      })
+      .catch(async (error) => {
+        await this.persistWebhookAudit({
+          tenantId,
+          integrationId,
+          localEntityId: integrationId,
+          status: CalendarSyncStatus.ERROR,
+          message: `Falha no job assíncrono de sync (${meta.reason}): ${error instanceof Error ? error.message : 'erro desconhecido'}`,
+          payload: { reason: meta.reason, jobId },
+        });
+      })
+      .finally(() => {
+        if (this.googleSyncQueue.get(queueKey) === next) {
+          this.googleSyncQueue.delete(queueKey);
+        }
+      });
+
+    this.googleSyncQueue.set(queueKey, next);
+    return jobId;
+  }
+
+  private async identifyGoogleWebhookTarget(headers: Required<GoogleWebhookHeaders>) {
+    const tokenData = this.parseGoogleChannelToken(headers.channelToken);
+    if (tokenData?.tenantId) {
+      const integration = tokenData.integrationId
+        ? await this.prisma.calendarIntegration.findFirst({ where: { id: tokenData.integrationId, tenantId: tokenData.tenantId, provider: 'GOOGLE' } })
+        : await this.prisma.calendarIntegration.findUnique({ where: { tenantId_provider: { tenantId: tokenData.tenantId, provider: 'GOOGLE' } } });
+
+      if (integration) {
+        const registration = await this.getStoredWebhookRegistration(tokenData.tenantId, integration.id);
+        if (registration) {
+          return { tenantId: tokenData.tenantId, integration, registration };
+        }
+      }
+    }
+
+    const registrations = await this.prisma.integrationSettings.findMany({
+      where: { provider: 'GOOGLE_CALENDAR_WEBHOOK_REGISTRATION', active: true },
+      select: { tenantId: true, config: true },
+      take: 500,
+    });
+
+    const matching = registrations.find((setting) => {
+      const config = setting.config as Prisma.JsonObject;
+      return config.channelId === headers.channelId && config.resourceId === headers.resourceId;
+    });
+
+    if (!matching) return null;
+
+    const config = matching.config as Prisma.JsonObject;
+    const integrationId = typeof config.integrationId === 'string' ? config.integrationId : null;
+    const integration = integrationId
+      ? await this.prisma.calendarIntegration.findFirst({ where: { id: integrationId, tenantId: matching.tenantId, provider: 'GOOGLE' } })
+      : await this.prisma.calendarIntegration.findUnique({ where: { tenantId_provider: { tenantId: matching.tenantId, provider: 'GOOGLE' } } });
+
+    if (!integration) return null;
+
+    return {
+      tenantId: matching.tenantId,
+      integration,
+      registration: {
+        channelId: String(config.channelId ?? ''),
+        resourceId: String(config.resourceId ?? ''),
+        expiresAt: typeof config.expiresAt === 'string' ? config.expiresAt : null,
+        resourceUri: typeof config.resourceUri === 'string' ? config.resourceUri : null,
+      } as WebhookRegistration,
+    };
+  }
+
+  private validateWebhookRegistration(headers: Required<GoogleWebhookHeaders>, registration: WebhookRegistration) {
+    if (!headers.channelId || !headers.resourceId) {
+      return 'Headers X-Goog-Channel-ID/X-Goog-Resource-ID são obrigatórios.';
+    }
+
+    if (headers.channelId !== registration.channelId) {
+      return 'Channel ID do webhook Google não confere com o canal registrado.';
+    }
+
+    if (headers.resourceId !== registration.resourceId) {
+      return 'Resource ID do webhook Google não confere com o recurso registrado.';
+    }
+
+    return null;
+  }
+
+  private normalizeWebhookHeaders(headers: GoogleWebhookHeaders): Required<GoogleWebhookHeaders> {
+    return {
+      channelId: headers.channelId ?? '',
+      resourceId: headers.resourceId ?? '',
+      resourceState: headers.resourceState?.toLowerCase() ?? 'exists',
+      resourceUri: headers.resourceUri ?? '',
+      messageNumber: headers.messageNumber ?? '',
+      channelExpiration: headers.channelExpiration ?? '',
+      channelToken: headers.channelToken ?? '',
+    };
+  }
+
+  private parseGoogleChannelToken(token: string | undefined) {
+    if (!token) return null;
+
+    try {
+      const decoded = Buffer.from(token, 'base64url').toString('utf8');
+      const parsed = JSON.parse(decoded) as { tenantId?: string; integrationId?: string };
+      if (!parsed?.tenantId) return null;
+      return parsed;
+    } catch {
+      return null;
+    }
+  }
+
+  private async getStoredWebhookRegistration(tenantId: string, integrationId: string) {
+    const setting = await this.prisma.integrationSettings.findFirst({
+      where: { tenantId, provider: 'GOOGLE_CALENDAR_WEBHOOK_REGISTRATION', active: true },
+    });
+    if (!setting) return null;
+
+    const config = setting.config as Prisma.JsonObject;
+    if (config.integrationId !== integrationId) return null;
+
+    return {
+      channelId: String(config.channelId ?? ''),
+      resourceId: String(config.resourceId ?? ''),
+      expiresAt: typeof config.expiresAt === 'string' ? config.expiresAt : null,
+      resourceUri: typeof config.resourceUri === 'string' ? config.resourceUri : null,
+    } as WebhookRegistration;
+  }
+
+  private async resubscribeGoogleCalendarChannel(
+    tenantId: string,
+    integrationId: string,
+    headers: Required<GoogleWebhookHeaders>,
+    payload: Record<string, unknown>,
+  ) {
+    const renewal = {
+      integrationId,
+      channelId: randomUUID(),
+      resourceId: randomUUID(),
+      resourceUri: headers.resourceUri || null,
+      expiresAt: new Date(Date.now() + 7 * 24 * 60 * 60 * 1000).toISOString(),
+      refreshedAt: new Date().toISOString(),
+      previousChannelId: headers.channelId,
+      previousResourceId: headers.resourceId,
+    };
+
+    const existing = await this.prisma.integrationSettings.findFirst({
+      where: { tenantId, provider: 'GOOGLE_CALENDAR_WEBHOOK_REGISTRATION' },
+    });
+
+    if (existing) {
+      await this.prisma.integrationSettings.update({
+        where: { id: existing.id },
+        data: { config: renewal as Prisma.InputJsonValue, active: true },
+      });
+    } else {
+      await this.prisma.integrationSettings.create({
+        data: {
+          tenantId,
+          provider: 'GOOGLE_CALENDAR_WEBHOOK_REGISTRATION',
+          active: true,
+          config: renewal as Prisma.InputJsonValue,
+        },
+      });
+    }
+
+    await this.persistWebhookAudit({
+      tenantId,
+      integrationId,
+      localEntityId: integrationId,
+      status: CalendarSyncStatus.WARNING,
+      message: 'Canal Google Calendar renovado automaticamente.',
+      payload: this.toJson({
+        previous: { channelId: headers.channelId, resourceId: headers.resourceId },
+        renewal,
+        webhookPayload: payload,
+      }),
+    });
+  }
+
+  private async persistWebhookAudit(input: {
+    tenantId: string;
+    integrationId: string;
+    localEntityId: string;
+    status: CalendarSyncStatus;
+    message: string;
+    payload: Prisma.InputJsonValue;
+  }) {
+    return this.prisma.syncAuditLog.create({
+      data: {
+        tenantId: input.tenantId,
+        integrationId: input.integrationId,
+        syncType: CalendarSyncType.EVENT,
+        direction: CalendarSyncDirection.PULL,
+        localEntity: 'GoogleCalendarWebhook',
+        localEntityId: input.localEntityId,
+        externalId: null,
+        status: input.status,
+        message: input.message,
+        syncedAt: input.status === CalendarSyncStatus.ERROR ? null : new Date(),
+        payload: input.payload,
+      },
+    });
+  }
+
+  private getGoogleCalendarClient(integration: CalendarIntegration) {
+    const auth = new google.auth.OAuth2(
+      process.env.GOOGLE_CLIENT_ID,
+      process.env.GOOGLE_CLIENT_SECRET,
+      process.env.GOOGLE_REDIRECT_URI,
+    );
+    auth.setCredentials({
+      access_token: integration.accessToken ?? undefined,
+      refresh_token: integration.refreshToken ?? undefined,
+      expiry_date: integration.tokenExpiresAt?.getTime(),
+    });
+    return google.calendar({ version: 'v3', auth });
+  }
+
+  private async pullGoogleEvents(
+    calendar: calendar_v3.Calendar,
+    integration: CalendarIntegration,
+    tenantId: string,
+    direction: CalendarSyncDirection,
+  ) {
+    const calendarId = integration.selectedCalendarId ?? 'primary';
+    const timeMin = new Date();
+    const timeMax = new Date();
+    timeMax.setDate(timeMax.getDate() + 30);
+    const response = await calendar.events.list({
+      calendarId,
+      singleEvents: true,
+      orderBy: 'updated',
+      timeMin: timeMin.toISOString(),
+      timeMax: timeMax.toISOString(),
+      maxResults: 250,
+    });
+
+    let synced = 0;
+    let conflicts = 0;
+    let errors = 0;
+
+    for (const remoteEvent of response.data.items ?? []) {
+      if (!remoteEvent.id || !remoteEvent.start?.dateTime) continue;
+
+      const externalLastModifiedAt = remoteEvent.updated ? new Date(remoteEvent.updated) : null;
+      const local = await this.prisma.agendaEvent.findFirst({
+        where: {
+          tenantId,
+          OR: [{ externalEventId: remoteEvent.id }, { externalId: remoteEvent.id }],
+        },
+      });
+
+      if (!local) {
+        const created = await this.prisma.agendaEvent.create({
+          data: {
+            tenantId,
+            title: remoteEvent.summary ?? 'Evento Google Calendar',
+            description: remoteEvent.description ?? undefined,
+            type: AgendaEventType.OUTRO,
+            status: AgendaEventStatus.AGENDADA,
+            source: AgendaEventSource.GOOGLE_CALENDAR,
+            syncStatus: 'SYNCED',
+            externalProvider: 'GOOGLE',
+            externalId: remoteEvent.id,
+            externalEventId: remoteEvent.id,
+            externalEtag: remoteEvent.etag ?? undefined,
+            externalLastModifiedAt: externalLastModifiedAt ?? undefined,
+            externalCalendarId: calendarId,
+            startAt: new Date(remoteEvent.start.dateTime),
+            endAt: remoteEvent.end?.dateTime ? new Date(remoteEvent.end.dateTime) : null,
+            allDay: false,
+            location: remoteEvent.location ?? undefined,
+            lastSyncAt: new Date(),
+          },
+        });
+        await this.createSyncAuditLog({
+          tenantId,
+          integration,
+          direction,
+          eventId: created.id,
+          externalId: remoteEvent.id,
+          status: CalendarSyncStatus.SYNCED,
+          message: 'Evento externo criado localmente.',
+          operation: 'create',
+          localUpdatedAt: created.updatedAt,
+          externalUpdatedAt: externalLastModifiedAt,
+        });
+        synced += 1;
+        continue;
+      }
+
+      const externalIsNewer = this.isExternalEventNewer(local, externalLastModifiedAt, remoteEvent.etag ?? null);
+      if (!externalIsNewer) {
+        await this.createSyncAuditLog({
+          tenantId,
+          integration,
+          direction,
+          eventId: local.id,
+          externalId: remoteEvent.id,
+          status: CalendarSyncStatus.WARNING,
+          message: 'Evento externo ignorado: sem alterações mais recentes.',
+          operation: 'skip',
+          localUpdatedAt: local.updatedAt,
+          externalUpdatedAt: externalLastModifiedAt,
+        });
+        continue;
+      }
+
+      const localChangedAfterSync = Boolean(local.lastSyncAt && local.updatedAt > local.lastSyncAt);
+      if (integration.mode === CalendarSyncMode.TWO_WAY && localChangedAfterSync) {
+        conflicts += 1;
+        await this.createSyncAuditLog({
+          tenantId,
+          integration,
+          direction,
+          eventId: local.id,
+          externalId: remoteEvent.id,
+          status: CalendarSyncStatus.CONFLICT,
+          message: 'Conflito em modo TWO_WAY: alterações locais pendentes.',
+          operation: 'skip',
+          localUpdatedAt: local.updatedAt,
+          externalUpdatedAt: externalLastModifiedAt,
+        });
+        continue;
+      }
+
+      try {
+        const updated = await this.prisma.agendaEvent.update({
+          where: { id: local.id },
+          data: {
+            title: remoteEvent.summary ?? local.title,
+            description: remoteEvent.description ?? local.description,
+            startAt: new Date(remoteEvent.start.dateTime),
+            endAt: remoteEvent.end?.dateTime ? new Date(remoteEvent.end.dateTime) : local.endAt,
+            location: remoteEvent.location ?? local.location,
+            source: AgendaEventSource.GOOGLE_CALENDAR,
+            syncStatus: 'SYNCED',
+            externalProvider: 'GOOGLE',
+            externalId: remoteEvent.id,
+            externalEventId: remoteEvent.id,
+            externalEtag: remoteEvent.etag ?? local.externalEtag,
+            externalLastModifiedAt: externalLastModifiedAt ?? local.externalLastModifiedAt,
+            externalCalendarId: calendarId,
+            lastSyncAt: new Date(),
+          },
+        });
+        await this.createSyncAuditLog({
+          tenantId,
+          integration,
+          direction,
+          eventId: updated.id,
+          externalId: remoteEvent.id,
+          status: CalendarSyncStatus.SYNCED,
+          message: 'Evento externo atualizado localmente.',
+          operation: 'update',
+          localUpdatedAt: updated.updatedAt,
+          externalUpdatedAt: externalLastModifiedAt,
+        });
+        synced += 1;
+      } catch (error) {
+        errors += 1;
+        await this.createSyncAuditLog({
+          tenantId,
+          integration,
+          direction,
+          eventId: local.id,
+          externalId: remoteEvent.id,
+          status: CalendarSyncStatus.ERROR,
+          message: `Erro ao atualizar evento local: ${(error as Error).message}`,
+          operation: 'error',
+          localUpdatedAt: local.updatedAt,
+          externalUpdatedAt: externalLastModifiedAt,
+        });
+      }
+    }
+
+    return { synced, conflicts, errors };
+  }
+
+  private async pushGoogleEvents(
+    calendar: calendar_v3.Calendar,
+    integration: CalendarIntegration,
+    tenantId: string,
+    direction: CalendarSyncDirection,
+  ) {
+    const calendarId = integration.selectedCalendarId ?? 'primary';
+    const since = integration.lastSyncAt ?? new Date(0);
+    const events = await this.prisma.agendaEvent.findMany({
+      where: {
+        tenantId,
+        updatedAt: { gt: since },
+      },
+      orderBy: { updatedAt: 'asc' },
+      take: 200,
+    });
+
+    let synced = 0;
+    let conflicts = 0;
+    let errors = 0;
+
+    for (const event of events) {
+      const payload: calendar_v3.Schema$Event = {
+        summary: event.title,
+        description: event.description ?? undefined,
+        location: event.location ?? undefined,
+        start: { dateTime: event.startAt.toISOString() },
+        end: { dateTime: (event.endAt ?? new Date(event.startAt.getTime() + 60 * 60 * 1000)).toISOString() },
+      };
+
+      try {
+        const result = event.externalEventId
+          ? await calendar.events.patch({
+              calendarId,
+              eventId: event.externalEventId,
+              requestBody: payload,
+            })
+          : await calendar.events.insert({
+              calendarId,
+              requestBody: payload,
+            });
+
+        const syncedEvent = result.data;
+        const externalUpdatedAt = syncedEvent.updated ? new Date(syncedEvent.updated) : event.externalLastModifiedAt;
+        await this.prisma.agendaEvent.update({
+          where: { id: event.id },
+          data: {
+            source: AgendaEventSource.GOOGLE_CALENDAR,
+            syncStatus: 'SYNCED',
+            syncErrorMessage: null,
+            externalProvider: 'GOOGLE',
+            externalId: syncedEvent.id ?? event.externalId,
+            externalEventId: syncedEvent.id ?? event.externalEventId,
+            externalEtag: syncedEvent.etag ?? event.externalEtag,
+            externalLastModifiedAt: externalUpdatedAt ?? undefined,
+            externalCalendarId: calendarId,
+            lastSyncAt: new Date(),
+          },
+        });
+
+        await this.createSyncAuditLog({
+          tenantId,
+          integration,
+          direction,
+          eventId: event.id,
+          externalId: syncedEvent.id ?? event.externalId,
+          status: CalendarSyncStatus.SYNCED,
+          message: event.externalEventId ? 'Evento atualizado no Google Calendar.' : 'Evento criado no Google Calendar.',
+          operation: event.externalEventId ? 'update' : 'create',
+          localUpdatedAt: event.updatedAt,
+          externalUpdatedAt: externalUpdatedAt ?? null,
+        });
+        synced += 1;
+      } catch (error) {
+        errors += 1;
+        await this.prisma.agendaEvent.update({
+          where: { id: event.id },
+          data: {
+            syncStatus: 'ERROR',
+            syncErrorMessage: (error as Error).message,
+          },
+        });
+        await this.createSyncAuditLog({
+          tenantId,
+          integration,
+          direction,
+          eventId: event.id,
+          externalId: event.externalId,
+          status: CalendarSyncStatus.ERROR,
+          message: `Erro no push do evento: ${(error as Error).message}`,
+          operation: 'error',
+          localUpdatedAt: event.updatedAt,
+          externalUpdatedAt: event.externalLastModifiedAt,
+        });
+      }
+    }
+
+    return { synced, conflicts, errors };
+  }
+
+  private isExternalEventNewer(
+    localEvent: { updatedAt: Date; externalLastModifiedAt: Date | null; externalEtag: string | null },
+    externalUpdatedAt: Date | null,
+    externalEtag: string | null,
+  ) {
+    if (externalUpdatedAt && (!localEvent.externalLastModifiedAt || externalUpdatedAt > localEvent.externalLastModifiedAt)) {
+      return true;
+    }
+    if (externalEtag && externalEtag !== localEvent.externalEtag) {
+      return !externalUpdatedAt || externalUpdatedAt >= localEvent.updatedAt;
+    }
+    return false;
+  }
+
+  private createSyncAuditLog(params: {
+    tenantId: string;
+    integration: CalendarIntegration;
+    direction: CalendarSyncDirection;
+    eventId: string;
+    externalId?: string | null;
+    status: CalendarSyncStatus;
+    message: string;
+    operation: 'create' | 'update' | 'skip' | 'error';
+    localUpdatedAt: Date | null;
+    externalUpdatedAt: Date | null;
+  }) {
+    return this.prisma.syncAuditLog.create({
+      data: {
+        tenantId: params.tenantId,
+        integrationId: params.integration.id,
+        syncType: CalendarSyncType.EVENT,
+        direction: params.direction,
+        localEntity: 'AgendaEvent',
+        localEntityId: params.eventId,
+        externalId: params.externalId ?? undefined,
+        status: params.status,
+        message: params.message,
+        localUpdatedAt: params.localUpdatedAt,
+        externalUpdatedAt: params.externalUpdatedAt,
+        syncedAt: params.status === CalendarSyncStatus.ERROR || params.status === CalendarSyncStatus.CONFLICT ? null : new Date(),
+        payload: {
+          operation: params.operation,
+        },
+      },
+    });
   }
 
   async listSyncAudit(dto: ListSyncAuditDto) {
@@ -632,13 +1311,74 @@ export class IntegrationsService {
     ) as AgendaEntitySnapshot;
   }
 
-  private calculateSyncStatus(localUpdatedAt: Date, externalLastModifiedAt: Date | null, lastSyncAt: Date | null) {
+  private hasExternalChanges(externalLastModifiedAt: Date | null, lastSyncAt: Date | null) {
+    return Boolean(externalLastModifiedAt && lastSyncAt && externalLastModifiedAt.getTime() > lastSyncAt.getTime());
+  }
+
+  private reconcileSyncStatus(params: {
+    syncMode: CalendarSyncMode;
+    localUpdatedAt: Date;
+    externalLastModifiedAt: Date | null;
+    lastSyncAt: Date | null;
+    localEtag?: string | null;
+    externalEtag?: string | null;
+  }) {
+    const { syncMode, localUpdatedAt, externalLastModifiedAt, lastSyncAt, localEtag, externalEtag } = params;
     if (!lastSyncAt) return CalendarSyncStatus.SYNCED;
+
     const localChanged = localUpdatedAt.getTime() > lastSyncAt.getTime();
     const externalChanged = Boolean(externalLastModifiedAt && externalLastModifiedAt.getTime() > lastSyncAt.getTime());
+
+    if (syncMode === CalendarSyncMode.MIRROR) {
+      if (localChanged) return CalendarSyncStatus.WARNING;
+      if (externalChanged) return CalendarSyncStatus.WARNING;
+      return CalendarSyncStatus.SYNCED;
+    }
+
+    const etagDiverged = Boolean(localEtag && externalEtag && localEtag !== externalEtag);
+    if (etagDiverged && (localChanged || externalChanged)) return CalendarSyncStatus.CONFLICT;
     if (localChanged && externalChanged) return CalendarSyncStatus.CONFLICT;
     if (localChanged || externalChanged) return CalendarSyncStatus.WARNING;
     return CalendarSyncStatus.SYNCED;
+  }
+
+  private mapAgendaEventToGoogleEvent(event: {
+    id: string;
+    title: string;
+    description: string | null;
+    startAt: Date;
+    endAt: Date | null;
+    externalId: string | null;
+    externalLastModifiedAt: Date | null;
+  },
+  updatedAt: Date,
+  ): calendar_v3.Schema$Event {
+    return {
+      id: event.externalId ?? event.id,
+      summary: event.title,
+      description: event.description ?? undefined,
+      start: this.toGoogleEventDateTime(event.startAt),
+      end: this.toGoogleEventDateTime(event.endAt ?? event.startAt),
+      updated: updatedAt.toISOString(),
+    };
+  }
+
+  private toGoogleEventDateTime(date: Date): calendar_v3.Schema$EventDateTime {
+    return {
+      dateTime: date.toISOString(),
+      timeZone: 'UTC',
+    };
+  }
+
+  private hasGoogleEventConflict(
+    localEvent: calendar_v3.Schema$Event,
+    externalEvent: calendar_v3.Schema$Event | null,
+    lastSyncAt: Date | null,
+  ) {
+    if (!externalEvent?.updated || !lastSyncAt) return false;
+    const externalUpdatedAt = new Date(externalEvent.updated).getTime();
+    const localUpdatedAt = new Date(localEvent.updated ?? 0).getTime();
+    return localUpdatedAt > lastSyncAt.getTime() && externalUpdatedAt > lastSyncAt.getTime();
   }
 
   private async withRetry<T>(fn: () => Promise<T>, retries = 3): Promise<T> {
@@ -665,6 +1405,10 @@ export class IntegrationsService {
 
   private setCache(key: string, value: Record<string, unknown>, ttlMs: number) {
     this.cache.set(key, { value, expiresAt: Date.now() + ttlMs });
+  }
+
+  private toJson(value: unknown): Prisma.InputJsonValue {
+    return value as Prisma.InputJsonValue;
   }
 
   private assertRateLimit(provider: string, windowSeconds: number, max: number) {

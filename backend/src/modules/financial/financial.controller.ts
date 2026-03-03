@@ -1,12 +1,17 @@
-import { Body, Controller, Delete, Get, Param, Patch, Post, Query } from '@nestjs/common';
-import { ApiBearerAuth, ApiOperation, ApiTags } from '@nestjs/swagger';
+import { BadRequestException, Body, Controller, Delete, Get, Param, Patch, Post, Query, UploadedFile, UseInterceptors } from '@nestjs/common';
+import { ApiBearerAuth, ApiBody, ApiConsumes, ApiOperation, ApiTags } from '@nestjs/swagger';
+import { FileInterceptor } from '@nestjs/platform-express';
+import { memoryStorage } from 'multer';
 import { FinancialService } from './financial.service';
 import {
   CreateDespesaDto,
   CreateRecebimentoDto,
   ImportRecebimentosDto,
+  ImportUnmatchedTransactionsDto,
   ReconcileDto,
+  LinkUnmatchedPaymentDto,
   UpdateUnmatchedPaymentDto,
+  SplitUnmatchedPaymentDto,
 } from './dto/financial.dto';
 import { ImportCsvDto, LinkUnmatchedPaymentDto } from './dto/import.dto';
 
@@ -23,8 +28,18 @@ export class FinancialController {
   }
 
   @Get('recebimentos')
-  listRecebimentos(@Query('periciaId') periciaId?: string) {
-    return this.service.listRecebimentos(periciaId);
+  listRecebimentos(@Query('periciaId') periciaId?: string, @Query('search') search?: string) {
+    return this.service.listRecebimentos(periciaId, search);
+  }
+
+  @Patch('recebimentos/:id')
+  updateRecebimento(@Param('id') id: string, @Body() dto: UpdateRecebimentoDto) {
+    return this.service.updateRecebimento(id, dto);
+  }
+
+  @Post('recebimentos/bulk-delete')
+  bulkDeleteRecebimentos(@Body() dto: BulkDeleteRecebimentosDto) {
+    return this.service.bulkDeleteRecebimentos(dto);
   }
 
   @Post('despesas')
@@ -36,6 +51,13 @@ export class FinancialController {
   @Get('despesas')
   listDespesas() {
     return this.service.listDespesas();
+  }
+
+
+  @Post('import-ai-print')
+  @ApiOperation({ summary: 'Importa print financeiro com IA' })
+  importAiPrint(@Body() dto: ImportAiPrintDto): Promise<FinancialImportAiPrintResponseDto> {
+    return this.service.importAiPrint(dto);
   }
 
   @Post('import-batch')
@@ -67,9 +89,19 @@ export class FinancialController {
     return this.service.listImportBatches();
   }
 
+  @Post('unmatched')
+  importUnmatched(@Body() dto: ImportUnmatchedTransactionsDto) {
+    return this.service.importUnmatched(dto);
+  }
+
   @Get('unmatched')
   unmatched() {
     return this.service.unmatched();
+  }
+
+  @Get('conciliation/stats')
+  conciliationStats() {
+    return this.service.conciliationStats();
   }
 
   @Post('reconcile')
@@ -84,13 +116,21 @@ export class FinancialController {
   }
 
   @Post('unmatched/:id/link')
-  linkUnmatched(@Param('id') id: string, @Body() body: { periciaId?: string; note?: string }) {
+  linkUnmatched(@Param('id') id: string, @Body() body: LinkUnmatchedPaymentDto) {
     return this.service.linkUnmatched(id, body);
   }
 
   @Post('unmatched/:id/discard')
   discardUnmatched(@Param('id') id: string, @Body() body: { note?: string }) {
     return this.service.discardUnmatched(id, body.note);
+  }
+
+  @Post('conciliation/:unmatchedId/split')
+  splitUnmatched(
+    @Param('unmatchedId') unmatchedId: string,
+    @Body() dto: SplitUnmatchedPaymentDto,
+  ) {
+    return this.service.splitUnmatched(unmatchedId, dto);
   }
 
   @Delete('unmatched/:id')

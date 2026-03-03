@@ -1,6 +1,7 @@
 import { apiClient } from '@/lib/api-client';
 import type {
   ApiListResponse,
+  ConciliationStats,
   CsvImportSource,
   Despesa,
   FinancialAnalytics,
@@ -11,7 +12,34 @@ import type {
   Recebimento,
   UnmatchedPayment,
   UnmatchedPaymentOrigin,
+  UnmatchedPaymentSplitPayload,
+  UnmatchedPaymentSplitResult,
 } from '@/types/api';
+
+
+
+type FinancialImportSource = 'AI_PRINT' | 'MANUAL_CSV' | 'INDIVIDUAL';
+
+type ImportRecebimentoItemPayload = {
+  processoCNJ: string;
+  fontePagamento: string;
+  dataRecebimento: string;
+  valorBruto: number;
+  valorLiquido?: number;
+  imposto?: number;
+  descricao?: string;
+};
+
+type ImportBatchResult = {
+  batchId: string;
+  source: FinancialImportSource;
+  itemsLinked: number;
+  itemsUnmatched: number;
+  gross: number;
+  net: number;
+  tax: number;
+  count: number;
+};
 
 type RecebimentoRaw = {
   id: string;
@@ -22,6 +50,25 @@ type RecebimentoRaw = {
   dataRecebimento?: string;
   periciaId?: string;
   createdAt?: string;
+};
+
+export type FinancialAiPrintResponse = {
+  global: {
+    totalBruto?: number | string;
+    totalLiquido?: number | string;
+    totalImpostos?: number | string;
+    dataPagamento?: string;
+    detectedSource?: string;
+  };
+  items: Array<{
+    cnj?: string;
+    bruto?: number | string;
+    desconto?: number | string;
+    liquido?: number | string;
+    data?: string;
+    status?: string;
+    periciaId?: string;
+  }>;
 };
 
 export const financialService = {
@@ -39,8 +86,10 @@ export const financialService = {
     return data;
   },
 
-  listRecebimentos: async (): Promise<Recebimento[]> => {
-    const { data } = await apiClient.get<Recebimento[]>('/financial/recebimentos');
+  listRecebimentos: async (search?: string): Promise<RecebimentoListItem[]> => {
+    const { data } = await apiClient.get<RecebimentoListItem[]>('/financial/recebimentos', {
+      params: search ? { search } : undefined,
+    });
     return Array.isArray(data) ? data : [];
   },
 
@@ -53,6 +102,43 @@ export const financialService = {
     descricao?: string;
   }): Promise<Recebimento> => {
     const { data } = await apiClient.post<Recebimento>('/financial/recebimentos', payload);
+    return data;
+  },
+
+  updateRecebimento: async (
+    id: string,
+    payload: { dataRecebimento: string; origem: string; valorLiquido?: number; descricao?: string },
+  ): Promise<Recebimento> => {
+    const { data } = await apiClient.patch<Recebimento>(`/financial/recebimentos/${id}`, payload);
+    return data;
+  },
+
+  bulkDeleteRecebimentos: async (ids: string[]): Promise<{ deleted: number }> => {
+    const { data } = await apiClient.post<{ deleted: number }>('/financial/recebimentos/bulk-delete', { ids });
+    return data;
+  },
+
+  listImportBatches: async (): Promise<ImportBatch[]> => {
+    const { data } = await apiClient.get<ImportBatch[]>('/financial/import-batches');
+    return Array.isArray(data) ? data : [];
+  },
+
+  revertImportBatch: async (id: string): Promise<{ reverted: boolean; deletedRecebimentos?: number }> => {
+    const { data } = await apiClient.post<{ reverted: boolean; deletedRecebimentos?: number }>(`/financial/import-batches/${id}/revert`);
+    return data;
+  },
+
+  deleteImportBatch: async (id: string): Promise<{ deletedBatchId: string; deletedRecebimentos: number }> => {
+    const { data } = await apiClient.delete<{ deletedBatchId: string; deletedRecebimentos: number }>(`/financial/import-batches/${id}`);
+    return data;
+  },
+
+  clearAllFinancialData: async (): Promise<{
+    deletedRecebimentos: number;
+    deletedUnmatchedPayments: number;
+    deletedImportBatches: number;
+  }> => {
+    const { data } = await apiClient.post('/financial/clear-all-financial-data');
     return data;
   },
 
@@ -106,6 +192,12 @@ export const financialService = {
 
   discardUnmatchedPayment: async (id: string, note?: string): Promise<UnmatchedPayment> => {
     const { data } = await apiClient.post<UnmatchedPayment>(`/financial/unmatched/${id}/discard`, { note });
+    return data;
+  },
+
+
+  conciliationStats: async (): Promise<ConciliationStats> => {
+    const { data } = await apiClient.get<ConciliationStats>('/financial/conciliation/stats');
     return data;
   },
 

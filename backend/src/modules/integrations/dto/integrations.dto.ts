@@ -63,6 +63,11 @@ export class GoogleOAuthCallbackDto {
   @IsNotEmpty()
   code!: string;
 
+  @ApiProperty()
+  @IsString()
+  @IsNotEmpty()
+  state!: string;
+
   @ApiPropertyOptional()
   @IsOptional()
   @IsString()

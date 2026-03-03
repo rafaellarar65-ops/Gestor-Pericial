@@ -9,11 +9,13 @@ import {
   ApiTags,
 } from '@nestjs/swagger';
 import { CommunicationsService } from './communications.service';
+import { Response } from 'express';
 import {
   AutomaticVaraChargeDto,
   BulkGrantOptInDto,
   BulkLinkInboundDto,
   BulkResendTemplateDto,
+  DownloadInboxAttachmentQueryDto,
   CreateEmailTemplateDto,
   CreateLawyerDto,
   CreateMessageTemplateDto,
@@ -26,9 +28,9 @@ import {
   SendWhatsappMessageDto,
   TEMPLATE_CHANNELS,
   UpdateMessageTemplateDto,
-  UpdateWhatsappConsentDto,
-  UpsertUolhostEmailConfigDto,
+  UpdateWhatsappConsentDto
 } from './dto/communications.dto';
+import { UpsertUolhostEmailConfigDto } from './dto/email-config.dto';
 
 @ApiTags('communications')
 @ApiBearerAuth()

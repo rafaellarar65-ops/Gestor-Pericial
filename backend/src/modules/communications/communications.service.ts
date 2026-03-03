@@ -20,8 +20,9 @@ import {
   SendWhatsappMessageDto,
   UpdateMessageTemplateDto,
   UpdateWhatsappConsentDto,
-  UpsertUolhostEmailConfigDto,
 } from './dto/communications.dto';
+import { EmailConfigDto, UpsertUolhostEmailConfigDto } from './dto/email-config.dto';
+import { EmailImapService } from './email-imap.service';
 
 type UolhostCreds = {
   login: string;
@@ -36,6 +37,7 @@ export class CommunicationsService {
     private readonly prisma: PrismaService,
     private readonly context: RequestContextService,
     private readonly whatsappService: WhatsappService,
+    private readonly emailImapService: EmailImapService,
   ) {}
 
   private mapUolhostConfigResponse(config: {
@@ -183,5 +185,45 @@ export class CommunicationsService {
     const pericias = await this.prisma.pericia.findMany({ where: { tenantId, ...(dto.periciaIds?.length ? { id: { in: dto.periciaIds } } : {}) } });
     const charged = pericias.filter((p) => p.pagamentoStatus !== PericiaPaymentStatus.PAGO).length;
     return { varaId: dto.varaId, charged };
+  }
+
+  private signAttachmentToken(tenantId: string, attachmentId: string): string {
+    const expiresAt = Date.now() + 1000 * 60 * 10;
+    const payload = `${tenantId}|${attachmentId}|${expiresAt}`;
+    const signature = createHmac('sha256', this.getAttachmentSecret()).update(payload).digest('hex');
+    return Buffer.from(`${payload}|${signature}`, 'utf8').toString('base64url');
+  }
+
+  private verifyAttachmentToken(token: string, tenantId: string): string {
+    try {
+      const raw = Buffer.from(token, 'base64url').toString('utf8');
+      const [tokenTenantId, attachmentId, expiresAtRaw, signature] = raw.split('|');
+      const payload = `${tokenTenantId}|${attachmentId}|${expiresAtRaw}`;
+      const expected = createHmac('sha256', this.getAttachmentSecret()).update(payload).digest('hex');
+      if (!signature || !timingSafeEqual(Buffer.from(signature), Buffer.from(expected))) {
+        throw new BadRequestException('Token de download inválido.');
+      }
+      if (tokenTenantId !== tenantId) {
+        throw new BadRequestException('Token não pertence ao tenant atual.');
+      }
+      if (Number(expiresAtRaw) < Date.now()) {
+        throw new BadRequestException('Token de download expirado.');
+      }
+      return attachmentId;
+    } catch {
+      throw new BadRequestException('Token de download inválido.');
+    }
+  }
+
+  private decodeInlinePayload(storageKey: string): Buffer {
+    const INLINE_PREFIX = 'inline://base64/';
+    if (!storageKey.startsWith(INLINE_PREFIX)) {
+      throw new NotFoundException('Conteúdo do anexo não disponível para download.');
+    }
+    return Buffer.from(storageKey.slice(INLINE_PREFIX.length), 'base64');
+  }
+
+  private getAttachmentSecret(): string {
+    return process.env.INBOX_ATTACHMENT_SECRET || process.env.JWT_SECRET || 'inbox-attachment-dev-secret';
   }
 }

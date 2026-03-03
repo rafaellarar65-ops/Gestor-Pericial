@@ -343,8 +343,8 @@ docker compose exec backend npx prisma migrate deploy --schema prisma/schema.pri
 
 # 5. Acesse:
 #    Frontend: http://localhost:3000
-#    Backend:  http://localhost:8001
-#    Swagger:  http://localhost:8001/docs
+#    Backend:  http://localhost:3001
+#    Swagger:  http://localhost:3001/docs
 #    MailHog:  http://localhost:8025
 ```
 

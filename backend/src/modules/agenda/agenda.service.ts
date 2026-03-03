@@ -1,4 +1,4 @@
-import { Injectable, NotFoundException } from '@nestjs/common';
+import { BadRequestException, Injectable, NotFoundException } from '@nestjs/common';
 import { AgendaEventStatus, AgendaEventType, AgendaTaskStatus, Prisma } from '@prisma/client';
 import { RequestContextService } from '../../common/request-context.service';
 import { PrismaService } from '../../prisma/prisma.service';
@@ -29,6 +29,25 @@ type StatusHistoryEntry = {
   reason?: string;
 };
 
+type BatchValidationReason = 'PAST_DATE' | 'INVALID_DATETIME' | 'EXISTING_OVERLAP' | 'INTRA_BATCH_COLLISION';
+
+type BatchInvalidItem = {
+  index: number;
+  periciaId?: string;
+  startAt: string;
+  city?: string;
+  reason: BatchValidationReason;
+  detail: string;
+};
+
+
+type StatusHistoryEntry = {
+  from: AgendaEventStatus;
+  to: AgendaEventStatus;
+  changedAt: string;
+  changedBy?: string;
+  reason?: string;
+};
 
 @Injectable()
 export class AgendaService {
@@ -112,12 +131,25 @@ export class AgendaService {
 
   async batchScheduling(dto: BatchScheduleDto) {
     const tenantId = this.context.get('tenantId') as string;
-    const created = await this.prisma.$transaction(
-      dto.items.map((item) =>
-        this.prisma.agendaEvent.create({
+    const invalidItems = await this.validateBatchScheduling(dto, tenantId);
+    if (invalidItems.length > 0) {
+      throw new BadRequestException({
+        code: 'BATCH_SCHEDULE_VALIDATION_ERROR',
+        message: 'Falha de validação no agendamento em lote.',
+        invalidItems,
+      });
+    }
+
+    const summary = await this.prisma.$transaction(async (tx) => {
+      const createdEvents: Array<{ id: string; periciaId: string | null }> = [];
+      const updatedPericiaIds: string[] = [];
+      const createdTaskIds: string[] = [];
+
+      for (const item of dto.items) {
+        const createdEvent = await tx.agendaEvent.create({
           data: {
             tenantId,
-            title: item.title ?? "Agendamento",
+            title: item.title ?? 'Agendamento',
             type: item.type ?? AgendaEventType.OUTRO,
             status: item.status ?? AgendaEventStatus.AGENDADA,
             source: item.source,
@@ -136,34 +168,65 @@ export class AgendaService {
             startAt: new Date(item.startAt),
             ...(item.endAt ? { endAt: new Date(item.endAt) } : {}),
           },
-        }),
-      ),
-    );
+        });
 
-    await this.prisma.schedulingBatch.create({
-      data: {
-        tenantId,
-        dateRef: new Date(dto.metadata?.date ?? dto.items[0]?.startAt ?? new Date().toISOString()),
-        criteriaJson: ({
-          ...(dto.metadata ?? {}),
-          generatedAt: new Date().toISOString(),
-          batchSize: dto.items.length,
-        }) as Prisma.InputJsonValue,
-        resultJson: ({
-          status: 'CONFIRMADO',
-          created: created.length,
-          confirmedAt: new Date().toISOString(),
-          routeIncluded: false,
-          items: dto.items.map((item) => ({
+        createdEvents.push({ id: createdEvent.id, periciaId: createdEvent.periciaId });
+
+        if (!item.periciaId) continue;
+
+        await tx.pericia.update({
+          where: { id: item.periciaId },
+          data: {
+            agendada: true,
+            dataAgendamento: new Date(item.startAt),
+            horaAgendamento: new Date(item.startAt).toISOString().slice(11, 16),
+          },
+        });
+        updatedPericiaIds.push(item.periciaId);
+
+        const task = await tx.agendaTask.create({
+          data: {
+            tenantId,
             periciaId: item.periciaId,
-            city: item.city,
-            scheduledAt: item.startAt,
-          })),
-        }) as Prisma.InputJsonValue,
-      },
+            title: `Preparar perícia agendada: ${item.title ?? 'Agendamento'}`,
+            dueAt: new Date(item.startAt),
+            status: AgendaTaskStatus.TODO,
+          },
+        });
+        createdTaskIds.push(task.id);
+      }
+
+      await tx.schedulingBatch.create({
+        data: {
+          tenantId,
+          dateRef: new Date(dto.metadata?.date ?? dto.items[0]?.startAt ?? new Date().toISOString()),
+          criteriaJson: (dto.metadata ?? {}) as Prisma.InputJsonValue,
+          resultJson: ({
+            status: 'CONFIRMADO',
+            created: createdEvents.length,
+            items: dto.items.map((item) => ({
+              periciaId: item.periciaId,
+              scheduledAt: item.startAt,
+            })),
+          }) as Prisma.InputJsonValue,
+        },
+      });
+
+      return {
+        createdEvents,
+        updatedPericiaIds,
+        createdTaskIds,
+      };
     });
 
-    return { created: created.length };
+    return {
+      createdEventsCount: summary.createdEvents.length,
+      updatedPericiasCount: summary.updatedPericiaIds.length,
+      createdTasksCount: summary.createdTaskIds.length,
+      eventIds: summary.createdEvents.map((event) => event.id),
+      updatedPericiaIds: summary.updatedPericiaIds,
+      taskIds: summary.createdTaskIds,
+    };
   }
 
 
@@ -292,6 +355,302 @@ export class AgendaService {
       contentBase64: pdfBuffer.toString('base64'),
       mimeType: 'application/pdf',
     };
+  }
+
+  private async validateBatchScheduling(dto: BatchScheduleDto, tenantId: string): Promise<BatchInvalidItem[]> {
+    const nowMs = Date.now();
+    const invalidItems: BatchInvalidItem[] = [];
+
+    const periciaIds = Array.from(new Set(dto.items.map((item) => item.periciaId).filter((id): id is string => Boolean(id))));
+    const pericias = periciaIds.length
+      ? await this.prisma.pericia.findMany({
+          where: { tenantId, id: { in: periciaIds } },
+          select: { id: true, cidade: { select: { nome: true } } },
+        })
+      : [];
+    const cityByPericia = new Map(pericias.map((pericia) => [pericia.id, pericia.cidade?.nome ?? undefined]));
+
+    const slotMap = new Map<string, number[]>();
+
+    dto.items.forEach((item, index) => {
+      const startAtDate = new Date(item.startAt);
+      const startAtMs = startAtDate.getTime();
+      const city = item.city || (item.periciaId ? cityByPericia.get(item.periciaId) : undefined);
+
+      if (!Number.isFinite(startAtMs)) {
+        invalidItems.push({
+          index,
+          periciaId: item.periciaId,
+          startAt: item.startAt,
+          city,
+          reason: 'INVALID_DATETIME',
+          detail: 'Data/hora inválida para o item. Revise o horário informado.',
+        });
+        return;
+      }
+
+      if (startAtMs <= nowMs) {
+        invalidItems.push({
+          index,
+          periciaId: item.periciaId,
+          startAt: item.startAt,
+          city,
+          reason: 'PAST_DATE',
+          detail: 'Data/hora no passado. Informe um horário futuro.',
+        });
+      }
+
+      const slotKey = `${city ?? '__SEM_CIDADE__'}|${startAtDate.toISOString()}`;
+      const currentSlot = slotMap.get(slotKey) ?? [];
+      currentSlot.push(index);
+      slotMap.set(slotKey, currentSlot);
+    });
+
+    slotMap.forEach((indexes) => {
+      if (indexes.length < 2) return;
+      indexes.forEach((index) => {
+        const item = dto.items[index];
+        invalidItems.push({
+          index,
+          periciaId: item.periciaId,
+          startAt: item.startAt,
+          city: item.city || (item.periciaId ? cityByPericia.get(item.periciaId) : undefined),
+          reason: 'INTRA_BATCH_COLLISION',
+          detail: 'Conflito intra-lote: existe mais de um item com mesma cidade e mesmo horário.',
+        });
+      });
+    });
+
+    const overlapChecks = await Promise.all(
+      dto.items.map(async (item, index) => {
+        const startAtDate = new Date(item.startAt);
+        const startAtMs = startAtDate.getTime();
+        if (!Number.isFinite(startAtMs)) return null;
+
+        const endAtDate = item.endAt ? new Date(item.endAt) : new Date(startAtMs + 60 * 60 * 1000);
+
+        const existingEvent = await this.prisma.agendaEvent.findFirst({
+          where: {
+            tenantId,
+            startAt: { lt: endAtDate },
+            OR: [{ endAt: { gt: startAtDate } }, { endAt: null, startAt: { gt: new Date(startAtMs - 60 * 60 * 1000) } }],
+          },
+          select: { id: true, startAt: true, endAt: true },
+        });
+
+        if (!existingEvent) return null;
+
+        return {
+          index,
+          periciaId: item.periciaId,
+          startAt: item.startAt,
+          city: item.city || (item.periciaId ? cityByPericia.get(item.periciaId) : undefined),
+          reason: 'EXISTING_OVERLAP' as const,
+          detail: `Conflito com evento existente (${existingEvent.id}) entre ${existingEvent.startAt.toISOString()} e ${(existingEvent.endAt ?? new Date(existingEvent.startAt.getTime() + 60 * 60 * 1000)).toISOString()}.`,
+        };
+      }),
+    );
+
+    overlapChecks.forEach((entry) => {
+      if (entry) invalidItems.push(entry);
+    });
+
+    return invalidItems;
+  }
+
+  async weeklyWorkload(startDate?: string) {
+    const weekStart = this.getWeekStart(startDate);
+    const weekEnd = new Date(weekStart);
+    weekEnd.setDate(weekEnd.getDate() + 7);
+
+    const events = await this.prisma.agendaEvent.findMany({
+      where: {
+        startAt: { gte: weekStart, lt: weekEnd },
+      },
+      orderBy: { startAt: 'asc' },
+    });
+
+    const byDay = new Map<string, WeeklyDaySummary>();
+    for (let i = 0; i < 7; i += 1) {
+      const date = new Date(weekStart);
+      date.setDate(date.getDate() + i);
+      const key = this.toYmd(date);
+      const weekday = date.getDay();
+      byDay.set(key, {
+        date: key,
+        allocated_minutes: 0,
+        work_window_minutes: weekday === 0 || weekday === 6 ? 240 : 480,
+        utilization: 0,
+        conflicts: 0,
+      });
+    }
+
+    const eventsByDay = new Map<string, typeof events>();
+    for (const event of events) {
+      const key = this.toYmd(event.startAt);
+      const day = byDay.get(key);
+      if (!day) continue;
+      const endAt = event.endAt ?? new Date(event.startAt.getTime() + 60 * 60 * 1000);
+      const minutes = Math.max(15, Math.round((endAt.getTime() - event.startAt.getTime()) / 60000));
+      day.allocated_minutes += minutes;
+      const list = eventsByDay.get(key) ?? [];
+      list.push(event);
+      eventsByDay.set(key, list);
+    }
+
+    for (const [key, day] of byDay.entries()) {
+      const dayEvents = (eventsByDay.get(key) ?? []).sort((a, b) => a.startAt.getTime() - b.startAt.getTime());
+      let overlaps = 0;
+      for (let i = 0; i < dayEvents.length; i += 1) {
+        for (let j = i + 1; j < dayEvents.length; j += 1) {
+          const aEnd = dayEvents[i].endAt ?? new Date(dayEvents[i].startAt.getTime() + 60 * 60 * 1000);
+          if (aEnd <= dayEvents[j].startAt) break;
+          overlaps += 1;
+        }
+      }
+      day.conflicts = overlaps;
+      day.utilization = day.work_window_minutes > 0 ? Number(((day.allocated_minutes / day.work_window_minutes) * 100).toFixed(1)) : 0;
+    }
+
+    const days = Array.from(byDay.values());
+    const totals = {
+      allocated_minutes: days.reduce((sum, d) => sum + d.allocated_minutes, 0),
+      work_window_minutes: days.reduce((sum, d) => sum + d.work_window_minutes, 0),
+      conflicts: days.reduce((sum, d) => sum + d.conflicts, 0),
+    };
+
+    return {
+      week_start: this.toYmd(weekStart),
+      week_end: this.toYmd(new Date(weekEnd.getTime() - 86400000)),
+      days,
+      ...totals,
+      utilization: totals.work_window_minutes > 0 ? Number(((totals.allocated_minutes / totals.work_window_minutes) * 100).toFixed(1)) : 0,
+    };
+  }
+
+  async exportWeeklyPdf(dto: ExportWeeklyPdfDto) {
+    const week = await this.weeklyWorkload(dto.startDate);
+    const weekStart = this.getWeekStart(dto.startDate);
+    const weekEnd = new Date(weekStart);
+    weekEnd.setDate(weekEnd.getDate() + 7);
+    const events = await this.prisma.agendaEvent.findMany({
+      where: { startAt: { gte: weekStart, lt: weekEnd } },
+      orderBy: { startAt: 'asc' },
+    });
+
+    const lines: string[] = [];
+    lines.push(`Relatório Semanal de Carga (${week.week_start} a ${week.week_end})`);
+    lines.push(`Utilização: ${week.utilization}% | Conflitos: ${week.conflicts}`);
+    lines.push('');
+
+    if (dto.mode === 'detalhado') {
+      lines.push('Eventos:');
+      for (const event of events) {
+        const start = event.startAt.toISOString().replace('T', ' ').slice(0, 16);
+        const end = (event.endAt ?? new Date(event.startAt.getTime() + 60 * 60 * 1000))
+          .toISOString()
+          .replace('T', ' ')
+          .slice(0, 16);
+        lines.push(`- [${start} → ${end}] ${event.title} (${event.type})`);
+      }
+    } else {
+      lines.push('Resumo diário:');
+      for (const day of week.days) {
+        lines.push(`- ${day.date}: ${day.allocated_minutes}min, util ${day.utilization}%, conflitos ${day.conflicts}`);
+      }
+    }
+
+    const pdf = this.buildSimplePdf(lines.join('\n'));
+    return {
+      filename: `agenda-semanal-${week.week_start}.pdf`,
+      contentBase64: pdf.toString('base64'),
+      mimeType: 'application/pdf',
+    };
+  }
+
+  async suggestLaudoBlocks(dto: AiSuggestLaudoBlocksDto) {
+    const weekStart = this.getWeekStart(dto.startDate);
+    const weekEnd = new Date(weekStart);
+    weekEnd.setDate(weekEnd.getDate() + 7);
+    const events = await this.prisma.agendaEvent.findMany({
+      where: { startAt: { gte: weekStart, lt: weekEnd } },
+      orderBy: { startAt: 'asc' },
+    });
+
+    const requiredMinutes = dto.backlog * dto.avg_minutes_per_laudo;
+    const suggestedCount = Math.max(1, Math.ceil(requiredMinutes / Math.max(dto.avg_minutes_per_laudo, 30)));
+
+    const suggestions = Array.from({ length: suggestedCount }).map((_, index) => {
+      const date = new Date(weekStart);
+      const preferred = dto.preferred_windows[index % dto.preferred_windows.length] ?? '14:00';
+      date.setDate(date.getDate() + (index % 5));
+      const [hour, minute] = preferred.split(':').map(Number);
+      date.setHours(hour || 14, minute || 0, 0, 0);
+
+      const duration = Math.max(dto.min_buffer_minutes, Math.round(dto.avg_minutes_per_laudo * 0.8));
+      const endDate = new Date(date.getTime() + duration * 60000);
+
+      const conflict = events.some((event) => {
+        const eventEnd = event.endAt ?? new Date(event.startAt.getTime() + 60 * 60 * 1000);
+        return date < eventEnd && endDate > event.startAt;
+      });
+
+      return {
+        title: `Bloco de Laudo #${index + 1}`,
+        type: AgendaEventType.BLOCO_TRABALHO,
+        startAt: date.toISOString(),
+        endAt: endDate.toISOString(),
+        aiSuggested: true,
+        conflict,
+      };
+    });
+
+    return {
+      assumptions: {
+        avg_minutes_per_laudo: dto.avg_minutes_per_laudo,
+        backlog: dto.backlog,
+        required_minutes: requiredMinutes,
+        min_buffer_minutes: dto.min_buffer_minutes,
+      },
+      suggestions,
+    };
+  }
+
+  async applyLaudoBlocks(items: Array<{ title: string; startAt: string; endAt: string; periciaId?: string }>) {
+    const tenantId = this.context.get('tenantId') as string;
+    const created = await this.prisma.$transaction(
+      items.map((item) =>
+        this.prisma.agendaEvent.create({
+          data: {
+            tenantId,
+            title: item.title ?? "Agendamento",
+            startAt: new Date(item.startAt),
+            endAt: new Date(item.endAt),
+            type: AgendaEventType.BLOCO_TRABALHO,
+            ...(item.periciaId ? { periciaId: item.periciaId } : {}),
+            metadata: { aiSuggested: true } as Prisma.InputJsonValue,
+          },
+        }),
+      ),
+    );
+
+    await this.prisma.schedulingBatch.create({
+      data: {
+        tenantId,
+        dateRef: new Date(dto.metadata?.date ?? dto.items[0]?.startAt ?? new Date().toISOString()),
+        criteriaJson: (dto.metadata ?? {}) as Prisma.InputJsonValue,
+        resultJson: ({
+          status: 'CONFIRMADO',
+          created: created.length,
+          items: dto.items.map((item) => ({
+            periciaId: item.periciaId,
+            scheduledAt: item.startAt,
+          })),
+        }) as Prisma.InputJsonValue,
+      },
+    });
+
+    return { created: created.length };
   }
 
   async weeklyWorkload(startDate?: string) {
@@ -457,7 +816,7 @@ export class AgendaService {
         this.prisma.agendaEvent.create({
           data: {
             tenantId,
-            title: item.title ?? "Agendamento",
+            title: item.title,
             startAt: new Date(item.startAt),
             endAt: new Date(item.endAt),
             type: AgendaEventType.BLOCO_TRABALHO,
@@ -468,7 +827,53 @@ export class AgendaService {
       ),
     );
 
+    await this.prisma.schedulingBatch.create({
+      data: {
+        tenantId,
+        dateRef: new Date(items[0]?.startAt ?? new Date().toISOString()),
+        criteriaJson: ({ source: 'laudo_blocks' }) as Prisma.InputJsonValue,
+        resultJson: ({
+          status: 'CONFIRMADO',
+          created: created.length,
+          items: items.map((item) => ({
+            periciaId: item.periciaId,
+            scheduledAt: item.startAt,
+          })),
+        }) as Prisma.InputJsonValue,
+      },
+    });
+
     return { created: created.length };
+  }
+
+  async listBatchSchedulingHistory() {
+    const rows = await this.prisma.schedulingBatch.findMany({ orderBy: { createdAt: 'desc' }, take: 100 });
+    return rows.map((row) => {
+      const criteria = (row.criteriaJson ?? {}) as Record<string, unknown>;
+      const result = (row.resultJson ?? {}) as Record<string, unknown>;
+      const items = Array.isArray(result.items) ? result.items : [];
+
+      return {
+        id: row.id,
+        createdAt: row.createdAt,
+        cityNames: Array.isArray(criteria.cityNames) ? (criteria.cityNames as string[]) : [],
+        date: typeof criteria.date === 'string' ? criteria.date : '',
+        startTime: typeof criteria.startTime === 'string' ? criteria.startTime : '',
+        durationMinutes: typeof criteria.durationMinutes === 'number' ? criteria.durationMinutes : 0,
+        intervalMinutes: typeof criteria.intervalMinutes === 'number' ? criteria.intervalMinutes : 0,
+        location: typeof criteria.location === 'string' ? criteria.location : undefined,
+        modalidade: typeof criteria.modalidade === 'string' ? criteria.modalidade : undefined,
+        source: criteria.source === 'WORD' ? 'WORD' : 'CSV',
+        status: 'CONFIRMADO',
+        items: items.map((item) => {
+          const entry = item as Record<string, unknown>;
+          return {
+            periciaId: typeof entry.periciaId === 'string' ? entry.periciaId : '',
+            scheduledAt: typeof entry.scheduledAt === 'string' ? entry.scheduledAt : '',
+          };
+        }),
+      };
+    });
   }
 
   calendarSync() {

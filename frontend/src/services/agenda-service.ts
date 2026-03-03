@@ -38,15 +38,17 @@ export type SuggestScheduleResponse = {
 
 type BatchScheduleItemRequest = {
   periciaId: string;
+  dataAgendamento?: string;
+  horaAgendamento?: string;
   title?: string;
-  type?: string;
-  startAt: string;
 };
 
 type BatchScheduleMetadata = {
   cityNames?: string[];
   date?: string;
+  data?: string;
   startTime?: string;
+  hora?: string;
   durationMinutes?: number;
   intervalMinutes?: number;
   location?: string;
@@ -56,7 +58,12 @@ type BatchScheduleMetadata = {
 
 type BatchScheduleRequest = {
   items: BatchScheduleItemRequest[];
-  metadata?: BatchScheduleMetadata;
+  parametros?: BatchScheduleMetadata & { statusId?: string };
+  flags?: {
+    atualizarStatus?: boolean;
+    criarEventos?: boolean;
+    criarTarefas48h?: boolean;
+  };
 };
 
 type SchedulingBatchItem = {
@@ -77,6 +84,48 @@ type SchedulingBatchResponse = {
   source: 'CSV' | 'WORD';
   status: string;
   items: SchedulingBatchItem[];
+};
+
+export type ScheduleLotPayload = {
+  items: Array<{ periciaId: string; startAt: string }>;
+  metadata: {
+    cityNames: string[];
+    date: string;
+    startTime: string;
+    durationMinutes: number;
+    intervalMinutes: number;
+    location?: string;
+    modalidade?: string;
+    source: 'CSV' | 'WORD';
+  };
+};
+
+export type ScheduleLotPayload = {
+  items: Array<{ periciaId: string; startAt: string }>;
+  metadata: {
+    cityNames: string[];
+    date: string;
+    startTime: string;
+    durationMinutes: number;
+    intervalMinutes: number;
+    location?: string;
+    modalidade?: string;
+    source: 'CSV' | 'WORD';
+  };
+};
+
+export type ScheduleLotPayload = {
+  items: Array<{ periciaId: string; startAt: string }>;
+  metadata: {
+    cityNames: string[];
+    date: string;
+    startTime: string;
+    durationMinutes: number;
+    intervalMinutes: number;
+    location?: string;
+    modalidade?: string;
+    source: 'CSV' | 'WORD';
+  };
 };
 
 export const agendaService = {
@@ -165,29 +214,47 @@ export const agendaService = {
   },
 
   scheduleBatch: async (payload: BatchSchedulePayload): Promise<void> => {
-    const startAt = new Date(`${payload.date}T${payload.time}`).toISOString();
     const requestPayload: BatchScheduleRequest = {
       items: payload.periciaIds.map((periciaId) => ({
         periciaId,
+        dataAgendamento: payload.date,
+        horaAgendamento: payload.time,
         title: 'Perícia agendada em lote',
-        type: 'PERICIA',
-        startAt,
       })),
+      flags: {
+        atualizarStatus: false,
+        criarEventos: true,
+        criarTarefas48h: true,
+      },
     };
 
-    await apiClient.post('/agenda/batch-scheduling', requestPayload);
+    await apiClient.post('/pericias/batch-schedule', requestPayload);
   },
 
   scheduleLot: async (payload: { items: { periciaId: string; startAt: string }[]; metadata: BatchScheduleMetadata }): Promise<void> => {
     const requestPayload: BatchScheduleRequest = {
-      items: payload.items.map((item) => ({
-        periciaId: item.periciaId,
-        startAt: item.startAt,
-      })),
-      metadata: payload.metadata,
+      items: payload.items.map((item) => {
+        const scheduledAt = new Date(item.startAt);
+        return {
+          periciaId: item.periciaId,
+          dataAgendamento: scheduledAt.toISOString().slice(0, 10),
+          horaAgendamento: scheduledAt.toISOString().slice(11, 16),
+          title: 'Perícia agendada em lote',
+        };
+      }),
+      parametros: {
+        ...payload.metadata,
+        data: payload.metadata.date,
+        hora: payload.metadata.startTime,
+      },
+      flags: {
+        atualizarStatus: false,
+        criarEventos: true,
+        criarTarefas48h: true,
+      },
     };
 
-    await apiClient.post('/agenda/batch-scheduling', requestPayload);
+    await apiClient.post('/pericias/batch-schedule', requestPayload);
   },
 
   listSchedulingBatches: async (): Promise<SchedulingBatchResponse[]> => {
@@ -205,5 +272,56 @@ export const agendaService = {
       params: { includeRoute },
     });
     return data;
+  },
+
+  scheduleLot: async (payload: ScheduleLotPayload): Promise<void> => {
+    await apiClient.post('/agenda/batch-scheduling', {
+      metadata: payload.metadata,
+      items: payload.items.map((item) => ({
+        periciaId: item.periciaId,
+        title: 'Perícia agendada em lote',
+        type: 'PERICIA',
+        startAt: item.startAt,
+      })),
+    });
+  },
+
+  listSchedulingBatches: async (): Promise<SchedulingBatchHistory[]> => {
+    const { data } = await apiClient.get<SchedulingBatchHistory[]>('/agenda/batch-scheduling');
+    return Array.isArray(data) ? data : [];
+  },
+
+  scheduleLot: async (payload: ScheduleLotPayload): Promise<void> => {
+    await apiClient.post('/agenda/batch-scheduling', {
+      metadata: payload.metadata,
+      items: payload.items.map((item) => ({
+        periciaId: item.periciaId,
+        title: 'Perícia agendada em lote',
+        type: 'PERICIA',
+        startAt: item.startAt,
+      })),
+    });
+  },
+
+  listSchedulingBatches: async (): Promise<SchedulingBatchHistory[]> => {
+    const { data } = await apiClient.get<SchedulingBatchHistory[]>('/agenda/batch-scheduling');
+    return Array.isArray(data) ? data : [];
+  },
+
+  scheduleLot: async (payload: ScheduleLotPayload): Promise<void> => {
+    await apiClient.post('/agenda/batch-scheduling', {
+      metadata: payload.metadata,
+      items: payload.items.map((item) => ({
+        periciaId: item.periciaId,
+        title: 'Perícia agendada em lote',
+        type: 'PERICIA',
+        startAt: item.startAt,
+      })),
+    });
+  },
+
+  listSchedulingBatches: async (): Promise<SchedulingBatchHistory[]> => {
+    const { data } = await apiClient.get<SchedulingBatchHistory[]>('/agenda/batch-scheduling');
+    return Array.isArray(data) ? data : [];
   },
 };

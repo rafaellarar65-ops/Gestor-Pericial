@@ -1,4 +1,4 @@
-import { FontePagamento } from '@prisma/client';
+import { FontePagamento, PaymentMatchStatus } from '@prisma/client';
 import { FinancialService } from './financial.service';
 
 describe('FinancialService', () => {
@@ -8,10 +8,16 @@ describe('FinancialService', () => {
       findMany: jest.fn(),
       aggregate: jest.fn(),
     },
+    bankTransaction: {
+      create: jest.fn(),
+    },
     despesa: {
       create: jest.fn(),
       findMany: jest.fn(),
       aggregate: jest.fn(),
+    },
+    bankTransaction: {
+      create: jest.fn(),
     },
     importBatch: {
       create: jest.fn(),
@@ -19,10 +25,22 @@ describe('FinancialService', () => {
     },
     unmatchedPayment: {
       findMany: jest.fn(),
+      findFirst: jest.fn(),
+      update: jest.fn(),
       updateMany: jest.fn(),
+      createMany: jest.fn(),
+    },
+    activityLog: {
+      create: jest.fn(),
     },
     pericia: {
       count: jest.fn(),
+      findFirst: jest.fn(),
+    },
+    unmatchedPayment: {
+      create: jest.fn(),
+      findMany: jest.fn(),
+      updateMany: jest.fn(),
     },
     $transaction: jest.fn(),
   } as any;
@@ -49,8 +67,49 @@ describe('FinancialService', () => {
     expect(result.id).toBe('r-1');
   });
 
+
+
+  it('imports unmatched transactions and reports rejected rows', async () => {
+    prisma.unmatchedPayment.createMany.mockResolvedValue({ count: 1 });
+
+    const result = await service.importUnmatched({
+      rows: [
+        {
+          amount: 'R$ 1.234,56',
+          transactionDate: '10/03/2026 14:20',
+          payerName: 'Maria',
+          cnj: '0000000-00.0000.0.00.0000',
+          description: 'Transferência',
+          source: 'OFX',
+          origin: 'MANUAL_CSV',
+        },
+        {
+          amount: 'abc',
+          receivedAt: '2026-03-10',
+          payerName: 'Inválido',
+        },
+      ],
+    });
+
+    expect(prisma.unmatchedPayment.createMany).toHaveBeenCalledTimes(1);
+    expect(result.imported).toBe(1);
+    expect(result.rejected).toHaveLength(1);
+    expect(result.rejected[0].reason).toContain('Valor monetário inválido');
+  });
+
+  it('rejects rows when transaction date is invalid', async () => {
+    const result = await service.importUnmatched({
+      rows: [{ amount: 100, transactionDate: 'data-invalida' }],
+    });
+
+    expect(prisma.unmatchedPayment.createMany).not.toHaveBeenCalled();
+    expect(result.imported).toBe(0);
+    expect(result.rejected).toHaveLength(1);
+    expect(result.rejected[0].reason).toContain('Data inválida');
+  });
+
   it('returns zero financialScore when there is no revenue (edge case)', async () => {
-    prisma.$transaction.mockResolvedValue([
+    prisma.$transaction.mockResolvedValueOnce([
       { _sum: { valorLiquido: null, valorBruto: null } },
       { _sum: { valor: null } },
       0,
@@ -59,4 +118,21 @@ describe('FinancialService', () => {
     const result = await service.analytics();
     expect(result.financialScore).toBe(0);
   });
+
+  it('returns conciliation stats with ignored separated from matched', async () => {
+    prisma.unmatchedPayment.findMany.mockResolvedValue([
+      { amount: 100, matchStatus: 'MATCHED', notes: 'Conciliação em lote por CNJ', rawData: { origin: 'MANUAL_CSV' } },
+      { amount: 80, matchStatus: 'MATCHED', notes: 'Vinculado manualmente', rawData: { origin: 'INDIVIDUAL' } },
+      { amount: 45, matchStatus: 'UNMATCHED', notes: null, rawData: { origin: 'AI_PRINT' } },
+      { amount: 20, matchStatus: 'PARTIAL', notes: '[DISCARDED] Ignorado', rawData: { origin: 'MANUAL_CSV' } },
+    ]);
+
+    const result = await service.conciliationStats();
+
+    expect(result.totals).toEqual({ reconciled: 2, unreconciled: 1, ignored: 1, total: 4 });
+    expect(result.autoMatching.rate).toBe(50);
+    expect(result.originDistribution).toEqual({ CSV: 2, OFX: 1, INDIVIDUAL: 1 });
+    expect(result.financialVolume).toEqual({ reconciled: 180, pending: 45, ignored: 20 });
+  });
+
 });

@@ -1,4 +1,4 @@
-import { Body, Controller, Get, Post } from '@nestjs/common';
+import { Body, Controller, Get, Param, Post, Res } from '@nestjs/common';
 import { ApiBearerAuth, ApiOperation, ApiTags } from '@nestjs/swagger';
 import {
   CoherenceCheckDto,
@@ -6,6 +6,7 @@ import {
   CreateExamPlanDto,
   CreatePreLaudoDto,
   ExportPdfDto,
+  TranscribeLaudoDto,
   TranscriptionDto,
   UpdateSectionsDto,
 } from './dto/laudo.dto';
@@ -51,6 +52,25 @@ export class LaudoController {
   @Post('export-pdf')
   exportPdf(@Body() dto: ExportPdfDto) {
     return this.service.exportPdf(dto);
+  }
+
+
+
+  @Post(':id/transcribe')
+  @ApiOperation({ summary: 'Transcreve áudio do laudo e atualiza seções do PreLaudo' })
+  transcribe(@Param('id') laudoId: string, @Body() dto: TranscribeLaudoDto) {
+    return this.service.transcribeLaudo(laudoId, dto);
+  }
+
+  @Post(':id/export-docx')
+  @ApiOperation({ summary: 'Gera DOCX do laudo com todas as seções' })
+  async exportDocx(@Param('id') laudoId: string, @Res({ passthrough: true }) res: {
+    setHeader(name: string, value: string): void;
+  }) {
+    const exported = await this.service.exportDocx(laudoId);
+    res.setHeader('Content-Type', 'application/vnd.openxmlformats-officedocument.wordprocessingml.document');
+    res.setHeader('Content-Disposition', `attachment; filename="${exported.fileName}"`);
+    return exported.buffer;
   }
 
   @Post('coherence-check')

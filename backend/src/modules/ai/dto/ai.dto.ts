@@ -2,6 +2,7 @@ import { Type } from 'class-transformer';
 import { ApiProperty, ApiPropertyOptional } from '@nestjs/swagger';
 import {
   IsArray,
+  IsEnum,
   IsIn,
   IsNotEmpty,
   IsObject,
@@ -13,6 +14,13 @@ import {
 
 const tiposPericia = ['previdenciaria', 'acidentaria', 'civel', 'trabalhista', 'securitaria', 'administrativa', 'outra'] as const;
 const taskTypes = ['master-analysis', 'specific-analysis', 'laudo-assistant', 'batch-action', 'coherence-check'] as const;
+export const analyzePdfPromptType = {
+  PRE_LAUDO: 'PRE_LAUDO',
+  SUMMARY: 'SUMMARY',
+  LAWYERS: 'LAWYERS',
+} as const;
+
+export type AnalyzePdfPromptType = (typeof analyzePdfPromptType)[keyof typeof analyzePdfPromptType];
 
 export class AnalyzeDocumentDto {
   @ApiProperty({ example: 'documento.pdf' })
@@ -176,4 +184,21 @@ export class ExecuteAiTaskDto {
   @IsArray()
   @IsOptional()
   sourceFragments?: string[];
+}
+
+export class TranscribeAudioDto {
+  @ApiProperty({ description: 'Áudio em base64 puro, data URL ou URL pública' })
+  @IsString()
+  @IsNotEmpty()
+  audio!: string;
+}
+
+export class AnalyzePdfDto {
+  @ApiProperty({ format: 'uuid' })
+  @IsUUID()
+  documentId!: string;
+
+  @ApiProperty({ enum: analyzePdfPromptType })
+  @IsEnum(analyzePdfPromptType)
+  promptType!: AnalyzePdfPromptType;
 }

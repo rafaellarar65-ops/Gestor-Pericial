@@ -91,3 +91,21 @@ jobs:
             frontend/coverage
             backend/coverage
           if-no-files-found: warn
+
+
+  e2e-contract:
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    env:
+      E2E_BASE_URL: http://localhost:3000
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Setup Node 20
+        uses: actions/setup-node@v4
+        with:
+          node-version: 20
+
+      - name: Validate Playwright configuration and project matrix
+        run: node tests/scripts/validate-playwright-config.mjs
