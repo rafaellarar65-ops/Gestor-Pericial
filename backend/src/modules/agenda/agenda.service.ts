@@ -110,12 +110,17 @@ export class AgendaService {
 
   async batchScheduling(dto: BatchScheduleDto) {
     const tenantId = this.context.get('tenantId') as string;
-    const created = await this.prisma.$transaction(
-      dto.items.map((item) =>
-        this.prisma.agendaEvent.create({
+
+    const summary = await this.prisma.$transaction(async (tx) => {
+      const createdEvents: Array<{ id: string; periciaId: string | null }> = [];
+      const updatedPericiaIds: string[] = [];
+      const createdTaskIds: string[] = [];
+
+      for (const item of dto.items) {
+        const createdEvent = await tx.agendaEvent.create({
           data: {
             tenantId,
-            title: item.title ?? "Agendamento",
+            title: item.title ?? 'Agendamento',
             type: item.type ?? AgendaEventType.OUTRO,
             status: item.status ?? AgendaEventStatus.AGENDADA,
             source: item.source,
@@ -134,27 +139,65 @@ export class AgendaService {
             startAt: new Date(item.startAt),
             ...(item.endAt ? { endAt: new Date(item.endAt) } : {}),
           },
-        }),
-      ),
-    );
+        });
 
-    await this.prisma.schedulingBatch.create({
-      data: {
-        tenantId,
-        dateRef: new Date(dto.metadata?.date ?? dto.items[0]?.startAt ?? new Date().toISOString()),
-        criteriaJson: (dto.metadata ?? {}) as Prisma.InputJsonValue,
-        resultJson: ({
-          status: 'CONFIRMADO',
-          created: created.length,
-          items: dto.items.map((item) => ({
+        createdEvents.push({ id: createdEvent.id, periciaId: createdEvent.periciaId });
+
+        if (!item.periciaId) continue;
+
+        await tx.pericia.update({
+          where: { id: item.periciaId },
+          data: {
+            agendada: true,
+            dataAgendamento: new Date(item.startAt),
+            horaAgendamento: new Date(item.startAt).toISOString().slice(11, 16),
+          },
+        });
+        updatedPericiaIds.push(item.periciaId);
+
+        const task = await tx.agendaTask.create({
+          data: {
+            tenantId,
             periciaId: item.periciaId,
-            scheduledAt: item.startAt,
-          })),
-        }) as Prisma.InputJsonValue,
-      },
+            title: `Preparar perícia agendada: ${item.title ?? 'Agendamento'}`,
+            dueAt: new Date(item.startAt),
+            status: AgendaTaskStatus.TODO,
+          },
+        });
+        createdTaskIds.push(task.id);
+      }
+
+      await tx.schedulingBatch.create({
+        data: {
+          tenantId,
+          dateRef: new Date(dto.metadata?.date ?? dto.items[0]?.startAt ?? new Date().toISOString()),
+          criteriaJson: (dto.metadata ?? {}) as Prisma.InputJsonValue,
+          resultJson: ({
+            status: 'CONFIRMADO',
+            created: createdEvents.length,
+            items: dto.items.map((item) => ({
+              periciaId: item.periciaId,
+              scheduledAt: item.startAt,
+            })),
+          }) as Prisma.InputJsonValue,
+        },
+      });
+
+      return {
+        createdEvents,
+        updatedPericiaIds,
+        createdTaskIds,
+      };
     });
 
-    return { created: created.length };
+    return {
+      createdEventsCount: summary.createdEvents.length,
+      updatedPericiasCount: summary.updatedPericiaIds.length,
+      createdTasksCount: summary.createdTaskIds.length,
+      eventIds: summary.createdEvents.map((event) => event.id),
+      updatedPericiaIds: summary.updatedPericiaIds,
+      taskIds: summary.createdTaskIds,
+    };
   }
 
   async weeklyWorkload(startDate?: string) {
@@ -238,29 +281,32 @@ export class AgendaService {
     });
 
     const lines: string[] = [];
-    lines.push(`Agenda semanal (${week.week_start} a ${week.week_end})`);
-    lines.push(`Modo: ${dto.mode}`);
-    lines.push(`Total semana: ${week.allocated_minutes} min de ${week.work_window_minutes} min (${week.utilization}%)`);
-    lines.push(`Conflitos: ${week.conflicts}`);
+    lines.push(`Relatório Semanal de Carga (${week.week_start} a ${week.week_end})`);
+    lines.push(`Utilização: ${week.utilization}% | Conflitos: ${week.conflicts}`);
     lines.push('');
 
-    for (const day of week.days) {
-      lines.push(`${day.date} | ${day.allocated_minutes}/${day.work_window_minutes} min | uso ${day.utilization}% | conflitos ${day.conflicts}`);
-      if (dto.mode === 'detalhado') {
-        for (const event of events.filter((e) => this.toYmd(e.startAt) === day.date)) {
-          const endAt = event.endAt ?? new Date(event.startAt.getTime() + 60 * 60 * 1000);
-          lines.push(`  - ${event.title} [${event.type}] ${event.startAt.toISOString()} -> ${endAt.toISOString()}`);
-        }
+    if (dto.mode === 'detalhado') {
+      lines.push('Eventos:');
+      for (const event of events) {
+        const start = event.startAt.toISOString().replace('T', ' ').slice(0, 16);
+        const end = (event.endAt ?? new Date(event.startAt.getTime() + 60 * 60 * 1000))
+          .toISOString()
+          .replace('T', ' ')
+          .slice(0, 16);
+        lines.push(`- [${start} → ${end}] ${event.title} (${event.type})`);
+      }
+    } else {
+      lines.push('Resumo diário:');
+      for (const day of week.days) {
+        lines.push(`- ${day.date}: ${day.allocated_minutes}min, util ${day.utilization}%, conflitos ${day.conflicts}`);
       }
     }
 
-    const pdfBuffer = this.buildSimplePdf(lines.join('\n'));
-
+    const pdf = this.buildSimplePdf(lines.join('\n'));
     return {
-      fileName: `agenda-semanal-${week.week_start}.pdf`,
-      contentBase64: pdfBuffer.toString('base64'),
+      filename: `agenda-semanal-${week.week_start}.pdf`,
+      contentBase64: pdf.toString('base64'),
       mimeType: 'application/pdf',
-      totals: week,
     };
   }
 
@@ -268,14 +314,13 @@ export class AgendaService {
     const weekStart = this.getWeekStart(dto.startDate);
     const weekEnd = new Date(weekStart);
     weekEnd.setDate(weekEnd.getDate() + 7);
-
     const events = await this.prisma.agendaEvent.findMany({
       where: { startAt: { gte: weekStart, lt: weekEnd } },
       orderBy: { startAt: 'asc' },
     });
 
-    const requiredMinutes = dto.avg_minutes_per_laudo * dto.backlog;
-    const suggestedCount = Math.max(1, Math.ceil(requiredMinutes / Math.max(dto.min_buffer_minutes, 30)));
+    const requiredMinutes = dto.backlog * dto.avg_minutes_per_laudo;
+    const suggestedCount = Math.max(1, Math.ceil(requiredMinutes / Math.max(dto.avg_minutes_per_laudo, 30)));
 
     const suggestions = Array.from({ length: suggestedCount }).map((_, index) => {
       const date = new Date(weekStart);
