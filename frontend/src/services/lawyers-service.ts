@@ -91,3 +91,41 @@ export const communicationInboxService = {
     return data;
   },
 };
+
+
+export const emailImapService = {
+  saveConfig: async (payload: {
+    fromEmail: string;
+    fromName?: string;
+    smtpHost: string;
+    smtpPort: string;
+    imapHost: string;
+    imapPort: string;
+    login: string;
+    password: string;
+    secure?: boolean;
+  }) => {
+    const { data } = await apiClient.post('/communications/email-imap/config', payload);
+    return data;
+  },
+
+  listInbox: async (): Promise<EmailInboxMessage[]> => {
+    const { data } = await apiClient.get<EmailInboxMessage[]>('/communications/email-imap/inbox');
+    return Array.isArray(data) ? data : [];
+  },
+
+  getByUid: async (uid: number): Promise<EmailInboxDetail> => {
+    const { data } = await apiClient.get<EmailInboxDetail>(`/communications/email-imap/inbox/${uid}`);
+    return data;
+  },
+
+  markRead: async (uid: number): Promise<{ uid: number; read: boolean }> => {
+    const { data } = await apiClient.patch<{ uid: number; read: boolean }>(`/communications/email-imap/inbox/${uid}/read`);
+    return data;
+  },
+
+  reply: async (uid: number, payload: { from: string; to: string; text?: string; html?: string }): Promise<{ sent: boolean }> => {
+    const { data } = await apiClient.post<{ sent: boolean }>(`/communications/email-imap/reply/${uid}`, payload);
+    return data;
+  },
+};

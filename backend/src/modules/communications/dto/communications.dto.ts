@@ -86,6 +86,102 @@ export class GenerateHubEmailDto {
   context?: Record<string, string>;
 }
 
+
+export class EmailImapConfigDto {
+  @ApiProperty()
+  @IsString()
+  fromEmail!: string;
+
+  @ApiPropertyOptional()
+  @IsOptional()
+  @IsString()
+  fromName?: string;
+
+  @ApiProperty()
+  @IsString()
+  smtpHost!: string;
+
+  @ApiProperty()
+  @IsString()
+  smtpPort!: string;
+
+  @ApiProperty()
+  @IsString()
+  imapHost!: string;
+
+  @ApiProperty()
+  @IsString()
+  imapPort!: string;
+
+  @ApiProperty()
+  @IsString()
+  login!: string;
+
+  @ApiProperty()
+  @IsString()
+  password!: string;
+
+  @ApiPropertyOptional()
+  @IsOptional()
+  @IsBoolean()
+  secure?: boolean;
+}
+
+export class EmailImapSendDto {
+  @ApiProperty()
+  @IsString()
+  from!: string;
+
+  @ApiProperty()
+  @IsString()
+  to!: string;
+
+  @ApiProperty()
+  @IsString()
+  subject!: string;
+
+  @ApiPropertyOptional()
+  @IsOptional()
+  @IsString()
+  text?: string;
+
+  @ApiPropertyOptional()
+  @IsOptional()
+  @IsString()
+  html?: string;
+
+  @ApiPropertyOptional()
+  @IsOptional()
+  @IsString()
+  inReplyTo?: string;
+
+  @ApiPropertyOptional({ type: [String] })
+  @IsOptional()
+  @IsArray()
+  @IsString({ each: true })
+  references?: string[];
+}
+
+export class EmailImapReplyDto {
+  @ApiProperty()
+  @IsString()
+  from!: string;
+
+  @ApiProperty()
+  @IsString()
+  to!: string;
+
+  @ApiPropertyOptional()
+  @IsOptional()
+  @IsString()
+  text?: string;
+
+  @ApiPropertyOptional()
+  @IsOptional()
+  @IsString()
+  html?: string;
+}
+
 export class UpsertUolhostEmailConfigDto {
   @ApiProperty()
   @IsString()
