@@ -1,5 +1,4 @@
 #!/bin/sh
-set -e
 
 echo "[Entrypoint] Attempting Prisma migrate deploy..."
 
