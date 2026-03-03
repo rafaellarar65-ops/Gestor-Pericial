@@ -1,5 +1,5 @@
 import { apiClient } from '@/lib/api-client';
-import type { EmailTemplate, InboxItem, Lawyer, MessageTemplate, MessageTemplateChannel, TemplatePreview } from '@/types/api';
+import type { EmailTemplate, InboxItem, InboxListResponse, Lawyer, MessageTemplate, MessageTemplateChannel, TemplatePreview } from '@/types/api';
 
 export const lawyersService = {
   list: async (): Promise<Lawyer[]> => {
@@ -71,9 +71,9 @@ export const messageTemplatesService = {
 };
 
 export const communicationInboxService = {
-  list: async (filter?: string): Promise<InboxItem[]> => {
-    const { data } = await apiClient.get<InboxItem[]>('/communications/inbox', { params: filter ? { filter } : undefined });
-    return Array.isArray(data) ? data : [];
+  list: async (params?: { filter?: string; from?: string; subject?: string; cursor?: string; page?: number; limit?: number }): Promise<InboxListResponse> => {
+    const { data } = await apiClient.get<InboxListResponse>('/communications/inbox', { params });
+    return data ?? { items: [], page: 1, limit: params?.limit ?? 20, hasNextPage: false, nextCursor: null };
   },
 
   resendTemplate: async (payload: { messageIds: string[]; templateId: string }): Promise<{ resent: number }> => {

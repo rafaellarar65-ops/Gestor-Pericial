@@ -9,11 +9,13 @@ import {
   ApiTags,
 } from '@nestjs/swagger';
 import { CommunicationsService } from './communications.service';
+import { Response } from 'express';
 import {
   AutomaticVaraChargeDto,
   BulkGrantOptInDto,
   BulkLinkInboundDto,
   BulkResendTemplateDto,
+  DownloadInboxAttachmentQueryDto,
   CreateEmailTemplateDto,
   CreateLawyerDto,
   CreateMessageTemplateDto,
