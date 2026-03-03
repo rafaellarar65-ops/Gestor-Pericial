@@ -110,6 +110,15 @@ export const sidebarSections: SidebarSection[] = [
       { label: 'Documentação', href: appPaths.documentacao },
     ],
   },
+  {
+    section: 'SUPORTE E ADMINISTRAÇÃO',
+    items: [
+      { label: 'Documentação', href: '/documentacao' },
+      { label: 'Inbox de Email', href: '/inbox-email' },
+      { label: 'Advogados', href: '/advogados' },
+      { label: 'Despesas', href: '/despesas' },
+    ],
+  },
 ];
 
 // Flat list kept for command palette
