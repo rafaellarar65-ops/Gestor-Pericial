@@ -3,15 +3,21 @@ import { FinancialDirection, FontePagamento, PaymentMatchStatus, Prisma } from '
 import { RequestContextService } from '../../common/request-context.service';
 import { PrismaService } from '../../prisma/prisma.service';
 import {
+  BulkDeleteRecebimentosDto,
   CreateDespesaDto,
   CreateRecebimentoDto,
+  FinancialImportAiPrintResponseDto,
+  ImportAiPrintDto,
   ImportRecebimentosDto,
   ImportUnmatchedTransactionsDto,
+  LinkPaymentToPericiaDto,
+  LinkUnmatchedPaymentDto,
   ReconcileDto,
   SplitUnmatchedPaymentDto,
+  UpdateRecebimentoDto,
   UpdateUnmatchedPaymentDto,
 } from './dto/financial.dto';
-import { ImportCsvDto, type ImportSourceType, LinkUnmatchedPaymentDto } from './dto/import.dto';
+import { ImportCsvDto, type ImportSourceType } from './dto/import.dto';
 
 type ParsedCsvPayment = {
   cnj: string;
@@ -512,7 +518,7 @@ export class FinancialService {
     });
   }
 
-  async linkPaymentToPericia(paymentId: string, dto: LinkUnmatchedPaymentDto) {
+  async linkPaymentToPericia(paymentId: string, dto: LinkPaymentToPericiaDto) {
     const unmatched = await this.prisma.unmatchedPayment.findUnique({ where: { id: paymentId } });
     if (!unmatched) throw new NotFoundException('Pagamento não vinculado não encontrado.');
 
