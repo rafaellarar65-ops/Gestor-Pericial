@@ -243,6 +243,54 @@ const NomeacoesPage = () => {
     [data],
   );
 
+  const { data, isLoading, isFetchingNextPage, hasNextPage, fetchNextPage } = useInfiniteQuery({
+    queryKey: ['nomeacoes', PAGE_SIZE],
+    initialPageParam: 1,
+    queryFn: async ({ pageParam }) => {
+      const { data } = await apiClient.get<NomeacoesResponse>('/nomeacoes', {
+        params: { page: pageParam, limit: PAGE_SIZE },
+      });
+      return data;
+    },
+    getNextPageParam: (lastPage) => {
+      const pagination = lastPage.pagination;
+      if (!pagination) return undefined;
+      const loaded = pagination.page * pagination.limit;
+      return loaded < pagination.total ? pagination.page + 1 : undefined;
+    },
+  });
+
+  const allItems = useMemo(
+    () => (data?.pages ?? []).flatMap((page) => page.items ?? []),
+    [data?.pages],
+  );
+
+  const total = data?.pages?.[0]?.pagination?.total ?? allItems.length;
+
+  const statusTotals = data?.pages?.[0]?.statusTotals ?? {};
+
+  const groups = useMemo(
+    () =>
+      STATUS_GROUPS.map((sg) => {
+        const groupItems = allItems.filter((item) => matchGroup(item, sg));
+        const groupTotal = Object.entries(statusTotals).reduce((acc, [status, value]) => {
+          if (sg.statuses.some((expected) => status.includes(expected))) {
+            return acc + value;
+          }
+          return acc;
+        }, 0);
+
+        return {
+          ...sg,
+          items: groupItems,
+          total: groupTotal,
+        };
+      }),
+    [allItems, statusTotals],
+  );
+
+  const loadedCount = allItems.length;
+
   const toggle = (label: string) => {
     setOpenGroups((prev) => {
       const next = new Set(prev);
