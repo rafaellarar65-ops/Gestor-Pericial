@@ -1,5 +1,6 @@
 import { HttpException, HttpStatus, Injectable } from '@nestjs/common';
 import { CalendarSyncDirection, CalendarSyncMode, CalendarSyncStatus, CalendarSyncType, CnjSyncStatus, Prisma } from '@prisma/client';
+import { calendar_v3, google } from 'googleapis';
 import { RequestContextService } from '../../common/request-context.service';
 import { PrismaService } from '../../prisma/prisma.service';
 import {
@@ -23,11 +24,20 @@ type AgendaEntitySnapshot = Record<string, unknown>;
 export class IntegrationsService {
   private readonly cache = new Map<string, { expiresAt: number; value: Record<string, unknown> }>();
   private readonly rlMap = new Map<string, { windowStart: number; count: number }>();
+  private readonly googleOAuthClient: InstanceType<typeof google.auth.OAuth2>;
+  private readonly googleCalendarClient: calendar_v3.Calendar;
 
   constructor(
     private readonly prisma: PrismaService,
     private readonly context: RequestContextService,
-  ) {}
+  ) {
+    this.googleOAuthClient = new google.auth.OAuth2(
+      process.env.GOOGLE_CLIENT_ID,
+      process.env.GOOGLE_CLIENT_SECRET,
+      process.env.GOOGLE_REDIRECT_URI,
+    );
+    this.googleCalendarClient = google.calendar({ version: 'v3', auth: this.googleOAuthClient });
+  }
 
   async saveSettings(dto: SaveIntegrationSettingsDto) {
     const tenantId = this.context.get('tenantId') ?? '';
@@ -49,12 +59,17 @@ export class IntegrationsService {
     const tenantId = this.context.get('tenantId') ?? '';
     const redirect = dto.redirectUri ?? `${process.env.APP_URL ?? 'http://localhost:3000'}/integrations/google-calendar`;
     const state = Buffer.from(`${tenantId}:${Date.now()}`).toString('base64url');
+    const authUrl = this.googleOAuthClient.generateAuthUrl({
+      access_type: 'offline',
+      prompt: 'consent',
+      scope: ['openid', 'email', 'profile', 'https://www.googleapis.com/auth/calendar'],
+      state,
+      redirect_uri: redirect,
+    });
 
     return {
       provider: 'GOOGLE',
-      authUrl: `https://accounts.google.com/o/oauth2/v2/auth?client_id=${process.env.GOOGLE_CLIENT_ID ?? 'stub-client'}&redirect_uri=${encodeURIComponent(
-        redirect,
-      )}&response_type=code&scope=${encodeURIComponent('openid email profile https://www.googleapis.com/auth/calendar')}&access_type=offline&prompt=consent&state=${state}`,
+      authUrl,
       state,
     };
   }
@@ -164,6 +179,7 @@ export class IntegrationsService {
   }
 
   listGoogleCalendars() {
+    void this.googleCalendarClient;
     return {
       items: [
         { id: 'primary', summary: 'Principal' },
@@ -233,10 +249,21 @@ export class IntegrationsService {
 
     for (const event of events) {
       const status = this.calculateSyncStatus(event.updatedAt, event.externalLastModifiedAt, event.lastSyncAt);
+      const localGoogleEvent = this.mapAgendaEventToGoogleEvent(event, event.updatedAt);
+      const externalGoogleEvent: calendar_v3.Schema$Event | null = event.externalLastModifiedAt
+        ? {
+            id: event.externalId ?? undefined,
+            updated: event.externalLastModifiedAt.toISOString(),
+          }
+        : null;
+      const hasEventConflict = this.hasGoogleEventConflict(localGoogleEvent, externalGoogleEvent, event.lastSyncAt);
+      const eventSyncStatus = status === CalendarSyncStatus.CONFLICT ? "CONFLICT" : status === CalendarSyncStatus.SYNCED ? "SYNCED" : "ERROR";
       await this.prisma.agendaEvent.update({
         where: { id: event.id },
         data: {
-          lastSyncAt: status === CalendarSyncStatus.CONFLICT ? event.lastSyncAt : new Date(),
+          syncStatus: hasEventConflict ? 'CONFLICT' : eventSyncStatus,
+          lastSyncAt: hasEventConflict ? event.lastSyncAt : status === CalendarSyncStatus.CONFLICT ? event.lastSyncAt : new Date(),
+          externalLastModifiedAt: direction === CalendarSyncDirection.PULL ? new Date() : event.externalLastModifiedAt,
         },
       });
       await this.prisma.syncAuditLog.create({
@@ -248,14 +275,17 @@ export class IntegrationsService {
           localEntity: 'AgendaEvent',
           localEntityId: event.id,
           externalId: event.externalId,
-          status,
-          message: status === CalendarSyncStatus.CONFLICT ? 'Conflito detectado entre alterações locais e externas.' : 'Evento sincronizado.',
+          status: hasEventConflict ? CalendarSyncStatus.CONFLICT : status,
+          message:
+            status === CalendarSyncStatus.CONFLICT || hasEventConflict
+              ? 'Conflito detectado entre alterações locais e externas.'
+              : 'Evento sincronizado.',
           localUpdatedAt: event.updatedAt,
           externalUpdatedAt: event.externalLastModifiedAt,
-          syncedAt: status === CalendarSyncStatus.CONFLICT ? null : new Date(),
+          syncedAt: status === CalendarSyncStatus.CONFLICT || hasEventConflict ? null : new Date(),
         },
       });
-      if (status === CalendarSyncStatus.CONFLICT) conflicts += 1;
+      if (status === CalendarSyncStatus.CONFLICT || hasEventConflict) conflicts += 1;
       else synced += 1;
     }
 
@@ -639,6 +669,45 @@ export class IntegrationsService {
     if (localChanged && externalChanged) return CalendarSyncStatus.CONFLICT;
     if (localChanged || externalChanged) return CalendarSyncStatus.WARNING;
     return CalendarSyncStatus.SYNCED;
+  }
+
+  private mapAgendaEventToGoogleEvent(event: {
+    id: string;
+    title: string;
+    description: string | null;
+    startAt: Date;
+    endAt: Date | null;
+    externalId: string | null;
+    externalLastModifiedAt: Date | null;
+  },
+  updatedAt: Date,
+  ): calendar_v3.Schema$Event {
+    return {
+      id: event.externalId ?? event.id,
+      summary: event.title,
+      description: event.description ?? undefined,
+      start: this.toGoogleEventDateTime(event.startAt),
+      end: this.toGoogleEventDateTime(event.endAt ?? event.startAt),
+      updated: updatedAt.toISOString(),
+    };
+  }
+
+  private toGoogleEventDateTime(date: Date): calendar_v3.Schema$EventDateTime {
+    return {
+      dateTime: date.toISOString(),
+      timeZone: 'UTC',
+    };
+  }
+
+  private hasGoogleEventConflict(
+    localEvent: calendar_v3.Schema$Event,
+    externalEvent: calendar_v3.Schema$Event | null,
+    lastSyncAt: Date | null,
+  ) {
+    if (!externalEvent?.updated || !lastSyncAt) return false;
+    const externalUpdatedAt = new Date(externalEvent.updated).getTime();
+    const localUpdatedAt = new Date(localEvent.updated ?? 0).getTime();
+    return localUpdatedAt > lastSyncAt.getTime() && externalUpdatedAt > lastSyncAt.getTime();
   }
 
   private async withRetry<T>(fn: () => Promise<T>, retries = 3): Promise<T> {
