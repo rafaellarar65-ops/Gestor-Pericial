@@ -57,6 +57,11 @@ Garantir qualidade funcional, segurança (LGPD/RBAC), confiabilidade e conformid
 | CC-003 | Cross-cutting | Notificações | Evento de sistema | Disparar evento | Notificação correta sem duplicidade | Medium | S |
 | CC-004 | Cross-cutting | Responsividade | Viewports mobile/desktop | Abrir páginas principais | Layout usável sem quebra crítica | High | S |
 
+## Padrão operacional da suíte E2E (Playwright)
+- **Base URL oficial:** `http://localhost:3000`, com override por `E2E_BASE_URL` para CI e ambientes remotos.
+- **Política de evidências:** trace em `on-first-retry`, screenshot em `only-on-failure` e vídeo em `retain-on-failure`.
+- **Matriz obrigatória de execução:** `desktop-chrome` e `iphone-13`.
+
 ## Critérios de saída
 - 100% dos testes BLOCKER aprovados.
 - 0 falhas críticas abertas.
