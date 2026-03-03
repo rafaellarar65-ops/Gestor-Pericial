@@ -1,8 +1,9 @@
 import { BadRequestException, Injectable, NotFoundException } from '@nestjs/common';
-import { Prisma } from '@prisma/client';
+import { AgendaEventSource, AgendaEventStatus, AgendaEventType, AgendaTaskStatus, Prisma } from '@prisma/client';
 import { RequestContextService } from '../../common/request-context.service';
 import { PrismaService } from '../../prisma/prisma.service';
 import {
+  BatchSchedulePericiasDto,
   BatchUpdatePericiasDto,
   ChangeStatusPericiaDto,
   CreatePericiasDto,
@@ -130,6 +131,133 @@ export class PericiasService {
   async batchUpdate(dto: BatchUpdatePericiasDto) {
     const result = await this.prisma.pericia.updateMany({ where: { id: { in: dto.ids } }, data: dto.data });
     return { updated: result.count };
+  }
+
+
+  async batchSchedule(dto: BatchSchedulePericiasDto) {
+    const tenantId = this.context.get('tenantId') ?? '';
+    const flags = {
+      atualizarStatus: dto.flags?.atualizarStatus ?? true,
+      criarEventos: dto.flags?.criarEventos ?? true,
+      criarTarefas48h: dto.flags?.criarTarefas48h ?? true,
+    };
+
+    const periciaIds = Array.from(new Set(dto.items.map((item) => item.periciaId)));
+    if (periciaIds.length === 0) throw new BadRequestException('Nenhuma perícia informada para agendamento em lote.');
+
+    const pericias = await this.prisma.pericia.findMany({
+      where: { tenantId, id: { in: periciaIds } },
+      select: { id: true, processoCNJ: true, cidadeId: true },
+    });
+
+    const foundIds = new Set(pericias.map((item) => item.id));
+    const missingIds = periciaIds.filter((id) => !foundIds.has(id));
+
+    const periciaById = new Map(pericias.map((item) => [item.id, item]));
+    const targetStatusId = dto.parametros?.statusId;
+
+    const summary: Array<{ periciaId: string; sucesso: boolean; erro?: string }> = [];
+    const successfulItems: Array<{ periciaId: string; scheduledAt: string }> = [];
+
+    await this.prisma.$transaction(async (tx) => {
+      for (const item of dto.items) {
+        const pericia = periciaById.get(item.periciaId);
+        if (!pericia) {
+          summary.push({ periciaId: item.periciaId, sucesso: false, erro: 'Perícia não encontrada para o tenant.' });
+          continue;
+        }
+
+        const baseDate = item.dataAgendamento ?? dto.parametros?.data;
+        const baseTime = item.horaAgendamento ?? dto.parametros?.hora;
+
+        if (!baseDate || !baseTime) {
+          summary.push({ periciaId: item.periciaId, sucesso: false, erro: 'Data e hora são obrigatórias para cada item.' });
+          continue;
+        }
+
+        const scheduledAt = new Date(`${baseDate}T${baseTime}:00`);
+        if (Number.isNaN(scheduledAt.getTime())) {
+          summary.push({ periciaId: item.periciaId, sucesso: false, erro: 'Data/hora inválidas para o item.' });
+          continue;
+        }
+
+        await tx.pericia.update({
+          where: { id: pericia.id },
+          data: {
+            dataAgendamento: new Date(baseDate),
+            horaAgendamento: baseTime,
+            ...(flags.atualizarStatus && targetStatusId ? { statusId: targetStatusId } : {}),
+          },
+        });
+
+        if (flags.criarEventos) {
+          await tx.agendaEvent.create({
+            data: {
+              tenantId,
+              periciaId: pericia.id,
+              cityId: pericia.cidadeId ?? undefined,
+              title: item.title ?? `Perícia agendada - ${pericia.processoCNJ}`,
+              type: AgendaEventType.PERICIA_AGENDADA,
+              status: AgendaEventStatus.AGENDADA,
+              source: AgendaEventSource.MANUAL,
+              startAt: scheduledAt,
+              location: dto.parametros?.location,
+              metadata: {
+                source: 'pericias.batchSchedule',
+                modalidade: dto.parametros?.modalidade,
+              },
+            },
+          });
+        }
+
+        if (flags.criarTarefas48h) {
+          const dueAt = new Date(scheduledAt.getTime() - 48 * 60 * 60 * 1000);
+          await tx.agendaTask.create({
+            data: {
+              tenantId,
+              periciaId: pericia.id,
+              title: `Preparar perícia ${pericia.processoCNJ} (D-2)`,
+              dueAt,
+              status: AgendaTaskStatus.TODO,
+              priority: 2,
+              metadata: {
+                source: 'pericias.batchSchedule',
+                scheduledAt: scheduledAt.toISOString(),
+              },
+            },
+          });
+        }
+
+        successfulItems.push({ periciaId: pericia.id, scheduledAt: scheduledAt.toISOString() });
+        summary.push({ periciaId: pericia.id, sucesso: true });
+      }
+
+      await tx.schedulingBatch.create({
+        data: {
+          tenantId,
+          dateRef: new Date(dto.parametros?.data ?? dto.items[0]?.dataAgendamento ?? new Date().toISOString()),
+          criteriaJson: {
+            parametros: dto.parametros ?? {},
+            flags,
+          } as unknown as Prisma.InputJsonValue,
+          resultJson: {
+            status: missingIds.length > 0 || summary.some((item) => !item.sucesso) ? 'PARCIAL' : 'CONFIRMADO',
+            total: dto.items.length,
+            sucesso: successfulItems.length,
+            falhas: summary.filter((item) => !item.sucesso).length,
+            missingIds,
+            items: summary,
+          } as unknown as Prisma.InputJsonValue,
+        },
+      });
+    });
+
+    return {
+      total: dto.items.length,
+      sucesso: summary.filter((item) => item.sucesso).length,
+      falhas: summary.filter((item) => !item.sucesso).length,
+      items: summary,
+    };
   }
 
   async importCsv(dto: ImportPericiasDto) {

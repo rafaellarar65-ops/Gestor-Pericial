@@ -39,12 +39,11 @@ describe('AgendarLotePage', () => {
 
     await waitFor(() => {
       expect(postMock).toHaveBeenCalledWith(
-        '/agenda/batch-scheduling',
+        '/pericias/batch-schedule',
         expect.objectContaining({
           items: expect.arrayContaining([
             expect.objectContaining({
               periciaId: 'p1',
-              type: 'PERICIA',
             }),
           ]),
         }),
