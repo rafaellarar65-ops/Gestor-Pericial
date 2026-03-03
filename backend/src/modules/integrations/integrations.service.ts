@@ -150,19 +150,36 @@ export class IntegrationsService {
         : Promise.resolve([]),
     ]);
 
-    const direction = dto.direction === 'push' ? CalendarSyncDirection.PUSH : CalendarSyncDirection.PULL;
+    const requestedDirection = dto.direction === 'push' ? CalendarSyncDirection.PUSH : CalendarSyncDirection.PULL;
+    const syncMode = integration.mode ?? CalendarSyncMode.MIRROR;
+    const shouldRunPull = syncMode === CalendarSyncMode.TWO_WAY;
+    const shouldRunPush = syncMode === CalendarSyncMode.MIRROR || syncMode === CalendarSyncMode.TWO_WAY;
+    const executedDirections: CalendarSyncDirection[] = [];
+    if (shouldRunPull) executedDirections.push(CalendarSyncDirection.PULL);
+    if (shouldRunPush) executedDirections.push(CalendarSyncDirection.PUSH);
+
+    const ignoredExternalChanges: Array<{ type: CalendarSyncType; localEntityId: string }> = [];
     let conflicts = 0;
     let synced = 0;
 
     for (const event of events) {
-      const status = this.calculateSyncStatus(event.updatedAt, event.externalLastModifiedAt, event.lastSyncAt);
+      const status = this.reconcileSyncStatus({
+        syncMode,
+        localUpdatedAt: event.updatedAt,
+        externalLastModifiedAt: event.externalLastModifiedAt,
+        lastSyncAt: event.lastSyncAt,
+        localEtag: event.externalEtag,
+        externalEtag: event.externalEtag,
+      });
+      const externalChanged = this.hasExternalChanges(event.externalLastModifiedAt, event.lastSyncAt);
+      const ignoredExternalByMode = syncMode === CalendarSyncMode.MIRROR && externalChanged;
       const eventSyncStatus = status === CalendarSyncStatus.CONFLICT ? "CONFLICT" : status === CalendarSyncStatus.SYNCED ? "SYNCED" : "ERROR";
       await this.prisma.agendaEvent.update({
         where: { id: event.id },
         data: {
           syncStatus: eventSyncStatus,
           lastSyncAt: status === CalendarSyncStatus.CONFLICT ? event.lastSyncAt : new Date(),
-          externalLastModifiedAt: direction === CalendarSyncDirection.PULL ? new Date() : event.externalLastModifiedAt,
+          externalLastModifiedAt: shouldRunPull ? new Date() : event.externalLastModifiedAt,
         },
       });
       await this.prisma.syncAuditLog.create({
@@ -170,23 +187,35 @@ export class IntegrationsService {
           tenantId,
           integrationId: integration.id,
           syncType: CalendarSyncType.EVENT,
-          direction,
+          direction: shouldRunPull ? CalendarSyncDirection.PULL : CalendarSyncDirection.PUSH,
           localEntity: 'AgendaEvent',
           localEntityId: event.id,
           externalId: event.externalId,
-          status,
-          message: status === CalendarSyncStatus.CONFLICT ? 'Conflito detectado entre alterações locais e externas.' : 'Evento sincronizado.',
+          status: ignoredExternalByMode ? CalendarSyncStatus.WARNING : status,
+          message: ignoredExternalByMode
+            ? 'Alterações externas ignoradas: modo MIRROR aplica apenas push local → Google.'
+            : status === CalendarSyncStatus.CONFLICT
+              ? 'Conflito detectado entre alterações locais e externas.'
+              : 'Evento sincronizado.',
           localUpdatedAt: event.updatedAt,
           externalUpdatedAt: event.externalLastModifiedAt,
           syncedAt: status === CalendarSyncStatus.CONFLICT ? null : new Date(),
         },
       });
+      if (ignoredExternalByMode) {
+        ignoredExternalChanges.push({ type: CalendarSyncType.EVENT, localEntityId: event.id });
+      }
       if (status === CalendarSyncStatus.CONFLICT) conflicts += 1;
       else synced += 1;
     }
 
     for (const task of tasks) {
-      const status = this.calculateSyncStatus(task.updatedAt, null, task.lastSyncAt);
+      const status = this.reconcileSyncStatus({
+        syncMode,
+        localUpdatedAt: task.updatedAt,
+        externalLastModifiedAt: null,
+        lastSyncAt: task.lastSyncAt,
+      });
       await this.prisma.agendaTask.update({
         where: { id: task.id },
         data: {
@@ -198,7 +227,7 @@ export class IntegrationsService {
           tenantId,
           integrationId: integration.id,
           syncType: CalendarSyncType.TASK,
-          direction,
+          direction: shouldRunPull ? CalendarSyncDirection.PULL : CalendarSyncDirection.PUSH,
           localEntity: 'AgendaTask',
           localEntityId: task.id,
           externalId: task.externalId,
@@ -215,7 +244,19 @@ export class IntegrationsService {
 
     await this.prisma.calendarIntegration.update({ where: { id: integration.id }, data: { lastSyncAt: new Date() } });
 
-    return { synced, conflicts, direction: dto.direction };
+    return {
+      synced,
+      conflicts,
+      direction: dto.direction,
+      mode: syncMode,
+      behavior: {
+        requestedDirection,
+        executedDirections,
+        pullEnabled: shouldRunPull,
+        pushEnabled: shouldRunPush,
+        ignoredExternalChanges: ignoredExternalChanges.length,
+      },
+    };
   }
 
   async listSyncAudit(dto: ListSyncAuditDto) {
@@ -329,10 +370,32 @@ export class IntegrationsService {
     return { original: dto.cnj, normalized: onlyDigits, validLength: onlyDigits.length === 20 };
   }
 
-  private calculateSyncStatus(localUpdatedAt: Date, externalLastModifiedAt: Date | null, lastSyncAt: Date | null) {
+  private hasExternalChanges(externalLastModifiedAt: Date | null, lastSyncAt: Date | null) {
+    return Boolean(externalLastModifiedAt && lastSyncAt && externalLastModifiedAt.getTime() > lastSyncAt.getTime());
+  }
+
+  private reconcileSyncStatus(params: {
+    syncMode: CalendarSyncMode;
+    localUpdatedAt: Date;
+    externalLastModifiedAt: Date | null;
+    lastSyncAt: Date | null;
+    localEtag?: string | null;
+    externalEtag?: string | null;
+  }) {
+    const { syncMode, localUpdatedAt, externalLastModifiedAt, lastSyncAt, localEtag, externalEtag } = params;
     if (!lastSyncAt) return CalendarSyncStatus.SYNCED;
+
     const localChanged = localUpdatedAt.getTime() > lastSyncAt.getTime();
     const externalChanged = Boolean(externalLastModifiedAt && externalLastModifiedAt.getTime() > lastSyncAt.getTime());
+
+    if (syncMode === CalendarSyncMode.MIRROR) {
+      if (localChanged) return CalendarSyncStatus.WARNING;
+      if (externalChanged) return CalendarSyncStatus.WARNING;
+      return CalendarSyncStatus.SYNCED;
+    }
+
+    const etagDiverged = Boolean(localEtag && externalEtag && localEtag !== externalEtag);
+    if (etagDiverged && (localChanged || externalChanged)) return CalendarSyncStatus.CONFLICT;
     if (localChanged && externalChanged) return CalendarSyncStatus.CONFLICT;
     if (localChanged || externalChanged) return CalendarSyncStatus.WARNING;
     return CalendarSyncStatus.SYNCED;
