@@ -107,6 +107,25 @@ export class CreateDespesaDto {
   periciaId?: string;
 }
 
+export class ImportAiPrintDto {
+  @ApiProperty({ description: 'Texto bruto extraído por OCR/IA.' })
+  @IsString()
+  content!: string;
+}
+
+export class FinancialImportAiPrintResponseDto {
+  @ApiProperty()
+  global!: {
+    totalBruto: number;
+    totalLiquido: number;
+    totalImpostos: number;
+    dataPagamento: string;
+  };
+
+  @ApiProperty({ type: [Object] })
+  items!: Array<Record<string, unknown>>;
+}
+
 export class ImportRecebimentoItemDto {
   @ApiProperty()
   @IsString()
@@ -370,4 +389,30 @@ export class ImportUnmatchedTransactionsDto {
   @ValidateNested({ each: true })
   @Type(() => ImportUnmatchedTransactionDto)
   rows!: ImportUnmatchedTransactionDto[];
+}
+
+export class SplitInstallmentDto {
+  @ApiProperty()
+  @IsUUID()
+  periciaId!: string;
+
+  @ApiProperty()
+  @Type(() => Number)
+  @IsNumber({ maxDecimalPlaces: 2 })
+  @Min(0.01)
+  amount!: number;
+
+  @ApiPropertyOptional()
+  @IsOptional()
+  @IsString()
+  note?: string;
+}
+
+export class SplitUnmatchedPaymentDto {
+  @ApiProperty({ type: [SplitInstallmentDto] })
+  @IsArray()
+  @ArrayMinSize(2)
+  @ValidateNested({ each: true })
+  @Type(() => SplitInstallmentDto)
+  installments!: SplitInstallmentDto[];
 }
