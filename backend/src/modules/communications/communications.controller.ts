@@ -28,9 +28,9 @@ import {
   SendWhatsappMessageDto,
   TEMPLATE_CHANNELS,
   UpdateMessageTemplateDto,
-  UpdateWhatsappConsentDto,
-  UpsertUolhostEmailConfigDto,
+  UpdateWhatsappConsentDto
 } from './dto/communications.dto';
+import { UpsertUolhostEmailConfigDto } from './dto/email-config.dto';
 
 @ApiTags('communications')
 @ApiBearerAuth()

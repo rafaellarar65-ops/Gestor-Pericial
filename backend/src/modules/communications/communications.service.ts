@@ -20,8 +20,9 @@ import {
   SendWhatsappMessageDto,
   UpdateMessageTemplateDto,
   UpdateWhatsappConsentDto,
-  UpsertUolhostEmailConfigDto,
 } from './dto/communications.dto';
+import { EmailConfigDto, UpsertUolhostEmailConfigDto } from './dto/email-config.dto';
+import { EmailImapService } from './email-imap.service';
 
 type UolhostCreds = {
   login: string;
@@ -36,6 +37,7 @@ export class CommunicationsService {
     private readonly prisma: PrismaService,
     private readonly context: RequestContextService,
     private readonly whatsappService: WhatsappService,
+    private readonly emailImapService: EmailImapService,
   ) {}
 
   private mapUolhostConfigResponse(config: {
