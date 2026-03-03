@@ -1,89 +1,138 @@
-import { useEffect, useMemo, useState } from 'react';
-import { useQuery } from '@tanstack/react-query';
-import { CalendarClock, ListFilter, MapPin, Plus, Trash2 } from 'lucide-react';
+import { useMemo, useState } from 'react';
+import { useMutation, useQuery } from '@tanstack/react-query';
+import { CalendarClock } from 'lucide-react';
 import { toast } from 'sonner';
-import { Button } from '@/components/ui/button';
-import { Card } from '@/components/ui/card';
-import { Input } from '@/components/ui/input';
-import { EmptyState, ErrorState, LoadingState } from '@/components/ui/state';
+import { ErrorState, LoadingState } from '@/components/ui/state';
+import { useScheduleLot, type PrepItem, type ScheduleParams } from '@/hooks/use-schedule-lot';
+import { StepConfirm } from '@/pages/fila-agendamento/step-confirm';
+import { StepReview } from '@/pages/fila-agendamento/step-review';
+import { StepSchedule } from '@/pages/fila-agendamento/step-schedule';
+import { StepSelect } from '@/pages/fila-agendamento/step-select';
+import { agendaService } from '@/services/agenda-service';
 import { periciaService } from '@/services/pericia-service';
-import type { StageListItem } from '@/types/api';
 
-type Tab = 'fila' | 'preparacao';
+const CONFIRMED_KEY = 'agendamento.confirmados';
 
-const PREP_KEY = 'agendamento.preparacao';
+const initialParams: ScheduleParams = {
+  date: '',
+  startTime: '',
+  durationMinutes: 30,
+  intervalMinutes: 10,
+  location: '',
+  modalidade: 'PRESENCIAL',
+  source: 'CSV',
+};
 
 const FilaAgendamentoPage = () => {
-  const [activeTab, setActiveTab] = useState<Tab>('fila');
-  const [selectedCities, setSelectedCities] = useState<Set<string>>(new Set());
+  const [currentStep, setCurrentStep] = useState<1 | 2 | 3 | 4>(1);
   const [search, setSearch] = useState('');
-  const [prepList, setPrepList] = useState<StageListItem[]>([]);
+  const [selectedCities, setSelectedCities] = useState<Set<string>>(new Set());
+  const [params, setParams] = useState<ScheduleParams>(initialParams);
+  const [confirmedPericiaIds, setConfirmedPericiaIds] = useState<Set<string>>(() => {
+    const raw = localStorage.getItem(CONFIRMED_KEY);
+    if (!raw) return new Set<string>();
+    const parsed = JSON.parse(raw) as string[];
+    return new Set(parsed);
+  });
 
   const { data, isLoading, isError } = useQuery({
     queryKey: ['fila-agendamento-cidades'],
     queryFn: () => periciaService.filaAgendamentoPorCidade(),
   });
 
-  useEffect(() => {
-    const prepRaw = localStorage.getItem(PREP_KEY);
-    if (prepRaw) setPrepList(JSON.parse(prepRaw) as StageListItem[]);
-  }, []);
-
-  useEffect(() => {
-    localStorage.setItem(PREP_KEY, JSON.stringify(prepList));
-  }, [prepList]);
-
-  const cityGroups = useMemo(() => {
+  const filteredCities = useMemo(() => {
     const q = search.trim().toLowerCase();
-    const groups = data?.cities ?? [];
-    if (!q) return groups;
+    const cities = data?.cities ?? [];
 
-    return groups
-      .map((group) => ({
-        ...group,
-        items: group.items.filter(
+    if (!q) return cities;
+
+    return cities
+      .map((cityGroup) => ({
+        ...cityGroup,
+        items: cityGroup.items.filter(
           (item) =>
-            item.processoCNJ.toLowerCase().includes(q) ||
+            item.cidade.toLowerCase().includes(q) ||
             item.autorNome.toLowerCase().includes(q) ||
-            group.cidade.toLowerCase().includes(q),
+            item.processoCNJ.toLowerCase().includes(q),
         ),
       }))
-      .filter((group) => group.items.length > 0)
-      .map((group) => ({ ...group, total: group.items.length }));
+      .filter((cityGroup) => cityGroup.items.length > 0);
   }, [data, search]);
 
-  const selectedCityItems = useMemo(
-    () => cityGroups.filter((group) => selectedCities.has(group.cidade)).flatMap((group) => group.items),
-    [cityGroups, selectedCities],
-  );
+  const selectedItems = useMemo<PrepItem[]>(() => {
+    return filteredCities
+      .filter((cityGroup) => selectedCities.has(cityGroup.cidade))
+      .flatMap((cityGroup) =>
+        cityGroup.items.map((item) => ({
+          id: item.id,
+          processoCNJ: item.processoCNJ,
+          autorNome: item.autorNome,
+          cidade: item.cidade,
+        })),
+      );
+  }, [filteredCities, selectedCities]);
+
+  const { draftLot, conflicts } = useScheduleLot(selectedItems, params, confirmedPericiaIds);
+
+  const submitMutation = useMutation({
+    mutationFn: async () => {
+      if (!draftLot) return;
+      await agendaService.scheduleLot({
+        items: draftLot.items.map((item) => ({
+          periciaId: item.periciaId,
+          startAt: item.scheduledAt,
+        })),
+        metadata: {
+          source: draftLot.source,
+          cityNames: draftLot.cityNames,
+          date: draftLot.date,
+          startTime: draftLot.startTime,
+          durationMinutes: draftLot.durationMinutes,
+          intervalMinutes: draftLot.intervalMinutes,
+          location: draftLot.location,
+          modalidade: draftLot.modalidade,
+        },
+      });
+    },
+    onSuccess: () => {
+      if (!draftLot) return;
+
+      const newIds = draftLot.items.map((item) => item.periciaId);
+      setConfirmedPericiaIds((previous) => {
+        const next = new Set(previous);
+        newIds.forEach((id) => next.add(id));
+        localStorage.setItem(CONFIRMED_KEY, JSON.stringify(Array.from(next)));
+        return next;
+      });
+
+      toast.success('Lote confirmado com sucesso.');
+      setCurrentStep(1);
+      setSelectedCities(new Set());
+      setParams(initialParams);
+    },
+    onError: () => {
+      toast.error('Falha ao confirmar o lote. Tente novamente.');
+    },
+  });
 
   const toggleCity = (city: string) => {
     setSelectedCities((prev) => {
       const next = new Set(prev);
-      next.has(city) ? next.delete(city) : next.add(city);
+      if (next.has(city)) {
+        next.delete(city);
+      } else {
+        next.add(city);
+      }
       return next;
     });
   };
 
-  const addToPreparation = () => {
-    if (selectedCityItems.length === 0) {
-      toast.error('Selecione ao menos uma cidade.');
-      return;
-    }
-
-    setPrepList((prev) => {
-      const merged = new Map(prev.map((item) => [item.id, item]));
-      selectedCityItems.forEach((item) => merged.set(item.id, item));
-      return Array.from(merged.values());
-    });
-
-    setSelectedCities(new Set());
-    setActiveTab('preparacao');
-    toast.success('Perícias adicionadas à lista de preparação.');
+  const goNext = () => {
+    setCurrentStep((prev) => (prev < 4 ? ((prev + 1) as 1 | 2 | 3 | 4) : prev));
   };
 
-  const removePrepItem = (id: string) => {
-    setPrepList((prev) => prev.filter((item) => item.id !== id));
+  const goBack = () => {
+    setCurrentStep((prev) => (prev > 1 ? ((prev - 1) as 1 | 2 | 3 | 4) : prev));
   };
 
   if (isLoading) return <LoadingState />;
@@ -92,102 +141,45 @@ const FilaAgendamentoPage = () => {
   return (
     <div className="space-y-4">
       <header className="rounded-xl border bg-white px-5 py-4 shadow-sm">
-        <div className="flex flex-wrap items-center justify-between gap-3">
-          <div className="flex items-start gap-3">
-            <CalendarClock className="mt-1 text-blue-600" size={22} />
-            <div>
-              <h1 className="text-xl font-semibold text-slate-900">Central de Agendamento (Presencial)</h1>
-              <p className="text-sm text-slate-500">Fila de espera por cidade e lista de preparação de lotes.</p>
-            </div>
-          </div>
-
-          <div className="flex items-center gap-1 rounded-lg bg-slate-100 p-1 text-sm">
-            <button className="rounded-md bg-white px-3 py-1.5 font-semibold text-blue-700" type="button">
-              Fila por Cidade
-            </button>
-            <button className="rounded-md px-3 py-1.5 text-slate-600" type="button">
-              Lista de Preparação
-            </button>
+        <div className="flex items-start gap-3">
+          <CalendarClock className="mt-1 text-blue-600" size={22} />
+          <div>
+            <h1 className="text-xl font-semibold text-slate-900">Agendar em Lote (Wizard)</h1>
+            <p className="text-sm text-slate-500">Etapa {currentStep} de 4: seleção, parâmetros, revisão e confirmação.</p>
           </div>
         </div>
       </header>
 
-      <div className="flex items-center gap-2">
-        <Button onClick={() => setActiveTab('fila')} variant={activeTab === 'fila' ? 'default' : 'outline'}>
-          <ListFilter className="mr-2" size={14} />
-          Fila
-        </Button>
-        <Button onClick={() => setActiveTab('preparacao')} variant={activeTab === 'preparacao' ? 'default' : 'outline'}>
-          <Plus className="mr-2" size={14} />
-          Preparação ({prepList.length})
-        </Button>
-      </div>
+      {currentStep === 1 && (
+        <StepSelect
+          cityGroups={filteredCities.map((cityGroup) => ({ city: cityGroup.cidade, items: cityGroup.items }))}
+          search={search}
+          onSearchChange={setSearch}
+          selectedCities={selectedCities}
+          onToggleCity={toggleCity}
+          onNext={goNext}
+        />
+      )}
 
-      {activeTab === 'fila' ? (
-        <>
-          <Card className="p-4">
-            <Input
-              onChange={(e) => setSearch(e.target.value)}
-              placeholder="Buscar por processo, autor ou cidade"
-              value={search}
-            />
-          </Card>
+      {currentStep === 2 && (
+        <StepSchedule
+          params={params}
+          totalItems={selectedItems.length}
+          onParamsChange={(patch) => setParams((prev) => ({ ...prev, ...patch }))}
+          onBack={goBack}
+          onNext={goNext}
+        />
+      )}
 
-          <div className="grid gap-3 lg:grid-cols-2">
-            {cityGroups.length === 0 ? (
-              <div className="lg:col-span-2">
-                <EmptyState title="Sem perícias na fila" />
-              </div>
-            ) : (
-              cityGroups.map((group) => (
-                <Card className="p-4" key={group.cidade}>
-                  <div className="mb-3 flex items-center justify-between">
-                    <button className="flex items-center gap-2 text-left" onClick={() => toggleCity(group.cidade)} type="button">
-                      <input checked={selectedCities.has(group.cidade)} readOnly type="checkbox" />
-                      <MapPin size={14} />
-                      <span className="font-semibold">{group.cidade}</span>
-                    </button>
-                    <span className="rounded-full bg-blue-100 px-2 py-1 text-xs font-semibold text-blue-800">{group.total}</span>
-                  </div>
-                  <ul className="space-y-2">
-                    {group.items.slice(0, 6).map((item) => (
-                      <li className="rounded border px-3 py-2 text-sm" key={item.id}>
-                        <p className="font-mono text-xs text-gray-500">{item.processoCNJ}</p>
-                        <p>{item.autorNome || '—'}</p>
-                      </li>
-                    ))}
-                  </ul>
-                </Card>
-              ))
-            )}
-          </div>
+      {currentStep === 3 && <StepReview draftLot={draftLot} conflicts={conflicts} onBack={goBack} onNext={goNext} />}
 
-          <div className="flex justify-end">
-            <Button onClick={addToPreparation}>Adicionar cidades selecionadas</Button>
-          </div>
-        </>
-      ) : (
-        <Card className="p-4">
-          {prepList.length === 0 ? (
-            <EmptyState title="Lista de preparação vazia" />
-          ) : (
-            <ul className="space-y-2">
-              {prepList.map((item) => (
-                <li className="flex items-center justify-between rounded border px-3 py-2" key={item.id}>
-                  <div>
-                    <p className="font-mono text-xs text-gray-500">{item.processoCNJ}</p>
-                    <p className="text-sm">
-                      {item.autorNome || '—'} · {item.cidade}
-                    </p>
-                  </div>
-                  <Button onClick={() => removePrepItem(item.id)} size="sm" variant="ghost">
-                    <Trash2 size={14} />
-                  </Button>
-                </li>
-              ))}
-            </ul>
-          )}
-        </Card>
+      {currentStep === 4 && (
+        <StepConfirm
+          draftLot={draftLot}
+          isSubmitting={submitMutation.isPending}
+          onBack={goBack}
+          onConfirm={() => submitMutation.mutate()}
+        />
       )}
     </div>
   );
