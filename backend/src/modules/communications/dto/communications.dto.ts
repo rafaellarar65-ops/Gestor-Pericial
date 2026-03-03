@@ -286,6 +286,12 @@ export class InboxFilterDto {
   filter?: (typeof INBOX_FILTERS)[number];
 }
 
+export class InboxUidParamDto {
+  @ApiProperty({ format: 'uuid', example: '8fe00bf0-b01d-4eaa-92c4-1f7b8fd2de67' })
+  @IsUUID()
+  uid!: string;
+}
+
 export class BulkResendTemplateDto {
   @ApiProperty({ type: [String] })
   @ArrayNotEmpty()

@@ -94,6 +94,12 @@ export class CommunicationsService {
   }
 
   listInbox(_dto: InboxFilterDto) { return this.prisma.activityLog.findMany({ orderBy: { createdAt: 'desc' }, take: 100 }); }
+
+  async getInboxByUid(uid: string) {
+    const item = await this.prisma.activityLog.findUnique({ where: { id: uid } });
+    if (!item) throw new NotFoundException('Item da inbox não encontrado');
+    return item;
+  }
   bulkResendTemplate(dto: BulkResendTemplateDto) { return { resent: dto.messageIds.length }; }
   bulkGrantOptIn(dto: BulkGrantOptInDto) { return { updated: dto.messageIds.length }; }
   bulkLinkInbound(dto: BulkLinkInboundDto) { return { linked: dto.messageIds.length, periciaId: dto.periciaId }; }
