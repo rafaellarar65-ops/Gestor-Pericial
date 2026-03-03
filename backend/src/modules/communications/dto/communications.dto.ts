@@ -124,6 +124,39 @@ export class UpsertUolhostEmailConfigDto {
   secure?: boolean;
 }
 
+
+export class UolhostEmailConfigResponseDto {
+  @ApiProperty()
+  id!: string;
+
+  @ApiProperty()
+  provider!: string;
+
+  @ApiProperty()
+  fromEmail!: string;
+
+  @ApiPropertyOptional()
+  fromName?: string;
+
+  @ApiProperty()
+  smtpHost!: string;
+
+  @ApiProperty()
+  smtpPort!: number;
+
+  @ApiProperty()
+  secure!: boolean;
+
+  @ApiProperty()
+  active!: boolean;
+
+  @ApiProperty()
+  createdAt!: Date;
+
+  @ApiProperty()
+  updatedAt!: Date;
+}
+
 export class SendWhatsappMessageDto {
   @ApiProperty()
   @IsString()
