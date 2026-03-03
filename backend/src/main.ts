@@ -81,6 +81,8 @@ async function bootstrap() {
   // Set global prefix for API routes (required for Kubernetes ingress routing)
   app.setGlobalPrefix('api');
 
+  // Operação: para permitir múltiplas origens de frontend, use FRONTEND_URL separado por vírgula
+  // Ex.: http://localhost:3000,http://127.0.0.1:3000
   const configuredOrigins = process.env.FRONTEND_URL
     ? process.env.FRONTEND_URL.split(',').map((u) => u.trim()).filter(Boolean)
     : [];

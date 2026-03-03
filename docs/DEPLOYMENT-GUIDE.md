@@ -342,9 +342,9 @@ docker compose up -d
 docker compose exec backend npx prisma migrate deploy --schema prisma/schema.prisma
 
 # 5. Acesse:
-#    Frontend: http://localhost:5173
-#    Backend:  http://localhost:3001
-#    Swagger:  http://localhost:3001/docs
+#    Frontend: http://localhost:3000
+#    Backend:  http://localhost:8001
+#    Swagger:  http://localhost:8001/docs
 #    MailHog:  http://localhost:8025
 ```
 
@@ -361,15 +361,15 @@ npm install
 npx prisma migrate deploy --schema prisma/schema.prisma
 npx prisma generate --schema prisma/schema.prisma
 npm run start:dev
-# Backend roda em http://localhost:3000
+# Backend roda em http://localhost:8001
 
 # 3. Frontend (em outro terminal)
 cd frontend
 npm install
 # Crie um .env com:
-#   VITE_API_URL=http://localhost:3000
+#   VITE_API_URL=http://localhost:8001
 npm run dev
-# Frontend roda em http://localhost:5173
+# Frontend roda em http://localhost:3000
 ```
 
 ---
