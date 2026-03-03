@@ -11,7 +11,7 @@ O usuário solicitou montar o frontend do aplicativo "Gestor Pericial" na plataf
 - **Autenticação**: JWT (access token + refresh token)
 
 ### Frontend (Emergent)
-- **URL**: https://8e73bda0-f74d-4d27-9923-cccb0661776f.preview.emergentagent.com
+- **URL**: https://legal-expert-sys.preview.emergentagent.com
 - **Tech Stack**: React 19 + Vite + TypeScript + TailwindCSS + Zustand
 - **Porta**: 3000
 
