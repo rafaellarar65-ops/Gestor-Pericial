@@ -1,3 +1,4 @@
+import { HttpException } from '@nestjs/common';
 import { IntegrationsService } from './integrations.service';
 
 describe('IntegrationsService', () => {
@@ -11,10 +12,21 @@ describe('IntegrationsService', () => {
       create: jest.fn(),
       update: jest.fn(),
     },
+    calendarIntegration: {
+      findUnique: jest.fn(),
+      update: jest.fn(),
+    },
+    activityLog: {
+      create: jest.fn(),
+    },
   } as any;
 
   const context = {
-    get: jest.fn().mockReturnValue('user-1'),
+    get: jest.fn((key: string) => {
+      if (key === 'tenantId') return 'tenant-1';
+      if (key === 'userId') return 'user-1';
+      return null;
+    }),
   } as any;
 
   let service: IntegrationsService;
@@ -42,5 +54,41 @@ describe('IntegrationsService', () => {
 
     expect(first.cached).toBe(false);
     expect(second.cached).toBe(true);
+  });
+
+  it('disconnects google integration, revokes token and anonymizes credentials', async () => {
+    const fetchSpy = jest.spyOn(global, 'fetch').mockResolvedValue({ ok: true, status: 200 } as Response);
+    prisma.calendarIntegration.findUnique.mockResolvedValue({ id: 'cal-1', accessToken: 'access-token' });
+    prisma.calendarIntegration.update.mockResolvedValue({ id: 'cal-1', active: false });
+
+    const result = await service.disconnectGoogleCalendar();
+
+    expect(fetchSpy).toHaveBeenCalledWith(
+      'https://oauth2.googleapis.com/revoke',
+      expect.objectContaining({ method: 'POST' }),
+    );
+    expect(prisma.calendarIntegration.update).toHaveBeenCalledWith({
+      where: { id: 'cal-1' },
+      data: expect.objectContaining({
+        accessToken: null,
+        refreshToken: null,
+        tokenExpiresAt: null,
+        selectedCalendarId: null,
+        selectedCalendarName: null,
+        lastSyncAt: null,
+        active: false,
+      }),
+    });
+    expect(prisma.activityLog.create).toHaveBeenCalled();
+    expect(result.status).toBe('disconnected');
+    expect(result.revokeStatus).toBe('revoked');
+
+    fetchSpy.mockRestore();
+  });
+
+  it('throws not found when google integration does not exist', async () => {
+    prisma.calendarIntegration.findUnique.mockResolvedValue(null);
+
+    await expect(service.disconnectGoogleCalendar()).rejects.toThrow(HttpException);
   });
 });
