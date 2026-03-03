@@ -14,6 +14,31 @@ import type {
   UnmatchedPaymentOrigin,
 } from '@/types/api';
 
+
+
+type FinancialImportSource = 'AI_PRINT' | 'MANUAL_CSV' | 'INDIVIDUAL';
+
+type ImportRecebimentoItemPayload = {
+  processoCNJ: string;
+  fontePagamento: string;
+  dataRecebimento: string;
+  valorBruto: number;
+  valorLiquido?: number;
+  imposto?: number;
+  descricao?: string;
+};
+
+type ImportBatchResult = {
+  batchId: string;
+  source: FinancialImportSource;
+  itemsLinked: number;
+  itemsUnmatched: number;
+  gross: number;
+  net: number;
+  tax: number;
+  count: number;
+};
+
 type RecebimentoRaw = {
   id: string;
   fontePagamento: string;

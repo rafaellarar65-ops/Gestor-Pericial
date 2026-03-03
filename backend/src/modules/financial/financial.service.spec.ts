@@ -24,6 +24,12 @@ describe('FinancialService', () => {
     },
     pericia: {
       count: jest.fn(),
+      findFirst: jest.fn(),
+    },
+    unmatchedPayment: {
+      create: jest.fn(),
+      findMany: jest.fn(),
+      updateMany: jest.fn(),
     },
     $transaction: jest.fn(),
   } as any;
