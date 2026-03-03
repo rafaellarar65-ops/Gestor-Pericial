@@ -1,11 +1,11 @@
 import { AlertTriangle } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { Card } from '@/components/ui/card';
-import type { BatchLot, LotItem } from '@/hooks/use-schedule-lot';
+import type { BatchLot, LotConflict } from '@/hooks/use-schedule-lot';
 
 type Props = {
   draftLot: BatchLot | null;
-  conflicts: LotItem[];
+  conflicts: LotConflict[];
   onBack: () => void;
   onNext: () => void;
 };
@@ -17,7 +17,11 @@ export const StepReview = ({ draftLot, conflicts, onBack, onNext }: Props) => (
       <div className="rounded-md border border-amber-300 bg-amber-50 p-3 text-sm">
         <p className="mb-2 inline-flex items-center gap-2 font-medium"><AlertTriangle className="h-4 w-4" />Conflitos encontrados</p>
         <ul className="list-inside list-disc">
-          {conflicts.map((item) => <li key={item.id}>{item.processoCNJ} já consta em lote confirmado.</li>)}
+          {conflicts.map((conflict) => (
+            <li key={`${conflict.item.id}-${conflict.reason}`}>
+              {conflict.item.processoCNJ}: {conflict.detail}
+            </li>
+          ))}
         </ul>
       </div>
     )}

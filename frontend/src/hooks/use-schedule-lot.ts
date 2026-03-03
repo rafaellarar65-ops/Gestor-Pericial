@@ -16,6 +16,18 @@ export type LotItem = {
   scheduledAt: string;
 };
 
+export type LotValidationReason =
+  | 'ALREADY_CONFIRMED'
+  | 'PAST_DATE'
+  | 'INVALID_DATETIME'
+  | 'INTRA_BATCH_COLLISION';
+
+export type LotConflict = {
+  item: LotItem;
+  reason: LotValidationReason;
+  detail: string;
+};
+
 export type BatchLot = {
   id: string;
   createdAt: string;
@@ -95,9 +107,56 @@ export const useScheduleLot = (items: PrepItem[], params: ScheduleParams, confir
     params.startTime,
   ]);
 
-  const conflicts = useMemo(() => {
+  const conflicts = useMemo<LotConflict[]>(() => {
     if (!draftLot) return [];
-    return draftLot.items.filter((item) => confirmedPericiaIds.has(item.periciaId));
+
+    const issues: LotConflict[] = [];
+    const now = Date.now();
+    const byCityTime = new Map<string, LotItem[]>();
+
+    draftLot.items.forEach((item) => {
+      const startAtMs = new Date(item.scheduledAt).getTime();
+
+      if (!Number.isFinite(startAtMs)) {
+        issues.push({
+          item,
+          reason: 'INVALID_DATETIME',
+          detail: 'Horário inválido para este item. Revise data/hora inicial e parâmetros do lote.',
+        });
+      } else if (startAtMs <= now) {
+        issues.push({
+          item,
+          reason: 'PAST_DATE',
+          detail: 'Horário no passado. Agende em uma data/horário futuro.',
+        });
+      }
+
+      if (confirmedPericiaIds.has(item.periciaId)) {
+        issues.push({
+          item,
+          reason: 'ALREADY_CONFIRMED',
+          detail: 'Perícia já consta em lote confirmado.',
+        });
+      }
+
+      const citySlotKey = `${item.cidade}|${item.scheduledAt}`;
+      const citySlot = byCityTime.get(citySlotKey) ?? [];
+      citySlot.push(item);
+      byCityTime.set(citySlotKey, citySlot);
+    });
+
+    byCityTime.forEach((citySlotItems) => {
+      if (citySlotItems.length < 2) return;
+      citySlotItems.forEach((item) => {
+        issues.push({
+          item,
+          reason: 'INTRA_BATCH_COLLISION',
+          detail: 'Conflito intra-lote: mesma cidade e mesmo horário para mais de um item.',
+        });
+      });
+    });
+
+    return issues;
   }, [draftLot, confirmedPericiaIds]);
 
   const hasValidTiming = params.durationMinutes > 0 && params.intervalMinutes >= 0;

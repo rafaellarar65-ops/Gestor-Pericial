@@ -1,4 +1,4 @@
-import { NotFoundException } from '@nestjs/common';
+import { BadRequestException, NotFoundException } from '@nestjs/common';
 import { AgendaEventStatus, AgendaEventType } from '@prisma/client';
 import { AgendaService } from './agenda.service';
 
@@ -9,6 +9,13 @@ describe('AgendaService', () => {
       findMany: jest.fn(),
       findFirst: jest.fn(),
       updateMany: jest.fn(),
+      update: jest.fn(),
+    },
+    pericia: {
+      findMany: jest.fn(),
+    },
+    schedulingBatch: {
+      create: jest.fn(),
     },
     agendaTask: {
       create: jest.fn(),
@@ -24,7 +31,8 @@ describe('AgendaService', () => {
   let service: AgendaService;
 
   beforeEach(() => {
-    jest.clearAllMocks();
+    jest.resetAllMocks();
+    context.get.mockImplementation((key: string) => (key === 'tenantId' ? 't-1' : 'u-1'));
     prisma.$transaction.mockImplementation(async (ops: Array<Promise<unknown>>) => Promise.all(ops));
     service = new AgendaService(prisma, context as any);
   });
@@ -68,18 +76,16 @@ describe('AgendaService', () => {
   });
 
   it('updates event by id + tenantId and returns updated entity', async () => {
-    prisma.agendaEvent.findFirst
-      .mockResolvedValueOnce({ id: 'ev-1', tenantId: 't-1' })
-      .mockResolvedValueOnce({ id: 'ev-1', tenantId: 't-1', title: 'Atualizado' });
-    prisma.agendaEvent.updateMany.mockResolvedValue({ count: 1 });
+    prisma.agendaEvent.findFirst.mockResolvedValue({ id: 'ev-1', tenantId: 't-1' });
+    prisma.agendaEvent.update.mockResolvedValue({ id: 'ev-1', tenantId: 't-1', title: 'Atualizado' });
 
     const result = await service.updateEvent('ev-1', { title: 'Atualizado' });
 
     expect(prisma.agendaEvent.findFirst).toHaveBeenNthCalledWith(1, {
       where: { id: 'ev-1', tenantId: 't-1' },
     });
-    expect(prisma.agendaEvent.updateMany).toHaveBeenCalledWith({
-      where: { id: 'ev-1', tenantId: 't-1' },
+    expect(prisma.agendaEvent.update).toHaveBeenCalledWith({
+      where: { id: 'ev-1' },
       data: expect.objectContaining({ title: 'Atualizado' }),
     });
     expect(result).toEqual({ id: 'ev-1', tenantId: 't-1', title: 'Atualizado' });
@@ -96,21 +102,24 @@ describe('AgendaService', () => {
 
   it('batch scheduling keeps tenantId in all transactional event creations', async () => {
     prisma.agendaEvent.create.mockImplementation(({ data }: { data: { title: string } }) => Promise.resolve({ id: data.title }));
+    prisma.pericia.findMany.mockResolvedValue([]);
+    prisma.agendaEvent.findFirst.mockResolvedValue(null);
+    prisma.schedulingBatch.create.mockResolvedValue({ id: 'b-1' });
 
     const result = await service.batchScheduling({
       items: [
         {
-          title: 'Evento A',
-          type: AgendaEventType.OUTRO,
-          startAt: new Date().toISOString(),
-        },
-        {
-          title: 'Evento B',
-          type: AgendaEventType.OUTRO,
-          startAt: new Date().toISOString(),
-        },
-      ],
-    });
+            title: 'Evento A',
+            type: AgendaEventType.OUTRO,
+            startAt: '2030-01-10T10:00:00.000Z',
+          },
+          {
+            title: 'Evento B',
+            type: AgendaEventType.OUTRO,
+            startAt: '2030-01-10T11:00:00.000Z',
+          },
+        ],
+      });
 
     expect(prisma.$transaction).toHaveBeenCalledTimes(1);
     expect(prisma.agendaEvent.create).toHaveBeenNthCalledWith(
@@ -126,6 +135,34 @@ describe('AgendaService', () => {
       }),
     );
     expect(result).toEqual({ created: 2 });
+  });
+
+  it('rejects batch scheduling with detailed invalid items', async () => {
+    prisma.pericia.findMany.mockResolvedValue([]);
+    prisma.agendaEvent.findFirst.mockResolvedValue({
+      id: 'ev-conflict',
+      startAt: new Date('2027-01-10T10:00:00.000Z'),
+      endAt: new Date('2027-01-10T11:00:00.000Z'),
+    });
+
+    await expect(
+      service.batchScheduling({
+        items: [
+          {
+            title: 'Evento A',
+            type: AgendaEventType.OUTRO,
+            startAt: '2027-01-10T10:00:00.000Z',
+            city: 'Belo Horizonte',
+          },
+          {
+            title: 'Evento B',
+            type: AgendaEventType.OUTRO,
+            startAt: '2027-01-10T10:00:00.000Z',
+            city: 'Belo Horizonte',
+          },
+        ],
+      }),
+    ).rejects.toThrow(BadRequestException);
   });
 
   it('appends status history when status changes', async () => {
