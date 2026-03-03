@@ -7,6 +7,35 @@ export type BatchSchedulePayload = {
   periciaIds: string[];
 };
 
+export type SuggestScheduleItem = {
+  periciaId: string;
+  cidade?: string;
+  modalidade?: string;
+  estimatedDurationMinutes?: number;
+};
+
+export type SuggestSchedulePayload = {
+  date: string;
+  startTime: string;
+  defaultDurationMinutes?: number;
+  intervalMinutes?: number;
+  modalidadeDurationMinutes?: Record<string, number>;
+  items: SuggestScheduleItem[];
+};
+
+export type SuggestScheduleResponse = {
+  date: string;
+  groupedByCity: string[];
+  suggestions: Array<{
+    periciaId: string;
+    cidade: string;
+    modalidade: string;
+    estimatedDurationMinutes: number;
+    startAt: string;
+    endAt: string;
+  }>;
+};
+
 type BatchScheduleItemRequest = {
   periciaId: string;
   title?: string;
@@ -164,5 +193,17 @@ export const agendaService = {
   listSchedulingBatches: async (): Promise<SchedulingBatchResponse[]> => {
     const { data } = await apiClient.get<SchedulingBatchResponse[]>('/agenda/batch-scheduling');
     return Array.isArray(data) ? data : [];
+  },
+
+  suggestBatchScheduling: async (payload: SuggestSchedulePayload): Promise<SuggestScheduleResponse> => {
+    const { data } = await apiClient.post<SuggestScheduleResponse>('/agenda/batch-scheduling/suggest', payload);
+    return data;
+  },
+
+  exportBatchPdf: async (batchId: string, includeRoute = false) => {
+    const { data } = await apiClient.get<{ fileName: string; contentBase64: string; mimeType: string }>(`/agenda/batch-scheduling/${batchId}/export-pdf`, {
+      params: { includeRoute },
+    });
+    return data;
   },
 };

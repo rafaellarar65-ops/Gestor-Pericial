@@ -6,7 +6,9 @@ import {
   BatchScheduleDto,
   CreateAgendaEventDto,
   CreateAgendaTaskDto,
+  ExportBatchPdfDto,
   ExportWeeklyPdfDto,
+  SuggestBatchSchedulingDto,
   UpdateAgendaEventDto,
 } from './dto/agenda.dto';
 
@@ -53,6 +55,19 @@ export class AgendaController {
   @ApiOperation({ summary: 'Agendamento em lote com transação atômica' })
   batchScheduling(@Body() dto: BatchScheduleDto) {
     return this.service.batchScheduling(dto);
+  }
+
+
+  @Post('batch-scheduling/suggest')
+  @ApiOperation({ summary: 'Sugere janelas para agendamento em lote com base na agenda atual e agrupamento por cidade' })
+  suggestBatchScheduling(@Body() dto: SuggestBatchSchedulingDto) {
+    return this.service.suggestBatchScheduling(dto);
+  }
+
+  @Get('batch-scheduling/:id/export-pdf')
+  @ApiOperation({ summary: 'Exporta PDF do lote de agendamento confirmado' })
+  exportBatchSchedulingPdf(@Param('id') id: string, @Query() query: ExportBatchPdfDto) {
+    return this.service.exportBatchSchedulingPdf(id, query);
   }
 
   @Get('weekly-workload')

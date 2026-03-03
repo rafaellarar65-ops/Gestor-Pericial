@@ -7,7 +7,9 @@ import {
   BatchScheduleDto,
   CreateAgendaEventDto,
   CreateAgendaTaskDto,
+  ExportBatchPdfDto,
   ExportWeeklyPdfDto,
+  SuggestBatchSchedulingDto,
   UpdateAgendaEventDto,
 } from './dto/agenda.dto';
 
@@ -142,12 +144,19 @@ export class AgendaService {
       data: {
         tenantId,
         dateRef: new Date(dto.metadata?.date ?? dto.items[0]?.startAt ?? new Date().toISOString()),
-        criteriaJson: (dto.metadata ?? {}) as Prisma.InputJsonValue,
+        criteriaJson: ({
+          ...(dto.metadata ?? {}),
+          generatedAt: new Date().toISOString(),
+          batchSize: dto.items.length,
+        }) as Prisma.InputJsonValue,
         resultJson: ({
           status: 'CONFIRMADO',
           created: created.length,
+          confirmedAt: new Date().toISOString(),
+          routeIncluded: false,
           items: dto.items.map((item) => ({
             periciaId: item.periciaId,
+            city: item.city,
             scheduledAt: item.startAt,
           })),
         }) as Prisma.InputJsonValue,
@@ -155,6 +164,134 @@ export class AgendaService {
     });
 
     return { created: created.length };
+  }
+
+
+  async suggestBatchScheduling(dto: SuggestBatchSchedulingDto) {
+    const tenantId = this.context.get('tenantId') as string;
+    const orderedItems = [...dto.items].sort((a, b) => (a.cidade ?? '').localeCompare(b.cidade ?? ''));
+    const dayStart = new Date(`${dto.date}T00:00:00`);
+    const dayEnd = new Date(`${dto.date}T23:59:59`);
+
+    const events = await this.prisma.agendaEvent.findMany({
+      where: {
+        tenantId,
+        startAt: { gte: dayStart, lte: dayEnd },
+      },
+      orderBy: { startAt: 'asc' },
+    });
+
+    let cursor = new Date(`${dto.date}T${dto.startTime}:00`);
+    const interval = dto.intervalMinutes ?? 15;
+    const modalidadeDuration = dto.modalidadeDurationMinutes ?? {};
+
+    const suggestions = orderedItems.map((item) => {
+      const duration =
+        item.estimatedDurationMinutes ??
+        modalidadeDuration[item.modalidade ?? ''] ??
+        dto.defaultDurationMinutes ??
+        60;
+
+      const slot = this.findNextFreeSlot(cursor, duration, events);
+      const endAt = new Date(slot.getTime() + duration * 60000);
+
+      cursor = new Date(endAt.getTime() + interval * 60000);
+      return {
+        periciaId: item.periciaId,
+        cidade: item.cidade ?? 'Não informada',
+        modalidade: item.modalidade ?? 'Não informada',
+        estimatedDurationMinutes: duration,
+        startAt: slot.toISOString(),
+        endAt: endAt.toISOString(),
+      };
+    });
+
+    return {
+      date: dto.date,
+      groupedByCity: Object.keys(
+        suggestions.reduce<Record<string, boolean>>((acc, current) => {
+          acc[current.cidade] = true;
+          return acc;
+        }, {}),
+      ),
+      suggestions,
+    };
+  }
+
+  async exportBatchSchedulingPdf(id: string, query: ExportBatchPdfDto) {
+    const tenantId = this.context.get('tenantId') as string;
+    const batch = await this.prisma.schedulingBatch.findFirst({
+      where: { id, tenantId },
+    });
+
+    if (!batch) throw new NotFoundException('Lote não encontrado.');
+
+    const criteria = (batch.criteriaJson ?? {}) as Record<string, unknown>;
+    const result = (batch.resultJson ?? {}) as {
+      status?: string;
+      items?: Array<{ periciaId?: string; scheduledAt?: string; city?: string }>;
+      routeIncluded?: boolean;
+    };
+
+    const itemRows = Array.isArray(result.items) ? result.items : [];
+    const periciaIds = itemRows.map((item) => item.periciaId).filter((value): value is string => Boolean(value));
+
+    const pericias = periciaIds.length
+      ? await this.prisma.pericia.findMany({
+          where: {
+            tenantId,
+            id: { in: periciaIds },
+          },
+          select: { id: true, processoCNJ: true, autorNome: true, cidade: { select: { nome: true } } },
+        })
+      : [];
+
+    const periciaMap = new Map(pericias.map((item) => [item.id, item]));
+
+    const lines: string[] = [];
+    lines.push(`Lote de agendamento ${batch.id}`);
+    lines.push(`Data referência: ${this.toYmd(batch.dateRef)}`);
+    lines.push(`Status: ${result.status ?? 'CONFIRMADO'}`);
+    lines.push(`Cidade(s): ${Array.isArray(criteria.cityNames) ? criteria.cityNames.join(', ') : 'N/A'}`);
+    lines.push(`Rota incluída: ${query.includeRoute ? 'Sim' : 'Não'}`);
+    lines.push('');
+    lines.push('Perícias:');
+
+    itemRows.forEach((item, index) => {
+      const pericia = item.periciaId ? periciaMap.get(item.periciaId) : undefined;
+      lines.push(
+        `${index + 1}. ${pericia?.processoCNJ ?? 'CNJ N/A'} | ${pericia?.autorNome ?? 'Contato N/A'} | ${item.scheduledAt ?? 'Horário N/A'} | ${item.city ?? pericia?.cidade?.nome ?? 'Cidade N/A'}`,
+      );
+    });
+
+    if (query.includeRoute) {
+      lines.push('');
+      lines.push('Rota sugerida (ordem por horário):');
+      itemRows
+        .slice()
+        .sort((a, b) => (a.scheduledAt ?? '').localeCompare(b.scheduledAt ?? ''))
+        .forEach((item, index) => {
+          lines.push(`${index + 1}. ${item.city ?? 'Cidade N/A'} - ${item.scheduledAt ?? 'Horário N/A'}`);
+        });
+    }
+
+    await this.prisma.schedulingBatch.update({
+      where: { id: batch.id },
+      data: {
+        resultJson: ({
+          ...result,
+          routeIncluded: Boolean(query.includeRoute),
+          exportedAt: new Date().toISOString(),
+        }) as Prisma.InputJsonValue,
+      },
+    });
+
+    const pdfBuffer = this.buildSimplePdf(lines.join('\n'));
+    return {
+      fileName: `lote-agendamento-${batch.id}.pdf`,
+      contentBase64: pdfBuffer.toString('base64'),
+      mimeType: 'application/pdf',
+    };
   }
 
   async weeklyWorkload(startDate?: string) {
@@ -336,6 +473,25 @@ export class AgendaService {
 
   calendarSync() {
     return { enabled: false, message: 'Integração Google Calendar será implementada em entrega futura.' };
+  }
+
+
+  private findNextFreeSlot(start: Date, durationMinutes: number, events: Array<{ startAt: Date; endAt: Date | null }>) {
+    let candidate = new Date(start);
+    const durationMs = durationMinutes * 60000;
+
+    while (true) {
+      const candidateEnd = new Date(candidate.getTime() + durationMs);
+      const conflict = events.find((event) => {
+        const eventEnd = event.endAt ?? new Date(event.startAt.getTime() + 60 * 60 * 1000);
+        return candidate < eventEnd && candidateEnd > event.startAt;
+      });
+
+      if (!conflict) return candidate;
+
+      const conflictEnd = conflict.endAt ?? new Date(conflict.startAt.getTime() + 60 * 60 * 1000);
+      candidate = new Date(conflictEnd.getTime() + 5 * 60000);
+    }
   }
 
   private toYmd(date: Date) {

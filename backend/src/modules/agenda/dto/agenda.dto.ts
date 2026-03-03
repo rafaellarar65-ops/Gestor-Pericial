@@ -378,6 +378,67 @@ export class ExportWeeklyPdfDto {
   mode?: 'compacto' | 'detalhado';
 }
 
+export class BatchSuggestionItemDto {
+  @ApiProperty()
+  @IsUUID()
+  periciaId!: string;
+
+  @ApiPropertyOptional()
+  @IsOptional()
+  @IsString()
+  cidade?: string;
+
+  @ApiPropertyOptional()
+  @IsOptional()
+  @IsString()
+  modalidade?: string;
+
+  @ApiPropertyOptional()
+  @IsOptional()
+  @IsInt()
+  @Min(15)
+  estimatedDurationMinutes?: number;
+}
+
+export class SuggestBatchSchedulingDto {
+  @ApiProperty({ type: [BatchSuggestionItemDto] })
+  @IsArray()
+  @ValidateNested({ each: true })
+  @Type(() => BatchSuggestionItemDto)
+  items!: BatchSuggestionItemDto[];
+
+  @ApiProperty({ description: 'Data base (YYYY-MM-DD)' })
+  @IsString()
+  date!: string;
+
+  @ApiProperty({ description: 'Horário base (HH:mm)' })
+  @IsString()
+  startTime!: string;
+
+  @ApiPropertyOptional({ default: 60 })
+  @IsOptional()
+  @IsInt()
+  @Min(15)
+  defaultDurationMinutes?: number;
+
+  @ApiPropertyOptional({ default: 15 })
+  @IsOptional()
+  @IsInt()
+  @Min(0)
+  intervalMinutes?: number;
+
+  @ApiPropertyOptional({ description: 'Duração por modalidade em minutos' })
+  @IsOptional()
+  modalidadeDurationMinutes?: Record<string, number>;
+}
+
+export class ExportBatchPdfDto {
+  @ApiPropertyOptional({ default: false })
+  @IsOptional()
+  @IsBoolean()
+  includeRoute?: boolean;
+}
+
 export class AiSuggestLaudoBlocksDto {
   @ApiPropertyOptional({ description: 'Data de referência da semana (YYYY-MM-DD)' })
   @IsOptional()
