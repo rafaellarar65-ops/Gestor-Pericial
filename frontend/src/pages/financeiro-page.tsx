@@ -18,7 +18,6 @@ import {
 import { Link } from 'react-router-dom';
 import { toast } from 'sonner';
 
-import { Dialog } from '@/components/ui/dialog';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { LoadingState, EmptyState, ErrorState } from '@/components/ui/state';
@@ -27,13 +26,9 @@ import { financialService } from '@/services/financial-service';
 import type { FinancialAnalytics, Recebimento } from '@/types/api';
 import { formatCurrency } from '@/lib/formatters';
 
-const FONTE_OPTIONS = [
-  { value: 'TJ', label: 'Tribunal de Justiça (TJ)' },
-  { value: 'PARTE_AUTORA', label: 'Parte Autora' },
-  { value: 'PARTE_RE', label: 'Parte Ré' },
-  { value: 'SEGURADORA', label: 'Seguradora' },
-  { value: 'OUTRO', label: 'Outro' },
-] as const;
+const VIEW_MODES: AnalyticsViewMode[] = ['FINANCE', 'PRODUCTION', 'WORKFLOW'];
+const PERIODS: AnalyticsPeriod[] = ['YEAR', 'LAST_30', 'LAST_90', 'CUSTOM'];
+const GRANULARITIES: AnalyticsGranularity[] = ['DAY', 'WEEK', 'MONTH'];
 
 const PERIOD_OPTIONS = [
   { value: 'ALL', label: 'Todo período' },
@@ -115,9 +110,9 @@ export default function FinanceiroPage() {
   const [periodoFiltro, setPeriodoFiltro] = useState<PeriodFilter>('ALL');
   const [form, setForm] = useState<FormState>(INITIAL_FORM);
 
-  const { data: recebimentos = [], isLoading, isError, error } = useQuery<Recebimento[]>({
-    queryKey: ['recebimentos'],
-    queryFn: financialService.listRecebimentos,
+  const { data: cidades = [] } = useQuery({
+    queryKey: ['config-cidades'],
+    queryFn: () => configService.list('cidades'),
   });
 
   const { data: analytics } = useQuery<FinancialAnalytics>({
@@ -285,7 +280,6 @@ export default function FinanceiroPage() {
             </div>
           </div>
         </div>
-      </div>
 
       <div className="mx-auto max-w-6xl space-y-5 px-6 py-6">
         <Tabs tabs={[...TAB_IDS]} activeTab={activeTab} onChange={(tab) => setActiveTab(tab as TabId)} />
