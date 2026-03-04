@@ -79,7 +79,43 @@ const getDeadlineDate = (item: LaudoItem): Date | null => {
   return Number.isNaN(parsed.getTime()) ? null : parsed;
 };
 
-const isItemUrgent = (item: LaudoItem, urgentTerms: string[]): boolean => {
+const normalizeStatus = (value?: string): string =>
+  (value ?? '')
+    .normalize('NFD')
+    .replace(/[\u0300-\u036f]/g, '')
+    .replace(/[\s-]+/g, '_')
+    .toUpperCase()
+    .trim();
+
+const getStatusCandidates = (item: LaudoItem): string[] => {
+  const status = item.status;
+  if (typeof status === 'string') return [status];
+  if (status && typeof status === 'object') return [status.nome ?? '', status.codigo ?? ''];
+  return [];
+};
+
+const isEnviarLaudoStatus = (item: LaudoItem): boolean => {
+  const normalizedCandidates = getStatusCandidates(item).map(normalizeStatus);
+  return normalizedCandidates.some((candidate) => candidate === 'ENVIAR_LAUDO' || candidate === 'ENVIARLAUDO');
+};
+
+const getStatusLabel = (item: LaudoItem): string | undefined => {
+  const status = item.status;
+  if (typeof status === 'string') return status;
+  return status?.nome ?? status?.codigo;
+};
+
+const getDelayDays = (item: LaudoItem): number | null => {
+  if (!item.dataRealizacao) return null;
+  const realizationDate = new Date(item.dataRealizacao);
+  if (Number.isNaN(realizationDate.getTime())) return null;
+
+  const now = new Date();
+  const diffMs = now.getTime() - realizationDate.getTime();
+  return Math.max(0, Math.floor(diffMs / (1000 * 60 * 60 * 24)));
+};
+
+const isItemUrgent = (item: LaudoItem): boolean => {
   if (item.isUrgent === true || item.isUrgent === 1 || item.isUrgent === 'true') return true;
 
   const statusCandidates = getStatusCandidates(item).map(normalizeStatus);

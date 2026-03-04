@@ -72,6 +72,34 @@ export class FinancialService {
     private readonly context: RequestContextService,
   ) {}
 
+
+
+  private normalizeCnj(cnj: string): string {
+    return cnj.replace(/\D/g, '');
+  }
+
+  private extractReconciliationReference(rawData: Prisma.JsonValue | null): ReconciliationReference | null {
+    if (!rawData || typeof rawData !== 'object' || Array.isArray(rawData)) return null;
+    const value = (rawData as Record<string, unknown>).reconciliation;
+    if (!value || typeof value !== 'object' || Array.isArray(value)) return null;
+
+    const ref = value as Record<string, unknown>;
+    if ((ref.type !== 'BANK_TRANSACTION' && ref.type !== 'RECEBIMENTO') || typeof ref.id !== 'string' || typeof ref.periciaId !== 'string') {
+      return null;
+    }
+
+    return { type: ref.type, id: ref.id, periciaId: ref.periciaId };
+  }
+
+  private withReconciliationReference(rawData: RawUnmatchedData, reconciliation: ReconciliationReference | null): RawUnmatchedData {
+    const next = { ...rawData };
+    if (!reconciliation) {
+      delete next.reconciliation;
+      return next;
+    }
+
+    return { ...next, reconciliation };
+  }
   private serializeUnmatchedPayment(payment: {
     id: string;
     cnjRaw: string | null;
@@ -223,10 +251,6 @@ export class FinancialService {
 
   importBatchIndividual(dto: ImportRecebimentosDto) {
     return this.importBatchBySource(FinancialImportSource.INDIVIDUAL, dto);
-  }
-
-  private normalizeCnj(cnj: string): string {
-    return cnj.replace(/\D/g, '');
   }
 
   private formatCnj(digits: string): string {
@@ -1160,10 +1184,6 @@ export class FinancialService {
     return Number.isNaN(date.getTime()) ? new Date() : date;
   }
 
-  private normalizeCnj(cnj: string): string {
-    return cnj.replace(/\D/g, '');
-  }
-
   private mapSourceToFonte(sourceType: ImportSourceType): FontePagamento {
     if (sourceType === 'TJ') return FontePagamento.TJ;
     if (sourceType === 'PARTES') return FontePagamento.PARTE_AUTORA;
@@ -1211,7 +1231,7 @@ export class FinancialService {
     return null;
   }
 
-  private parseCsv(content: string): ImportedBankRecord[] {
+  private parseBankCsv(content: string): ImportedBankRecord[] {
     const lines = content
       .split(/\r?\n/)
       .map((line) => line.trim())

@@ -17,6 +17,8 @@ import {
   UpdateUnmatchedPaymentDto,
   UpdateRecebimentoDto,
   SplitUnmatchedPaymentDto,
+  UpdateRecebimentoDto,
+  UpdateUnmatchedPaymentDto,
 } from './dto/financial.dto';
 import { ImportCsvDto } from './dto/import.dto';
 

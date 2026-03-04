@@ -230,6 +230,7 @@ model Tenant {
   teleSlotItems       TelepericiaSlotItem[]
   schedulingBatches   SchedulingBatch[]
   cnjSyncs            CnjSync[]
+  whatsAppJobs        WhatsAppJob[]
 }
 
 model User {
@@ -1212,6 +1213,35 @@ model ActivityLog {
   @@index([tenantId, entityType, entityId, createdAt])
 }
 
+model WhatsappMessage {
+  id               String   @id @default(uuid()) @db.Uuid
+  tenantId         String   @db.Uuid
+  periciaId        String?  @db.Uuid
+  provider         String   @default("whatsapp-cloud-api")
+  eventType        String
+  direction        String
+  status           String?
+  waMessageId      String?
+  fromPhone        String?
+  toPhone          String?
+  messageBody      String?
+  errorCode        String?
+  errorMessage     String?
+  payloadJson      Json?
+  providerResponse Json?
+  createdAt        DateTime @default(now())
+  updatedAt        DateTime @updatedAt
+  createdBy        String?  @db.Uuid
+  updatedBy        String?  @db.Uuid
+
+  tenant  Tenant  @relation(fields: [tenantId], references: [id], onDelete: Cascade)
+  pericia Pericia? @relation(fields: [periciaId], references: [id], onDelete: SetNull)
+
+  @@index([tenantId, periciaId, createdAt])
+  @@index([tenantId, waMessageId])
+  @@index([tenantId, status, createdAt])
+}
+
 model DailyUsage {
   id          String   @id @default(uuid()) @db.Uuid
   tenantId    String   @db.Uuid
@@ -1433,4 +1463,34 @@ model CnjSync {
   pericia Pericia? @relation(fields: [periciaId], references: [id], onDelete: SetNull)
 
   @@index([tenantId, status, nextSyncAt])
+}
+
+model WhatsAppJob {
+  id             String            @id @default(uuid()) @db.Uuid
+  tenantId       String            @db.Uuid
+  periciaId      String            @db.Uuid
+  jobType        WhatsAppJobType
+  status         WhatsAppJobStatus @default(QUEUED)
+  scheduledFor   DateTime
+  nextAttemptAt  DateTime?
+  attempts       Int               @default(0)
+  maxAttempts    Int               @default(4)
+  idempotencyKey String
+  phone          String?
+  payload        Json?
+  lastError      Json?
+  providerRef    String?
+  sentAt         DateTime?
+  canceledAt     DateTime?
+  createdAt      DateTime          @default(now())
+  updatedAt      DateTime          @updatedAt
+  createdBy      String?           @db.Uuid
+  updatedBy      String?           @db.Uuid
+
+  tenant  Tenant  @relation(fields: [tenantId], references: [id], onDelete: Cascade)
+  pericia Pericia @relation(fields: [periciaId], references: [id], onDelete: Cascade)
+
+  @@unique([tenantId, idempotencyKey])
+  @@index([tenantId, status, scheduledFor])
+  @@index([tenantId, periciaId, jobType])
 }

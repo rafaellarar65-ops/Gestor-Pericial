@@ -1,6 +1,5 @@
 import { BadRequestException, Injectable, NotFoundException } from '@nestjs/common';
 import { Prisma } from '@prisma/client';
-import { PericiaStageFilterService } from './pericia-stage-filter.service';
 import { RequestContextService } from '../../common/request-context.service';
 import { PrismaService } from '../../prisma/prisma.service';
 import {
@@ -71,6 +70,7 @@ export class PericiasService {
       ...(query.statusCodigo ? { status: { codigo: query.statusCodigo } } : {}),
       ...(query.cidadeId ? { cidadeId: query.cidadeId } : {}),
       ...(query.tipoPericiaId ? { tipoPericiaId: query.tipoPericiaId } : {}),
+      ...(query.modalidadeCodigo ? { modalidade: { codigo: query.modalidadeCodigo } } : {}),
       ...(query.dateFrom || query.dateTo
         ? { dataNomeacao: { ...(query.dateFrom ? { gte: new Date(query.dateFrom) } : {}), ...(query.dateTo ? { lte: new Date(query.dateTo) } : {}) } }
         : {}),
@@ -121,7 +121,7 @@ export class PericiasService {
   async update(id: string, dto: UpdatePericiasDto) {
     await this.findOne(id);
 
-    return this.prisma.pericia.update({
+    const updated = await this.prisma.pericia.update({
       where: { id },
       data: {
         ...(dto.juizNome !== undefined ? { juizNome: dto.juizNome } : {}),
@@ -138,7 +138,11 @@ export class PericiasService {
         ...(dto.dataRealizacao !== undefined ? { dataRealizacao: new Date(dto.dataRealizacao) } : {}),
         ...(dto.dataEnvioLaudo !== undefined ? { dataEnvioLaudo: new Date(dto.dataEnvioLaudo) } : {}),
       },
+      include: { modalidade: true },
     });
+
+    await this.scheduleWhatsappJobs(updated.id, updated.tenantId, updated.dataAgendamento, updated.modalidade?.codigo, updated.metadata);
+    return updated;
   }
 
   async delete(id: string) {
@@ -404,6 +408,81 @@ export class PericiasService {
     });
 
     return updated;
+  }
+
+
+  async telepericiaQueue(query: TelepericiaQueueQueryDto) {
+    const where: Prisma.PericiaWhereInput = {
+      modalidade: { codigo: 'telepericia' },
+      ...(query.whatsappStatus ? { whatsappStatus: query.whatsappStatus } : {}),
+      ...(query.search
+        ? {
+            OR: [
+              { processoCNJ: { contains: query.search, mode: 'insensitive' } },
+              { periciadoNome: { contains: query.search, mode: 'insensitive' } },
+              { autorNome: { contains: query.search, mode: 'insensitive' } },
+            ],
+          }
+        : {}),
+    };
+
+    const [items, total] = await this.prisma.$transaction([
+      this.prisma.pericia.findMany({
+        where,
+        select: {
+          id: true,
+          processoCNJ: true,
+          periciadoNome: true,
+          autorNome: true,
+          dataAgendamento: true,
+          isUrgent: true,
+          urgentCheckedAt: true,
+          telepericiaStatusChangedAt: true,
+          whatsappStatus: true,
+          telepericiaConfirmedAt: true,
+          telepericiaLastAttemptAt: true,
+          createdAt: true,
+          status: { select: { id: true, nome: true, codigo: true } },
+        },
+        orderBy: [
+          { isUrgent: 'desc' },
+          { urgentCheckedAt: 'asc' },
+          { telepericiaStatusChangedAt: 'asc' },
+          { dataAgendamento: 'asc' },
+          { createdAt: 'asc' },
+        ],
+        skip: (query.page - 1) * query.limit,
+        take: query.limit,
+      }),
+      this.prisma.pericia.count({ where }),
+    ]);
+
+    return { items, pagination: { page: query.page, limit: query.limit, total } };
+  }
+
+  async updateUrgent(id: string, isUrgent: boolean) {
+    await this.findOne(id);
+
+    return this.prisma.pericia.update({
+      where: { id },
+      data: {
+        isUrgent,
+        urgentCheckedAt: isUrgent ? new Date() : null,
+      },
+    });
+  }
+
+  async registerTelepericiaAttempt(id: string, whatsappStatus?: string) {
+    await this.findOne(id);
+
+    return this.prisma.pericia.update({
+      where: { id },
+      data: {
+        telepericiaLastAttemptAt: new Date(),
+        telepericiaStatusChangedAt: new Date(),
+        ...(whatsappStatus !== undefined ? { whatsappStatus } : {}),
+      },
+    });
   }
 
   async dashboard() {
@@ -775,57 +854,6 @@ export class PericiasService {
     };
   }
 
-
-  async updateUrgent(id: string, isUrgent: boolean) {
-    await this.findOne(id);
-    return this.prisma.pericia.update({
-      where: { id },
-      data: { isUrgent, urgentCheckedAt: new Date() },
-    });
-  }
-
-  async registerTelepericiaAttempt(id: string, whatsappStatus?: string) {
-    await this.findOne(id);
-    return this.prisma.pericia.update({
-      where: { id },
-      data: {
-        telepericiaLastAttemptAt: new Date(),
-        ...(whatsappStatus ? { whatsappStatus } : {}),
-      },
-    });
-  }
-
-  async telepericiaQueue(query: TelepericiaQueueQueryDto) {
-    const where: Prisma.PericiaWhereInput = {
-      modalidade: { codigo: 'telepericia' },
-      ...(query.whatsappStatus ? { whatsappStatus: query.whatsappStatus } : {}),
-      ...(query.search
-        ? {
-            OR: [
-              { processoCNJ: { contains: query.search, mode: 'insensitive' } },
-              { periciadoNome: { contains: query.search, mode: 'insensitive' } },
-            ],
-          }
-        : {}),
-    };
-
-    const [items, total] = await this.prisma.$transaction([
-      this.prisma.pericia.findMany({
-        where,
-        include: { cidade: true, status: true },
-        orderBy: { updatedAt: 'desc' },
-        skip: (query.page - 1) * query.limit,
-        take: query.limit,
-      }),
-      this.prisma.pericia.count({ where }),
-    ]);
-
-    return {
-      items,
-      pagination: { page: query.page, limit: query.limit, total },
-    };
-  }
-
   private buildCityOverview(
     cidade: { id: string; nome: string; uf: string | null },
     pericias: Array<{
@@ -872,6 +900,33 @@ export class PericiasService {
         finalizada: { total: grouped.finalizada.length },
       },
     };
+  }
+
+
+  private async scheduleWhatsappJobs(
+    periciaId: string,
+    tenantId: string,
+    dataAgendamento: Date | null,
+    modalidadeCodigo?: string | null,
+    metadata?: Prisma.JsonValue,
+  ) {
+    const isTelepericia = (modalidadeCodigo ?? '').toLowerCase() === 'telepericia';
+    const phone = this.extractPhone(metadata);
+
+    await this.whatsappScheduler.syncPericiaJobs({
+      tenantId,
+      periciaId,
+      scheduledAt: dataAgendamento,
+      phone,
+      shouldSchedule: isTelepericia,
+    });
+  }
+
+  private extractPhone(metadata?: Prisma.JsonValue) {
+    if (!metadata || typeof metadata !== 'object' || Array.isArray(metadata)) return null;
+
+    const value = (metadata as Record<string, unknown>).whatsappPhone ?? (metadata as Record<string, unknown>).phone;
+    return typeof value === 'string' ? value : null;
   }
 
 }

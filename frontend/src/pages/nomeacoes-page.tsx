@@ -123,12 +123,12 @@ const NomeacoesPage = () => {
   });
 
   const statusGroups = useMemo<StatusGroup[]>(() => {
-    if (!dashboardSettings) return DEFAULT_STATUS_GROUPS;
+    if (!dashboardSettings) return STATUS_GROUPS;
     return [
-      { ...DEFAULT_STATUS_GROUPS[0], statuses: dashboardSettings.nomeacoesGroups.avaliar },
-      { ...DEFAULT_STATUS_GROUPS[1], statuses: dashboardSettings.nomeacoesGroups.aceiteHonorarios },
-      { ...DEFAULT_STATUS_GROUPS[2], statuses: dashboardSettings.nomeacoesGroups.majorarHonorarios },
-      { ...DEFAULT_STATUS_GROUPS[3], statuses: dashboardSettings.nomeacoesGroups.observacaoExtra },
+      { ...STATUS_GROUPS[0], statuses: dashboardSettings.nomeacoesGroups.avaliar },
+      { ...STATUS_GROUPS[1], statuses: dashboardSettings.nomeacoesGroups.aceiteHonorarios },
+      { ...STATUS_GROUPS[2], statuses: dashboardSettings.nomeacoesGroups.majorarHonorarios },
+      { ...STATUS_GROUPS[3], statuses: dashboardSettings.nomeacoesGroups.observacaoExtra },
     ];
   }, [dashboardSettings]);
 
