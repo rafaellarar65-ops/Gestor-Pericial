@@ -1,6 +1,5 @@
 import { BadRequestException, Injectable, NotFoundException } from '@nestjs/common';
 import { Prisma } from '@prisma/client';
-import { PericiaStageFilterService } from './pericia-stage-filter.service';
 import { RequestContextService } from '../../common/request-context.service';
 import { PrismaService } from '../../prisma/prisma.service';
 import {
@@ -109,12 +108,11 @@ export class PericiasService {
     return this.findAll(query);
   }
 
-    const statuses = statusIds.length
-      ? await this.prisma.status.findMany({
-          where: { id: { in: statusIds } },
-          select: { id: true, codigo: true, nome: true },
-        })
-      : [];
+  async findOne(id: string) {
+    const record = await this.prisma.pericia.findFirst({
+      where: { id },
+      include: { cidade: true, vara: true, tipoPericia: true, modalidade: true, status: true, local: true },
+    });
 
     if (!record) throw new NotFoundException('Perícia não encontrada.');
     return record;
