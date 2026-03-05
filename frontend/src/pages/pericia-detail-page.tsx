@@ -370,25 +370,7 @@ const PericiaDetailPage = () => {
             )}
 
             {activeTab === 'Documentos' && (
-              <div className="space-y-4">
-                <div className="flex items-center justify-between rounded-lg border bg-slate-50 p-4">
-                  <div>
-                    <p className="font-semibold">Central de Documentos</p>
-                    <p className="text-sm text-muted-foreground">Documentos reais vinculados ao processo.</p>
-                  </div>
-                  <button className="inline-flex cursor-not-allowed items-center gap-2 rounded-md bg-blue-600 px-3 py-2 text-sm font-semibold text-white opacity-70" disabled title="Upload de documento por esta aba será disponibilizado em breve." type="button">
-                    <Plus size={14} /> Adicionar Documento (Em breve)
-                  </button>
-                </div>
-                {documentsQuery.isLoading ? <LoadingState /> : (
-                  <div className="space-y-2">
-                    {(documentsQuery.data ?? []).map((doc) => (
-                      <div className="rounded-md border p-3 text-sm" key={doc.id}><p className="font-semibold">{doc.nome}</p><p className="text-slate-500">Categoria: {doc.categoria ?? '—'} • Tipo: {doc.tipo ?? '—'}</p></div>
-                    ))}
-                    {(documentsQuery.data ?? []).length === 0 && <div className="rounded-md border border-dashed p-4 text-sm text-muted-foreground">Nenhum documento anexado.</div>}
-                  </div>
-                )}
-              </div>
+              <DocumentosTab periciaId={id} documentsQuery={documentsQuery} />
             )}
 
             {activeTab === 'Timeline' && (
@@ -551,3 +533,71 @@ const PericiaDetailPage = () => {
 };
 
 export default PericiaDetailPage;
+
+// ── DocumentosTab (PR #135) ─────────────────────────────────────────────────
+
+interface DocumentosTabProps {
+  periciaId: string;
+  documentsQuery: { isLoading: boolean; data?: Array<{ id: string; nome: string; categoria?: string | null; tipo?: string | null }> };
+}
+
+function DocumentosTab({ periciaId, documentsQuery }: DocumentosTabProps) {
+  const [uploading, setUploading] = useState(false);
+  const [nome, setNome] = useState('');
+
+  const handleUpload = async () => {
+    if (!nome.trim()) return;
+    setUploading(true);
+    try {
+      await apiClient.post('/documents/v2', { periciaId, nome: nome.trim() });
+      setNome('');
+      toast.success('Documento registrado com sucesso.');
+    } catch {
+      toast.error('Erro ao registrar documento.');
+    } finally {
+      setUploading(false);
+    }
+  };
+
+  return (
+    <div className="space-y-4">
+      <div className="rounded-lg border bg-slate-50 p-4">
+        <p className="mb-3 font-semibold">Adicionar Documento ao Perfil do Paciente</p>
+        <div className="flex gap-2">
+          <input
+            className="flex-1 rounded-md border px-3 py-2 text-sm"
+            onChange={(e) => setNome(e.target.value)}
+            placeholder="Nome do documento"
+            type="text"
+            value={nome}
+          />
+          <button
+            className="inline-flex items-center gap-2 rounded-md bg-blue-600 px-3 py-2 text-sm font-semibold text-white disabled:opacity-50"
+            disabled={uploading || !nome.trim()}
+            onClick={handleUpload}
+            type="button"
+          >
+            <Plus size={14} /> {uploading ? 'Registrando...' : 'Adicionar'}
+          </button>
+        </div>
+      </div>
+      {documentsQuery.isLoading ? (
+        <LoadingState />
+      ) : (
+        <div className="space-y-2">
+          {(documentsQuery.data ?? []).map((doc) => (
+            <div className="rounded-md border p-3 text-sm" key={doc.id}>
+              <p className="font-semibold">{doc.nome}</p>
+              <p className="text-slate-500">Categoria: {doc.categoria ?? '—'} • Tipo: {doc.tipo ?? '—'}</p>
+            </div>
+          ))}
+          {(documentsQuery.data ?? []).length === 0 && (
+            <div className="rounded-md border border-dashed p-4 text-sm text-muted-foreground">
+              Nenhum documento anexado.
+            </div>
+          )}
+        </div>
+      )}
+    </div>
+  );
+}

@@ -1,5 +1,6 @@
 import { ApiProperty, ApiPropertyOptional } from '@nestjs/swagger';
-import { IsInt, IsNotEmpty, IsOptional, IsString, IsUUID, Min } from 'class-validator';
+import { DocumentCategory } from '@prisma/client';
+import { IsEnum, IsInt, IsNotEmpty, IsOptional, IsString, IsUUID, Min } from 'class-validator';
 
 export class UploadDocumentDto {
   @ApiProperty()
@@ -69,4 +70,51 @@ export class LinkPericiaDocumentDto {
   @ApiProperty()
   @IsUUID()
   periciaId!: string;
+}
+
+// ── Patient-scoped Document DTOs (PR #137) ───────────────────────────────────
+
+export class CreateDocumentDto {
+  @ApiProperty()
+  @IsString()
+  @IsNotEmpty()
+  nome!: string;
+
+  @ApiPropertyOptional({ enum: DocumentCategory, default: DocumentCategory.OUTROS })
+  @IsOptional()
+  @IsEnum(DocumentCategory)
+  categoria?: DocumentCategory;
+
+  @ApiPropertyOptional()
+  @IsOptional()
+  @IsUUID()
+  periciaId?: string;
+
+  @ApiPropertyOptional()
+  @IsOptional()
+  @IsString()
+  storagePath?: string;
+
+  @ApiPropertyOptional()
+  @IsOptional()
+  @IsString()
+  mimeType?: string;
+
+  @ApiPropertyOptional()
+  @IsOptional()
+  @IsInt()
+  @Min(1)
+  fileSize?: number;
+
+  @ApiPropertyOptional()
+  @IsOptional()
+  metadata?: Record<string, unknown>;
+}
+
+export class GetDocumentSignedUrlDto {
+  @ApiPropertyOptional({ default: 3600 })
+  @IsOptional()
+  @IsInt()
+  @Min(60)
+  expiresInSeconds = 3600;
 }
