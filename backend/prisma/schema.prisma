@@ -190,6 +190,8 @@ model Tenant {
   locais              Local[]
   lawyers             Lawyer[]
   caseDocuments       CaseDocument[]
+  documents           Document[]
+  bioimpedances       Bioimpedance[]
   lawyerOnPericias    LawyerOnPericia[]
   preLaudos           PreLaudo[]
   examPlans           ExamPlan[]
@@ -474,6 +476,8 @@ model Pericia {
 
   lawyers          LawyerOnPericia[]
   caseDocuments    CaseDocument[]
+  documents        Document[]
+  bioimpedances    Bioimpedance[]
   preLaudo         PreLaudo?
   examPlans        ExamPlan[]
   examsPerformed   ExamPerformed[]
@@ -1493,4 +1497,70 @@ model WhatsAppJob {
   @@unique([tenantId, idempotencyKey])
   @@index([tenantId, status, scheduledFor])
   @@index([tenantId, periciaId, jobType])
+}
+
+// ─── Document Management (PR #139) ───────────────────────────────────────────
+
+enum DocumentCategory {
+  LAUDO
+  PERICIA
+  IDENTIDADE
+  MEDICO
+  JURIDICO
+  FINANCEIRO
+  IMAGEM
+  OUTROS
+}
+
+model Document {
+  id           String           @id @default(uuid()) @db.Uuid
+  tenantId     String           @db.Uuid
+  periciaId    String?          @db.Uuid
+  nome         String
+  categoria    DocumentCategory @default(OUTROS)
+  storagePath  String?
+  mimeType     String?
+  fileSize     Int?
+  hashSha256   String?
+  metadata     Json?
+  uploadedBy   String?          @db.Uuid
+  downloadCount Int             @default(0)
+  createdAt    DateTime         @default(now())
+  updatedAt    DateTime         @updatedAt
+  createdBy    String?          @db.Uuid
+  updatedBy    String?          @db.Uuid
+
+  tenant  Tenant   @relation(fields: [tenantId], references: [id], onDelete: Cascade)
+  pericia Pericia? @relation(fields: [periciaId], references: [id], onDelete: SetNull)
+
+  @@index([tenantId, periciaId])
+  @@index([tenantId, categoria])
+}
+
+// ─── Bioimpedance (PR #129, #130) ────────────────────────────────────────────
+
+model Bioimpedance {
+  id              String   @id @default(uuid()) @db.Uuid
+  tenantId        String   @db.Uuid
+  periciaId       String   @db.Uuid
+  peso            Decimal? @db.Decimal(6, 2)
+  altura          Decimal? @db.Decimal(5, 2)
+  imc             Decimal? @db.Decimal(5, 2)
+  gorduraCorporal Decimal? @db.Decimal(5, 2)
+  massaMagra      Decimal? @db.Decimal(6, 2)
+  aguaCorporal    Decimal? @db.Decimal(5, 2)
+  massaOssea      Decimal? @db.Decimal(5, 2)
+  taxaMetabolica  Int?
+  idadeCorporal   Int?
+  metadata        Json?
+  aiAnalysis      Json?
+  createdAt       DateTime @default(now())
+  updatedAt       DateTime @updatedAt
+  createdBy       String?  @db.Uuid
+  updatedBy       String?  @db.Uuid
+
+  tenant  Tenant  @relation(fields: [tenantId], references: [id], onDelete: Cascade)
+  pericia Pericia @relation(fields: [periciaId], references: [id], onDelete: Cascade)
+
+  @@index([tenantId, periciaId])
 }

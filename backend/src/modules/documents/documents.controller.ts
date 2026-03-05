@@ -1,7 +1,15 @@
-import { Body, Controller, Get, Post, Query } from '@nestjs/common';
+import { Body, Controller, Delete, Get, Param, Post, Query } from '@nestjs/common';
 import { ApiBearerAuth, ApiOperation, ApiTags } from '@nestjs/swagger';
+import { DocumentCategory } from '@prisma/client';
 import { DocumentsService } from './documents.service';
-import { CategorizeDocumentDto, LinkPericiaDocumentDto, SignedUrlDto, UploadDocumentDto } from './dto/documents.dto';
+import {
+  CategorizeDocumentDto,
+  CreateDocumentDto,
+  GetDocumentSignedUrlDto,
+  LinkPericiaDocumentDto,
+  SignedUrlDto,
+  UploadDocumentDto,
+} from './dto/documents.dto';
 
 @ApiTags('documents')
 @ApiBearerAuth()
@@ -34,5 +42,37 @@ export class DocumentsController {
   @Post('link-pericia')
   linkPericia(@Body() dto: LinkPericiaDocumentDto) {
     return this.service.linkPericia(dto);
+  }
+
+  // ── Patient-scoped Document endpoints (PR #137) ─────────────────────────
+
+  @Get('v2')
+  @ApiOperation({ summary: 'Lista documentos (patient-scoped)' })
+  listDocuments(
+    @Query('periciaId') periciaId?: string,
+    @Query('categoria') categoria?: DocumentCategory,
+  ) {
+    return this.service.listDocuments(periciaId, categoria);
+  }
+
+  @Post('v2')
+  @ApiOperation({ summary: 'Cria documento (patient-scoped)' })
+  createDocument(@Body() dto: CreateDocumentDto) {
+    return this.service.createDocument(dto);
+  }
+
+  @Get('v2/:id/signed-url')
+  @ApiOperation({ summary: 'Gera URL assinada para download' })
+  getDocumentSignedUrl(
+    @Param('id') id: string,
+    @Query() query: GetDocumentSignedUrlDto,
+  ) {
+    return this.service.getDocumentSignedUrl(id, query.expiresInSeconds);
+  }
+
+  @Delete('v2/:id')
+  @ApiOperation({ summary: 'Remove documento' })
+  deleteDocument(@Param('id') id: string) {
+    return this.service.deleteDocument(id);
   }
 }

@@ -25,6 +25,8 @@ import { TelepericiaModule } from './modules/telepericia/telepericia.module';
 import { NotificationsModule } from './modules/notifications/notifications.module';
 import { DocumentsModule } from './modules/documents/documents.module';
 import { AnalyticsCalendarModule } from './modules/analytics-calendar/analytics-calendar.module';
+import { TemplatesModule } from './modules/templates/templates.module';
+import { BioimpedanceModule } from './modules/bioimpedance/bioimpedance.module';
 import { HealthController } from './health.controller';
 
 @Module({
@@ -62,6 +64,8 @@ import { HealthController } from './health.controller';
     NotificationsModule,
     DocumentsModule,
     AnalyticsCalendarModule,
+    TemplatesModule,
+    BioimpedanceModule,
   ],
   providers: [
     { provide: APP_GUARD, useClass: ThrottlerGuard },

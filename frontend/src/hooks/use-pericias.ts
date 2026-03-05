@@ -1,4 +1,5 @@
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
+import { apiClient } from '@/lib/api-client';
 import { periciaService } from '@/services/pericia-service';
 
 export const useDashboardQuery = () =>
@@ -63,6 +64,45 @@ export const useUpdatePericiaDatesMutation = (id: string) => {
     onSuccess: () => {
       void queryClient.invalidateQueries({ queryKey: ['pericia-detail', id] });
       void queryClient.invalidateQueries({ queryKey: ['pericia-timeline', id] });
+    },
+  });
+};
+
+// ── Bioimpedance hooks (PR #129) ─────────────────────────────────────────────
+
+export interface BioimpedancePayload {
+  periciaId: string;
+  peso?: number;
+  altura?: number;
+  imc?: number;
+  gorduraCorporal?: number;
+  massaMagra?: number;
+  aguaCorporal?: number;
+  massaOssea?: number;
+  taxaMetabolica?: number;
+  idadeCorporal?: number;
+  metadata?: Record<string, unknown>;
+}
+
+export const useBioimpedanceQuery = (periciaId: string) =>
+  useQuery({
+    queryKey: ['bioimpedance', periciaId],
+    queryFn: async () => {
+      const { data } = await apiClient.get<BioimpedancePayload[]>(`/bioimpedance?periciaId=${periciaId}`);
+      return data;
+    },
+    enabled: Boolean(periciaId),
+  });
+
+export const useCreateBioimpedanceMutation = (periciaId: string) => {
+  const queryClient = useQueryClient();
+  return useMutation({
+    mutationFn: async (payload: Omit<BioimpedancePayload, 'periciaId'>) => {
+      const { data } = await apiClient.post<BioimpedancePayload>('/bioimpedance', { ...payload, periciaId });
+      return data;
+    },
+    onSuccess: () => {
+      void queryClient.invalidateQueries({ queryKey: ['bioimpedance', periciaId] });
     },
   });
 };
