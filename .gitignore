@@ -146,3 +146,4 @@ vite.config.ts.timestamp-*
 *.env
 *.env.*
 prontuendo-pr-files.zip
+prontuendo-pr-files/
